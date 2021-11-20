@@ -50,6 +50,6 @@ class CorpusGenerator:
       
       
 if __name__ == '__main__':
-  # 
+  # /Lummetry.AI Dropbox/DATA/_allan_data/_indaco/File_1'
   pass
   
