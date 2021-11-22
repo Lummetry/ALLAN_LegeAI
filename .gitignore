@@ -2,3 +2,5 @@
 .spyproject/config/
 
 __pycache__/
+
+_cache/_data/
