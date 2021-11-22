@@ -26,6 +26,7 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 
 import re
 import os
+
 import unicodedata
 from gensim.models import Word2Vec
 from gensim.test.utils import datapath
@@ -34,6 +35,8 @@ from gensim.models.callbacks import CallbackAny2Vec
 
 from libraries.logger import Logger
 from libraries.generic_obj import LummetryObject
+
+import constants as ct
 
 def strip_accents(s):
    return ''.join(c for c in unicodedata.normalize('NFD', s)
@@ -52,8 +55,9 @@ class LossCallback(CallbackAny2Vec):
         self.epoch += 1
 
 class CorpusGenerator(LummetryObject):
-  def __init__(self, folder, **kwargs):
+  def __init__(self, folder, encoding=ct.WV.RO_ENCODING, **kwargs):
     self._folder = folder
+    self._encoding = encoding
     self.tag_cleaner = re.compile('<.*?>')
     super().__init__(**kwargs)
     return
@@ -71,19 +75,24 @@ class CorpusGenerator(LummetryObject):
       self.P("  Processing file '{}'".format(fn))
       path = os.path.join(self._folder, fn)      
       corpus_path = datapath(path)
-      for line in open(corpus_path, encoding="latin-1"):
+      for line in open(corpus_path, encoding=self._encoding):
         clean_line = self.remove_exclusions(line)
-        preprocessed = utils.simple_preprocess(clean_line)
+        preprocessed = utils.simple_preprocess(clean_line, deacc=True)
         if len(preprocessed) < 10:
           continue
         yield preprocessed
       
       
 if __name__ == '__main__':
-  l = Logger('LAI', base_folder='Dropbox', app_folder='_allan_data/_indaco')
-  model_fn = os.path.join(l.get_models_folder(), l.file_prefix + 'embeds')
   
-  cg = CorpusGenerator(l.get_data_folder(), log=l)
+  l = Logger('LAI', base_folder='.', app_folder='_data')
+  model_fn = os.path.join(l.get_models_folder(), l.file_prefix + 'embeds')
+  if l.is_running_from_ipython:
+    data_folder = l.get_dropbox_subfolder('_allan_data/_indaco/_data')
+  else:
+    data_folder = l.get_data_folder()
+  
+  cg = CorpusGenerator(data_folder, log=l)
   
   model = Word2Vec(
     sentences=cg,

@@ -1,2 +1,4 @@
 
 .spyproject/config/
+
+__pycache__/
