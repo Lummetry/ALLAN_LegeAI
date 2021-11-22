@@ -72,10 +72,9 @@ class CorpusGenerator(LummetryObject):
     self.P("Processing folder '{}'".format(self._folder))
     files = os.listdir(self._folder)
     for fn in files:
-      self.P("  Processing file '{}'".format(fn))
-      path = os.path.join(self._folder, fn)      
-      corpus_path = datapath(path)
-      for line in open(corpus_path, encoding=self._encoding):
+      full_path_fn = os.path.join(self._folder, fn)      
+      self.P("  Processing file '{}'".format(full_path_fn))
+      for line in open(full_path_fn, encoding=self._encoding):
         clean_line = self.remove_exclusions(line)
         preprocessed = utils.simple_preprocess(clean_line, deacc=True)
         if len(preprocessed) < 10:

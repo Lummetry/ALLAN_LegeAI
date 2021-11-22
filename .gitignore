@@ -6,3 +6,5 @@ __pycache__/
 _cache/_data/
 
 _data/_logs/
+
+_cache/_logs/
