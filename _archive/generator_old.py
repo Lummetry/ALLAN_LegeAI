@@ -24,13 +24,17 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 
 """
 
+import re
 import os
 
 from gensim.models import Word2Vec
+from gensim import utils
 from gensim.models.callbacks import CallbackAny2Vec
 
 from libraries.logger import Logger
 from libraries.generic_obj import LummetryObject
+
+import constants as ct
 
 
 class LossCallback(CallbackAny2Vec):
@@ -56,27 +60,33 @@ class LossCallback(CallbackAny2Vec):
 
 
 class CorpusGenerator(LummetryObject):
-  def __init__(self, file_prefix='preproc', batch_size=1000, **kwargs):
-    self.file_prefix = file_prefix
-    self.batch_size = batch_size
+  def __init__(self, folder, encoding=ct.WV.RO_ENCODING, **kwargs):
+    self._folder = folder
+    self._encoding = encoding
+    self.tag_cleaner = re.compile('<.*?>')
     super().__init__(**kwargs)
     return
   
+  
+  def remove_exclusions(self, line):
+    clean_line = re.sub(self.tag_cleaner, '', line)
+    return clean_line
+    
+    
   def __iter__(self):
-    folder = self.log.get_data_folder()
-    self.P("Processing folder '{}'".format(folder))
-    files = [x for x in os.listdir(folder) if self.file_prefix in x and '.pkl' in x]
+    self.P("Processing folder '{}'".format(self._folder))
+    files = os.listdir(self._folder)
     for fn in files:
-      full_path_fn = os.path.join(folder, fn)      
+      full_path_fn = os.path.join(self._folder, fn)      
       if not os.path.isfile(full_path_fn):
         continue
       self.P("  Processing file '{}'".format(full_path_fn))
-      wordlist = l.load_pickle_from_data(full_path_fn)
-      nr_batches = len(wordlist) / self.batch_size
-      for batch_idx in range(nr_batches):
-        start = batch_idx * self.batch_size
-        end = (batch_idx + 1) * self.batch_size
-        yield wordlist[start:end]
+      for line in open(full_path_fn, encoding=self._encoding):
+        clean_line = self.remove_exclusions(line)
+        preprocessed = utils.simple_preprocess(clean_line, deacc=True)
+        if len(preprocessed) < 10:
+          continue
+        yield preprocessed
       
       
 if __name__ == '__main__':
@@ -94,8 +104,7 @@ if __name__ == '__main__':
   
   model = Word2Vec(
     sentences=cg,
-    vector_size=128,
-    window=5,
+    vector_size=200,
     min_count=10,
     sg=1,
     workers=10,    
