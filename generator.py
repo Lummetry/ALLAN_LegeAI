@@ -27,9 +27,7 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 import re
 import os
 
-import unicodedata
 from gensim.models import Word2Vec
-from gensim.test.utils import datapath
 from gensim import utils
 from gensim.models.callbacks import CallbackAny2Vec
 
@@ -38,9 +36,6 @@ from libraries.generic_obj import LummetryObject
 
 import constants as ct
 
-def strip_accents(s):
-   return ''.join(c for c in unicodedata.normalize('NFD', s)
-                  if unicodedata.category(c) != 'Mn')
 
 class LossCallback(CallbackAny2Vec):
     '''Callback to print loss after each epoch.'''
