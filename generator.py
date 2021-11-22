@@ -85,7 +85,7 @@ class CorpusGenerator(LummetryObject):
       
 if __name__ == '__main__':
   
-  l = Logger('LAI', base_folder='.', app_folder='_data')
+  l = Logger('LAI', base_folder='.', app_folder='_cache')
   model_fn = os.path.join(l.get_models_folder(), l.file_prefix + 'embeds')
   if l.is_running_from_ipython:
     data_folder = l.get_dropbox_subfolder('_allan_data/_indaco/_data')
