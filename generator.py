@@ -89,15 +89,23 @@ if __name__ == '__main__':
   model_fn = os.path.join(l.get_models_folder(), l.file_prefix + 'embeds')
   if l.is_running_from_ipython:
     data_folder = l.get_dropbox_subfolder('_allan_data/_indaco/_data')
+    l.P("Detected running in debug mode. Using '{}'".format(data_folder))
   else:
-    data_folder = l.get_data_folder()
+    data_folder = l.get_data_subfolder('_embeds')
+    l.P("Detected running in live model. Using '{}'".format(data_folder))
   
   cg = CorpusGenerator(data_folder, log=l)
   
   model = Word2Vec(
     sentences=cg,
     vector_size=200,
-    workers=7,
+    min_count=10,
+    sg=1,
+    workers=7,    
+    alpha=0.005,
+    min_alpha=0.001,
+    negative=20,
+    epochs=25,
     compute_loss=True,
     callbacks=[LossCallback(log=l)],
     )
