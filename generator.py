@@ -95,7 +95,7 @@ if __name__ == '__main__':
     vector_size=200,
     min_count=10,
     sg=1,
-    workers=7,    
+    workers=10,    
     alpha=0.005,
     min_alpha=0.001,
     negative=20,
