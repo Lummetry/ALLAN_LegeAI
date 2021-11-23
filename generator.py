@@ -94,12 +94,14 @@ class CorpusGenerator(LummetryObject):
       for batch_idx in range(nr_batches):
         start = batch_idx * self.batch_size
         end = (batch_idx + 1) * self.batch_size
+        words =  wordlist[start:end]
         if batch_idx % step == 0:
-          print("\rProcessing '{}': {:.1f}%\r".format(
+          print("\rProcessing '{}': {:.1f}% - {}\r".format(
             fn,
-            (batch_idx + 1) / nr_batches * 100.
+            (batch_idx + 1) / nr_batches * 100,
+            words[:5],
             ), end='', flush=True)
-        yield wordlist[start:end]
+        yield words
       
       
 if __name__ == '__main__':
