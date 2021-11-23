@@ -47,7 +47,7 @@ class LossCallback(CallbackAny2Vec):
     return
       
   def on_train_begin(self, model):
-    self.log.P("Begin training on with len(wv)={}".format(len(model.wv)))
+    self.log.P("Begin training on with len(wv)={}".format(len(model.wv)), color='g')
     return
       
   def on_epoch_begin(self, model):
@@ -85,15 +85,18 @@ class CorpusGenerator(LummetryObject):
     self.P("Processing folder '{}'".format(folder))
     files = [x for x in os.listdir(folder) if self.file_prefix in x and '.pkl' in x]
     for fn in files:
-      full_path_fn = os.path.join(folder, fn)      
-      if not os.path.isfile(full_path_fn):
-        continue
-      self.P("  Processing file '{}'".format(full_path_fn))
-      wordlist = l.load_pickle_from_data(full_path_fn)
+      self.P("  Processing file '{}'".format(fn))
+      wordlist = l.load_pickle_from_data(fn)
       nr_batches = len(wordlist) // self.batch_size
+      step = nr_batches // 100
       for batch_idx in range(nr_batches):
         start = batch_idx * self.batch_size
         end = (batch_idx + 1) * self.batch_size
+        if batch_idx % step == 0:
+          print("\rProcessing '{}': {:.1f}%\r".format(
+            fn,
+            (batch_idx + 1) / nr_batches * 100.
+            ), end='', flush=True)
         yield wordlist[start:end]
       
       
@@ -104,18 +107,22 @@ if __name__ == '__main__':
   model_fn = os.path.join(l.get_models_folder(), l.file_prefix + 'embeds')
   if l.is_running_from_ipython and not FORCE_LOCAL:
     data_folder = l.get_dropbox_subfolder('_allan_data/_indaco/_data')
-    l.P("Detected running in debug mode. Using '{}'".format(data_folder))
+    l.P("Detected running in debug mode. Using '{}'".format(data_folder), color='y')
+    max_vocab = 150000
   else:
     data_folder = l.get_data_subfolder('_embeds_input')
-    l.P("Detected running in live model. Using '{}'".format(data_folder))
+    l.P("Detected running in live model. Using '{}'".format(data_folder), color='y')
+    max_vocab = None
   
-  cg = CorpusGenerator(data_folder, log=l)
+  cg = CorpusGenerator(
+    log=l,
+    )
   
   model = Word2Vec(
     sentences=cg,
     vector_size=128,
     window=5,
-    min_count=10,
+    min_count=15,
     sg=1,
     workers=10,    
     alpha=0.005,
@@ -123,6 +130,7 @@ if __name__ == '__main__':
     negative=20,
     epochs=EPOCHS,
     compute_loss=True,
+    max_final_vocab=max_vocab,
     callbacks=[LossCallback(log=l, model_fn=model_fn)],
     )
   
