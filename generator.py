@@ -33,8 +33,9 @@ from gensim.models.callbacks import CallbackAny2Vec
 
 from libraries.logger import Logger
 from libraries.generic_obj import LummetryObject
+from embeds_utils.utils import test_model
 
-__VER__ = '0.1.0.0'
+__VER__ = '0.2.0.0'
 
 EPOCHS = 15
 
@@ -57,12 +58,19 @@ class LossCallback(CallbackAny2Vec):
 
   def on_epoch_end(self, model):
     loss = model.get_latest_training_loss()
-    elapsed_time = time.time() - self.start_time
+    epoch_time = time.time() - self.start_time
+    self.timings.append(epoch_time)
+    elapsed_time = np.sum(self.timings)
     remaining_time = (EPOCHS - self.epoch) * np.mean(elapsed_time)
-    self.timings.append(elapsed_time)
+    test_model(
+      log=self.log,
+      model=model,
+      name="Epoch {}".format(self.epoch)
+      )
     self.log.P(
-      "Epoch #{} end - Loss: {}, Elapsed time: {}, Remaining time: {}".format(
+      "Epoch #{}, Loss: {}, Epoch time: {}, Elapsed time: {}, Remaining time: {}".format(
         self.epoch, loss,
+        time.strftime("%H:%M:%S", time.gmtime(epoch_time)),
         time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),
         time.strftime("%H:%M:%S", time.gmtime(remaining_time)),
         ),      
@@ -87,7 +95,7 @@ class CorpusGenerator(LummetryObject):
     self.P("Processing folder '{}'".format(folder))
     files = [x for x in os.listdir(folder) if self.file_prefix in x and '.pkl' in x]
     for fn in files:
-      self.P("  Processing file '{}'".format(fn))
+      self.P("  Processing file '{}' {}".format(fn, ' ' * 50))
       wordlist = l.load_pickle_from_data(fn)
       nr_batches = len(wordlist) // self.batch_size
       step = nr_batches // 100
@@ -96,16 +104,16 @@ class CorpusGenerator(LummetryObject):
         end = (batch_idx + 1) * self.batch_size
         words =  wordlist[start:end]
         if batch_idx % step == 0:
-          print("\rProcessing '{}': {:.1f}% - {}\r".format(
+          print("\rProcessing '{}': {:.1f}% - {} {}\r".format(
             fn,
             (batch_idx + 1) / nr_batches * 100,
-            words[:5],
+            words[:4],
+            ' ' * 20,
             ), end='', flush=True)
         yield words
       
       
 if __name__ == '__main__':
-  os.system('color')
   FORCE_LOCAL = False
   l = Logger('LAI', base_folder='.', app_folder='_cache')
   model_fn = os.path.join(l.get_models_folder(), l.file_prefix + 'embeds')
@@ -128,7 +136,7 @@ if __name__ == '__main__':
     sentences=cg,
     vector_size=128,
     window=5,
-    min_count=15,
+    min_count=25,
     sg=1,
     workers=10,    
     alpha=0.005,
