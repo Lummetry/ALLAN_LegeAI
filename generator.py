@@ -106,12 +106,11 @@ if __name__ == '__main__':
   l = Logger('LAI', base_folder='.', app_folder='_cache')
   model_fn = os.path.join(l.get_models_folder(), l.file_prefix + 'embeds')
   if l.is_running_from_ipython and not FORCE_LOCAL:
-    data_folder = l.get_dropbox_subfolder('_allan_data/_indaco/_data')
-    l.P("Detected running in debug mode. Using '{}'".format(data_folder), color='y')
+    l.P("Detected running in debug mode", color='y')
     max_vocab = 150000
   else:
     data_folder = l.get_data_subfolder('_embeds_input')
-    l.P("Detected running in live model. Using '{}'".format(data_folder), color='y')
+    l.P("Detected running in live model. ", color='y')
     max_vocab = None
   
   cg = CorpusGenerator(
