@@ -34,6 +34,8 @@ from gensim.models.callbacks import CallbackAny2Vec
 from libraries.logger import Logger
 from libraries.generic_obj import LummetryObject
 
+__VER__ = '0.1.0.0'
+
 EPOCHS = 15
 
 class LossCallback(CallbackAny2Vec):
@@ -105,6 +107,7 @@ if __name__ == '__main__':
   FORCE_LOCAL = False
   l = Logger('LAI', base_folder='.', app_folder='_cache')
   model_fn = os.path.join(l.get_models_folder(), l.file_prefix + 'embeds')
+  
   if l.is_running_from_ipython and not FORCE_LOCAL:
     max_vocab = 150000
     l.P("Detected running in debug mode. Using 'small' vocab size {}".format(
