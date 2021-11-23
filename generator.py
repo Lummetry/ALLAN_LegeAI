@@ -106,12 +106,14 @@ if __name__ == '__main__':
   l = Logger('LAI', base_folder='.', app_folder='_cache')
   model_fn = os.path.join(l.get_models_folder(), l.file_prefix + 'embeds')
   if l.is_running_from_ipython and not FORCE_LOCAL:
-    l.P("Detected running in debug mode", color='y')
     max_vocab = 150000
+    l.P("Detected running in debug mode. Using 'small' vocab size {}".format(
+      max_vocab), color='y')
   else:
     data_folder = l.get_data_subfolder('_embeds_input')
-    l.P("Detected running in live model. ", color='y')
     max_vocab = None
+    l.P("Detected running in live model. Using vocab size {}".format(
+      max_vocab), color='y')
   
   cg = CorpusGenerator(
     log=l,
