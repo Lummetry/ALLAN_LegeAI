@@ -87,6 +87,7 @@ class CorpusGenerator(LummetryObject):
   def __init__(self, file_prefix='preproc', batch_size=1000, **kwargs):
     self.file_prefix = file_prefix
     self.batch_size = batch_size
+    self.version = __VER__
     super().__init__(**kwargs)
     return
   
@@ -108,7 +109,7 @@ class CorpusGenerator(LummetryObject):
             fn,
             (batch_idx + 1) / nr_batches * 100,
             words[:4],
-            ' ' * 20,
+            ' ' * 30,
             ), end='', flush=True)
         yield words
       
