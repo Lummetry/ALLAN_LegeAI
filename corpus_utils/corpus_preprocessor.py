@@ -46,7 +46,7 @@ if __name__ == '__main__':
       for line in fh:
         clean_line = re.sub(tag_cleaner, '', line)
         preprocessed = utils.simple_preprocess(clean_line, deacc=True)
-        wordlist = wordlist + preprocessed
+        wordlist += preprocessed
         if (len(wordlist) % 1000) == 0:
           print("\rPreparing file '{}': {:.1f}%\r".format(
             fn_out, len(wordlist) / WORDS_PER_FILE * 100), end='', flush=True)

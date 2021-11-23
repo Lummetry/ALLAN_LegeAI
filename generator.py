@@ -25,6 +25,8 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 """
 
 import os
+import time
+import numpy as np
 
 from gensim.models import Word2Vec
 from gensim.models.callbacks import CallbackAny2Vec
@@ -32,6 +34,7 @@ from gensim.models.callbacks import CallbackAny2Vec
 from libraries.logger import Logger
 from libraries.generic_obj import LummetryObject
 
+EPOCHS = 15
 
 class LossCallback(CallbackAny2Vec):
   '''Callback to print loss after each epoch.'''
@@ -40,18 +43,33 @@ class LossCallback(CallbackAny2Vec):
     self.epoch = 1
     self.log = log
     self.model_fn = model_fn
+    self.timings = []
     return
       
   def on_train_begin(self, model):
     self.log.P("Begin training on with len(wv)={}".format(len(model.wv)))
     return
       
+  def on_epoch_begin(self, model):
+    self.start_time = time.time()
 
   def on_epoch_end(self, model):
     loss = model.get_latest_training_loss()
-    self.log.P('Loss after epoch {}: {}'.format(self.epoch, loss), color='g')
+    elapsed_time = time.time() - self.start_time
+    remaining_time = (EPOCHS - self.epoch) * np.mean(elapsed_time)
+    self.timings.append(elapsed_time)
+    self.log.P(
+      "Epoch #{} end - Loss: {}, Elapsed time: {}, Remaining time: {}".format(
+        self.epoch, loss,
+        time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),
+        time.strftime("%H:%M:%S", time.gmtime(remaining_time)),
+        ),      
+      color='g'
+      )    
     self.epoch += 1
-    model.save(self.model_fn + '_ep_{:02}'.format(self.epoch))
+    model_fn = self.model_fn + '_ep_{:02}'.format(self.epoch)
+    self.log.P("Saving '{}'".format(model_fn), color='g')
+    model.save(model_fn)
 
 
 
@@ -72,7 +90,7 @@ class CorpusGenerator(LummetryObject):
         continue
       self.P("  Processing file '{}'".format(full_path_fn))
       wordlist = l.load_pickle_from_data(full_path_fn)
-      nr_batches = len(wordlist) / self.batch_size
+      nr_batches = len(wordlist) // self.batch_size
       for batch_idx in range(nr_batches):
         start = batch_idx * self.batch_size
         end = (batch_idx + 1) * self.batch_size
@@ -80,6 +98,7 @@ class CorpusGenerator(LummetryObject):
       
       
 if __name__ == '__main__':
+  os.system('color')
   FORCE_LOCAL = False
   l = Logger('LAI', base_folder='.', app_folder='_cache')
   model_fn = os.path.join(l.get_models_folder(), l.file_prefix + 'embeds')
@@ -102,7 +121,7 @@ if __name__ == '__main__':
     alpha=0.005,
     min_alpha=0.001,
     negative=20,
-    epochs=15,
+    epochs=EPOCHS,
     compute_loss=True,
     callbacks=[LossCallback(log=l, model_fn=model_fn)],
     )
