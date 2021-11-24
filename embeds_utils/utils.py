@@ -20,16 +20,19 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 
 def test_model(log, 
                model, 
-               words=['leafa', 'tva', 'bacsis', 'munca'], 
+               words=['leafa', 'salarizare', 'impozit', 'tva', 'divort', 'munca', 'frauda', 'copil'], 
                name=None,
                topn=5,
+               color='b',
                ):
   if name is not None:
-    log.P("Test for model '{}'".format(name), color='b')
+    log.P("Test for model '{}' {}".format(name, ' ' * 20), color=color)
   for _w in words:
     res = model.wv.most_similar(_w, topn=topn)
     log.P("  Top {} for '{}': {}".format(
       topn, _w,
       ", ".join(["{}: {:.2f}".format(_sw, _sc) for _sw, _sc in res ])
-      ), color='b')
+      ), color=color)
+  if name is not None:
+    log.P("*" * 80)
   return

@@ -22,3 +22,8 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 
 class WV:
   RO_ENCODING = 'ISO-8859-2'
+  TEST_LIST = [
+      'leafa', 'salarizare', 'impozit', 'tva', 'divort', 'munca', 'frauda', 'copil',
+      'stat', 'derogare', 'accize', 'pescuit', 'vanatoare', 'horeca', 'padure',
+      'mediu', 'petrol', 'gaze', 'eolian', 'solar'
+    ]
