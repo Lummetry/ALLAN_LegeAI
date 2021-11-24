@@ -23,21 +23,30 @@ from gensim.models import Word2Vec
 from libraries.logger import Logger
 
 from embeds_utils.utils import test_model
+import constants as ct
 
 if __name__ == '__main__':
   
-  FN1 = '20211123_112106embeds_ep_04'
-  FN2 = '20211123_112106embeds_ep_11'
+  fn_models = [
+    '20211123_112106embeds_ep_04',
+    '20211123_112106embeds_ep_11',  
+    '20211123_183830embeds',
+    ]
   
   l = Logger('LAIEMB', base_folder='.', app_folder='_cache')
-  fn1 = l.get_models_file(FN1)
-  fn2 = l.get_models_file(FN2)
-  l.P("Loading '{}'...".format(fn1))
-  m1 = Word2Vec.load(fn1)
-  l.P("Loading '{}'...".format(fn2))
-  m2 = Word2Vec.load(fn2)
-  
-  test_model(log=l, model=m1, name='Epoch 4')
-  
-  test_model(log=l, model=m2, name='Epoch 11')
+  fns = []
+  models = {}
+  for fn in fn_models:
+    fns.append(l.get_models_file(fn))
+    l.P("Loading '{}'...".format(fns[-1]))
+    m = Word2Vec.load(fns[-1])
+    models[fn] = m
+    
+  for name, model in models.items():
+    test_model(
+      log=l, 
+      model=model, name=name,
+      words=ct.WV.TEST_LIST,
+      )
+
   

@@ -34,23 +34,25 @@ from gensim.models.callbacks import CallbackAny2Vec
 from libraries.logger import Logger
 from libraries.generic_obj import LummetryObject
 from embeds_utils.utils import test_model
+import constants as ct
 
 __VER__ = '0.2.0.0'
-
-EPOCHS = 15
 
 class LossCallback(CallbackAny2Vec):
   '''Callback to print loss after each epoch.'''
 
-  def __init__(self, log, model_fn):
+  def __init__(self, log, model_fn, max_epoch):
     self.epoch = 1
     self.log = log
     self.model_fn = model_fn
+    self.max_epoch = max_epoch
     self.timings = []
     return
       
   def on_train_begin(self, model):
-    self.log.P("Begin training on with len(wv)={}".format(len(model.wv)), color='g')
+    self.log.P("Begin training on with len(wv)={} {}".format(
+      len(model.wv), ' ' * 20,
+      ), color='g')
     return
       
   def on_epoch_begin(self, model):
@@ -61,7 +63,7 @@ class LossCallback(CallbackAny2Vec):
     epoch_time = time.time() - self.start_time
     self.timings.append(epoch_time)
     elapsed_time = np.sum(self.timings)
-    remaining_time = (EPOCHS - self.epoch) * np.mean(elapsed_time)
+    remaining_time = (self.max_epoch - self.epoch) * np.mean(self.timings)
     test_model(
       log=self.log,
       model=model,
@@ -117,17 +119,24 @@ class CorpusGenerator(LummetryObject):
 if __name__ == '__main__':
   FORCE_LOCAL = False
   l = Logger('LAI', base_folder='.', app_folder='_cache')
-  model_fn = os.path.join(l.get_models_folder(), l.file_prefix + 'embeds')
   
   if l.is_running_from_ipython and not FORCE_LOCAL:
     max_vocab = 150000
+    epochs = 25
+    workers = 11
+    emb_size=128
     l.P("Detected running in debug mode. Using 'small' vocab size {}".format(
       max_vocab), color='y')
   else:
     data_folder = l.get_data_subfolder('_embeds_input')
     max_vocab = None
+    emb_size=128
     l.P("Detected running in live model. Using vocab size {}".format(
       max_vocab), color='y')
+    epochs = 40
+    workers = 15
+
+  model_fn = os.path.join(l.get_models_folder(), l.file_prefix + 'emb{}'.format(emb_size))
   
   cg = CorpusGenerator(
     log=l,
@@ -139,15 +148,22 @@ if __name__ == '__main__':
     window=5,
     min_count=25,
     sg=1,
-    workers=10,    
-    alpha=0.005,
+    workers=workers,    
+    alpha=0.004,
     min_alpha=0.001,
     negative=20,
-    epochs=EPOCHS,
+    epochs=epochs,
     compute_loss=True,
     max_final_vocab=max_vocab,
     callbacks=[LossCallback(log=l, model_fn=model_fn)],
     )
   
+  l.P("Test final:", color='g')
+  test_model(
+    log=l, 
+    model=model,
+    words=ct.WV.TEST_LIST,
+    color='g',
+    )
   model.save(model_fn)
   

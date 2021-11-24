@@ -32,16 +32,20 @@ def strip_accents(s):
  
   
 if __name__ == '__main__':
-  l = Logger('LAIT1', base_folder='Dropbox', app_folder='_allan_data/_rowiki_dump')
-  fn_in = l.get_data_file('20200120_corpus_merged')
-  fn_out = os.path.join(l.get_data_folder(), '20200120_corpus_merged_normalized')
-  fh_in = open(fn_in, encoding='utf-8')
-  fh_out = open(fn_out, 'wt', encoding=ct.WV.RO_ENCODING)
-  for line in fh_in:
-    line_out = strip_accents(line)
-    b_line = line_out.encode(ct.WV.RO_ENCODING, 'ignore')
-    line_out_converted = b_line.decode(ct.WV.RO_ENCODING, 'ignore')
-    fh_out.write(line_out_converted)
-  fh_out.close()
-  fh_in.close()
+  URL = 'https://www.dropbox.com/s/lfeupp18fp5efjy/20200120_corpus_merged?dl=1'
+  l = Logger('LAIT1', base_folder='.', app_folder='_cache')
+  fn_in = l.maybe_download(url=URL, fn='rowiki_raw_unicode', target='data')
+  fn_out = os.path.join(l.get_data_folder(), 'corpus_merged_normalized')
+  if os.path.isfile(fn_out):
+    l.P("'{}' already exists".format(fn_out))
+  else:
+    fh_in = open(fn_in, encoding='utf-8')
+    fh_out = open(fn_out, 'wt', encoding=ct.WV.RO_ENCODING)
+    for line in fh_in:
+      line_out = strip_accents(line)
+      b_line = line_out.encode(ct.WV.RO_ENCODING, 'ignore')
+      line_out_converted = b_line.decode(ct.WV.RO_ENCODING, 'ignore')
+      fh_out.write(line_out_converted)
+    fh_out.close()
+    fh_in.close()
     
