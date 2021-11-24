@@ -122,19 +122,23 @@ if __name__ == '__main__':
   
   if l.is_running_from_ipython and not FORCE_LOCAL:
     max_vocab = 150000
+    l.P("Detected running in debug mode. Using 'small' vocab size {}".format(
+      max_vocab), color='y')
     epochs = 25
     workers = 11
     emb_size=128
-    l.P("Detected running in debug mode. Using 'small' vocab size {}".format(
-      max_vocab), color='y')
+    window = 5
+    min_count = 20
   else:
+    l.P("Detected running in live model. Using vocab size {}".format(
+      max_vocab), color='y')
     data_folder = l.get_data_subfolder('_embeds_input')
     max_vocab = None
     emb_size=128
-    l.P("Detected running in live model. Using vocab size {}".format(
-      max_vocab), color='y')
     epochs = 40
     workers = 15
+    window = 5
+    min_count = 40
 
   model_fn = os.path.join(l.get_models_folder(), l.file_prefix + 'emb{}'.format(emb_size))
   
@@ -144,9 +148,9 @@ if __name__ == '__main__':
   
   model = Word2Vec(
     sentences=cg,
-    vector_size=128,
-    window=5,
-    min_count=25,
+    vector_size=emb_size,
+    window=window,
+    min_count=min_count,
     sg=1,
     workers=workers,    
     alpha=0.004,
@@ -155,7 +159,7 @@ if __name__ == '__main__':
     epochs=epochs,
     compute_loss=True,
     max_final_vocab=max_vocab,
-    callbacks=[LossCallback(log=l, model_fn=model_fn)],
+    callbacks=[LossCallback(log=l, model_fn=model_fn, max_epoch=epochs)],
     )
   
   l.P("Test final:", color='g')
