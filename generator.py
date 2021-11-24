@@ -130,10 +130,10 @@ if __name__ == '__main__':
     window = 5
     min_count = 20
   else:
+    max_vocab = None
     l.P("Detected running in live model. Using vocab size {}".format(
       max_vocab), color='y')
     data_folder = l.get_data_subfolder('_embeds_input')
-    max_vocab = None
     emb_size=128
     epochs = 40
     workers = 15
