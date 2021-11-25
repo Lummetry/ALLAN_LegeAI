@@ -36,7 +36,7 @@ from libraries.generic_obj import LummetryObject
 from utils.utils import test_model
 import constants as ct
 
-__VER__ = '0.2.5.0'
+__VER__ = '0.2.5.1'
 
 class LossCallback(CallbackAny2Vec):
   '''Callback to print loss after each epoch.'''
@@ -79,7 +79,7 @@ class LossCallback(CallbackAny2Vec):
         ),      
       color='g'
       )    
-    model_fn = l.file_prefix() + '_e{}_v{}K_ep_{:02}'.format(
+    model_fn = l.file_prefix + '_e{}_v{}K_ep_{:02}'.format(
       model.wv.vector_size, 
       len(model.wv) // 1000,
       self.epoch)
@@ -171,7 +171,7 @@ if __name__ == '__main__':
       color='g',
       )
     
-    model_fn = l.file_prefix() + '_e{}_v{}K_final'.format(
+    model_fn = l.file_prefix + '_e{}_v{}K_final'.format(
         model.wv.vector_size, 
         len(model.wv) // 1000,
         )
