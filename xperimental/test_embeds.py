@@ -21,16 +21,15 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 from gensim.models import Word2Vec
 
 from libraries.logger import Logger
-
-from embeds_utils.utils import test_model
+from utils.utils import test_model
 import constants as ct
 
 if __name__ == '__main__':
   
   fn_models = [
-    '20211123_112106embeds_ep_04',
-    '20211123_112106embeds_ep_11',  
-    '20211123_183830embeds',
+    '20211124_082955_emb128',
+    # '20211123_112106embeds_ep_11',  
+    # '20211123_183830embeds',
     ]
   
   l = Logger('LAIEMB', base_folder='.', app_folder='_cache')
