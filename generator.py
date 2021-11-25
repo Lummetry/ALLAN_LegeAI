@@ -33,24 +33,25 @@ from gensim.models.callbacks import CallbackAny2Vec
 
 from libraries.logger import Logger
 from libraries.generic_obj import LummetryObject
-from embeds_utils.utils import test_model
+from utils.utils import test_model
 import constants as ct
 
-__VER__ = '0.2.0.0'
+__VER__ = '0.2.5.0'
 
 class LossCallback(CallbackAny2Vec):
   '''Callback to print loss after each epoch.'''
 
-  def __init__(self, log, model_fn, max_epoch):
+  def __init__(self, log, max_epoch, model_no):
     self.epoch = 1
     self.log = log
-    self.model_fn = model_fn
+    self.model_no = model_no
     self.max_epoch = max_epoch
     self.timings = []
     return
       
   def on_train_begin(self, model):
-    self.log.P("Begin training on with len(wv)={} {}".format(
+    self.log.P("Begin training model {} on with len(wv)={} {}".format(
+      self.model_no,
       len(model.wv), ' ' * 20,
       ), color='g')
     return
@@ -70,18 +71,21 @@ class LossCallback(CallbackAny2Vec):
       name="Epoch {}".format(self.epoch)
       )
     self.log.P(
-      "Epoch #{}, Loss: {}, Epoch time: {}, Elapsed time: {}, Remaining time: {}".format(
-        self.epoch, loss,
+      "Model {}, Epoch #{}, Loss: {}, Epoch time: {}, Elapsed time: {}, Remaining time: {}".format(
+        self.model_no, self.epoch, loss,
         time.strftime("%H:%M:%S", time.gmtime(epoch_time)),
         time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),
         time.strftime("%H:%M:%S", time.gmtime(remaining_time)),
         ),      
       color='g'
       )    
-    self.epoch += 1
-    model_fn = self.model_fn + '_ep_{:02}'.format(self.epoch)
+    model_fn = l.file_prefix() + '_e{}_v{}K_ep_{:02}'.format(
+      model.wv.vector_size, 
+      len(model.wv) // 1000,
+      self.epoch)
     self.log.P("Saving '{}'".format(model_fn), color='g')
     model.save(model_fn)
+    self.epoch += 1
 
 
 
@@ -97,6 +101,8 @@ class CorpusGenerator(LummetryObject):
     folder = self.log.get_data_folder()
     self.P("Processing folder '{}'".format(folder))
     files = [x for x in os.listdir(folder) if self.file_prefix in x and '.pkl' in x]
+    if len(files) == 0:
+      raise ValueError("No data files to train on!")
     for fn in files:
       self.P("  Processing file '{}' {}".format(fn, ' ' * 50))
       wordlist = l.load_pickle_from_data(fn)
@@ -121,53 +127,53 @@ if __name__ == '__main__':
   l = Logger('LAI', base_folder='.', app_folder='_cache')
   
   if l.is_running_from_ipython and not FORCE_LOCAL:
-    max_vocab = 150000
-    l.P("Detected running in debug mode. Using 'small' vocab size {}".format(
-      max_vocab), color='y')
-    epochs = 25
+    l.P("Detected running in debug mode.", color='y')
+    params = [
+        {'max_final_vocab': 120000, 'min_count':20 ,'vector_size':128, 'epochs':25, 'window':5},
+      ]
     workers = 11
-    emb_size=128
-    window = 5
-    min_count = 20
   else:
     max_vocab = None
-    l.P("Detected running in live model. Using vocab size {}".format(
-      max_vocab), color='y')
+    l.P("Detected running in live model", color='y')
+    params = [
+        {'max_final_vocab':   None, 'min_count':40, 'vector_size':128, 'epochs':40, 'window':5},
+        {'max_final_vocab':   None, 'min_count':20, 'vector_size':128, 'epochs':40, 'window':5},
+        {'max_final_vocab': 140000, 'min_count':20, 'vector_size':128, 'epochs':40, 'window':5},
+        {'max_final_vocab': 120000, 'min_count':20, 'vector_size':128, 'epochs':40, 'window':5},
+        
+      ]
     data_folder = l.get_data_subfolder('_embeds_input')
-    emb_size=128
-    epochs = 40
     workers = 15
-    window = 5
-    min_count = 40
 
-  model_fn = os.path.join(l.get_models_folder(), l.file_prefix + 'emb{}'.format(emb_size))
-  
-  cg = CorpusGenerator(
-    log=l,
-    )
-  
-  model = Word2Vec(
-    sentences=cg,
-    vector_size=emb_size,
-    window=window,
-    min_count=min_count,
-    sg=1,
-    workers=workers,    
-    alpha=0.004,
-    min_alpha=0.001,
-    negative=20,
-    epochs=epochs,
-    compute_loss=True,
-    max_final_vocab=max_vocab,
-    callbacks=[LossCallback(log=l, model_fn=model_fn, max_epoch=epochs)],
-    )
-  
-  l.P("Test final:", color='g')
-  test_model(
-    log=l, 
-    model=model,
-    words=ct.WV.TEST_LIST,
-    color='g',
-    )
-  model.save(model_fn)
-  
+  for idx, param_set in enumerate(params):
+    l.P("Training model {}/{} with {}".format(idx+1, len(params), param_set), color='g')
+    cg = CorpusGenerator(
+      log=l,
+      )
+    
+    model = Word2Vec(
+      sentences=cg,
+      sg=1,
+      workers=workers,    
+      alpha=0.004,
+      min_alpha=0.001,
+      negative=20,
+      compute_loss=True,
+      callbacks=[LossCallback(log=l, max_epoch=param_set['epochs'], model_no=idx+1)],
+      **param_set,
+      )
+    
+    l.P("Test final:", color='g')
+    test_model(
+      log=l, 
+      model=model,
+      words=ct.WV.TEST_LIST,
+      color='g',
+      )
+    
+    model_fn = l.file_prefix() + '_e{}_v{}K_final'.format(
+        model.wv.vector_size, 
+        len(model.wv) // 1000,
+        )
+    model.save(model_fn)
+    
