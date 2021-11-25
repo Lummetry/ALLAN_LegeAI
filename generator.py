@@ -79,7 +79,7 @@ class LossCallback(CallbackAny2Vec):
         ),      
       color='g'
       )    
-    model_fn = l.file_prefix() + '_e{}_v{}K_ep_{:02}'.format(
+    model_fn = l.file_prefix + '_e{}_v{}K_ep_{:02}'.format(
       model.wv.vector_size, 
       len(model.wv) // 1000,
       self.epoch)
@@ -171,7 +171,7 @@ if __name__ == '__main__':
       color='g',
       )
     
-    model_fn = l.file_prefix() + '_e{}_v{}K_final'.format(
+    model_fn = l.file_prefix + '_e{}_v{}K_final'.format(
         model.wv.vector_size, 
         len(model.wv) // 1000,
         )
