@@ -12,7 +12,6 @@ import tensorflow.keras.backend as K
 
 from tagger.brain.base_engine import ALLANTaggerEngine
 
-from libraries.lummetry_layers.gated import GatedDense
 
 from time import time
 
@@ -304,8 +303,8 @@ class EmbeddingApproximator(ALLANTaggerEngine):
     
     if (not force_generate) and ('DATAFILE' in self.embgen_model_config.keys()):
       fn = self.embgen_model_config['DATAFILE']
-      if self.log.GetDataFile(fn) is not None:
-        xa, xd, xf = self.log.LoadPickleFromData(fn)
+      if self.log.get_data_file(fn) is not None:
+        xa, xd, xf = self.log.load_pickle_from_data(fn)
         self._siam_data_lens = [len(x) for x in xa]
         self._siam_data_unique_lens = np.unique(self._siam_data_lens)
         return xa, xd, xf
@@ -349,8 +348,8 @@ class EmbeddingApproximator(ALLANTaggerEngine):
     #generate also based on predefined list of typos or other kind of mistakes
     if 'CUSTOM_MISTAKES_FILE' in self.embgen_model_config:
       fn = self.embgen_model_config['CUSTOM_MISTAKES_FILE']
-      if self.log.GetDataFile(fn) is not None:
-        pairs = self.log.LoadPickleFromData(fn)
+      if self.log.get_data_file(fn) is not None:
+        pairs = self.log.load_pickle_from_data(fn)
         for s_duplic, s_anchor in pairs:
           idx = self.dic_word2index[s_anchor]
           i_false = (idx + np.random.randint(100,1000)) % len(self.dic_index2word)
@@ -665,11 +664,11 @@ if __name__ == '__main__':
 
   eng = EmbeddingApproximator(log=l,)
 
-  if False:
+  if True:
     #eng._get_siamese_datasets(min_nr_words=0)
     xa, xd, xf = eng._get_siamese_datasets(force_generate=True)
-    for i in range(50):
-      irnd = np.random.randint(0, xa.shape[0])
+    indices = np.random.choice(xa.shape[0], size=50, replace=False)
+    for irnd in indices:
       sa = eng.char_tokens_to_word(xa[irnd])
       sd = eng.char_tokens_to_word(xd[irnd])
       sf = eng.char_tokens_to_word(xf[irnd])
@@ -682,11 +681,11 @@ if __name__ == '__main__':
 
     eng.debug_known_words()
     
-  if True:
+  if False:
     eng.maybe_load_pretrained_embgen()
     eng._get_generated_embeddings()
   
-  if True:
+  if False:
     xa, xd, _ = eng._get_siamese_datasets(force_generate=False, save=False)
     unk_words, true_words = eng._get_performance_comput_input(xa, xd, nr_pairs=20000)
     res = eng.compute_performance(unk_words, true_words)

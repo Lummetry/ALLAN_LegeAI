@@ -27,3 +27,4 @@ class WV:
       'stat', 'derogare', 'accize', 'pescuit', 'vanatoare', 'horeca', 'padure',
       'mediu', 'petrol', 'gaze', 'eolian', 'solar'
     ]
+  
