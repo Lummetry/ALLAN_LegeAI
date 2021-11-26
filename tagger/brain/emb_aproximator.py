@@ -5,15 +5,18 @@ Created on Thu Jul 25 09:04:56 2019
 @author: Andrei
 """
 import numpy as np
+import os
+from time import time
 
 import tensorflow as tf
+tf.compat.v1.disable_eager_execution()
 import tensorflow.keras.backend as K
 
 
 from tagger.brain.base_engine import ALLANTaggerEngine
+from utils.utils import K_identity_loss, K_triplet_loss
 
 
-from time import time
 
 class EmbeddingApproximator(ALLANTaggerEngine):
   def __init__(self, np_embeds=None, dct_w2i=None, dct_i2w=None, **kwargs):
@@ -42,7 +45,6 @@ class EmbeddingApproximator(ALLANTaggerEngine):
   
   def _setup(self):
     self.embgen_model_batch_size = self.embgen_model_config['BATCH_SIZE']
-    self.use_cuda = self.embgen_model_config['USE_CUDA']
     return
     
   
@@ -56,7 +58,7 @@ class EmbeddingApproximator(ALLANTaggerEngine):
                               layer_cfg,
                               final_layer,
                               prev_features,
-                              use_cuda,
+                              both_pools=False
                               ):
     s_name = layer_name.lower()
     n_prev_feats = prev_features
@@ -67,14 +69,9 @@ class EmbeddingApproximator(ALLANTaggerEngine):
     if (b_residual and final_layer) or (b_residual and 'emb' in s_type):
       raise ValueError("Pre-readound final and post-input embedding layers cannot have residual connection")
     if 'lstm' in s_type:
-      if use_cuda:
-        cell_lstm = tf.keras.layers.CuDNNLSTM(units=n_feats, 
-                                              return_sequences=sequences,
-                                              name=s_name+'_culstm')
-      else:
-        cell_lstm = tf.keras.layers.LSTM(units=n_feats, 
-                                         return_sequences=sequences,
-                                         name=s_name+'_lstm')
+      cell_lstm = tf.keras.layers.LSTM(units=n_feats, 
+                                       return_sequences=sequences,
+                                       name=s_name+'_lstm')
       tf_x = tf.keras.layers.Bidirectional(cell_lstm,
                                            name=s_name+'_bidi')(tf_inputs)
       # double n_feats due to BiDi
@@ -89,11 +86,14 @@ class EmbeddingApproximator(ALLANTaggerEngine):
       tf_x = tf.keras.layers.BatchNormalization(name=s_name+'_bn')(tf_x)
       tf_x = tf.keras.layers.Activation(act, name=s_name+'_'+act)(tf_x)
       if final_layer:
-        tf_x1 = tf.keras.layers.GlobalAvgPool1D(name=s_name+'_GAP')(tf_x)
-        tf_x2 = tf.keras.layers.GlobalMaxPool1D(name=s_name+'_GMP')(tf_x)
-        tf_x = tf.keras.layers.concatenate([tf_x1, tf_x2], name=s_name+'_concat')
+        tf_x1 = tf.keras.layers.GlobalMaxPool1D(name=s_name+'_GMP')(tf_x)
+        if both_pools:
+          tf_x2 = tf.keras.layers.GlobalAvgPool1D(name=s_name+'_GAP')(tf_x)
+          tf_x = tf.keras.layers.concatenate([tf_x1, tf_x2], name=s_name+'_concat')
+        else:
+          tf_x = tf_x1
     else:
-      raise ValueError("Unknown '' layer type".format(s_type))
+      raise ValueError("Unknown '{}' layer type".format(s_type))
     
     if b_residual:
       if 'lstm' in s_type:
@@ -159,7 +159,6 @@ class EmbeddingApproximator(ALLANTaggerEngine):
                               layer_cfg=layers_cfg[-1],
                               final_layer=True,
                               prev_features=prev_features,
-                              use_cuda=self.use_cuda,
                             )
       lst_columns.append(tf_x)
     
@@ -169,7 +168,12 @@ class EmbeddingApproximator(ALLANTaggerEngine):
       tf_x = lst_columns[0]
     if drp > 0:
       tf_x = tf.keras.layers.Dropout(drp, name='drop1_{:.1f}'.format(drp))(tf_x)
-    tf_x = GatedDense(units=self.emb_size*2, name='gated1')(tf_x)
+    
+    tf_x_res = tf.keras.layers.Dense(units=self.emb_size*2, name='pre_emb_lin_res')(tf_x)
+    tf_x = tf.keras.layers.Dense(units=self.emb_size*2, name='pre_emb_lin')(tf_x)
+    tf_x = tf.keras.layers.Activation('relu', name='pre_emb_relu')(tf_x)
+    tf_x = tf.keras.layers.Add(name='res_add')([tf_x, tf_x_res])
+
     if drp > 0:
       tf_x = tf.keras.layers.Dropout(drp, name='drop2_{:.1f}'.format(drp))(tf_x)
     
@@ -177,11 +181,11 @@ class EmbeddingApproximator(ALLANTaggerEngine):
     l2norm_layer = tf.keras.layers.Lambda(lambda x: K.l2_normalize(x, axis=1), name='emb_l2_norm_readout')
     tf_readout = l2norm_layer(tf_x)
     model = tf.keras.models.Model(inputs=tf_input, outputs=tf_readout)
-    model.compile(optimizer='adam', loss='logcosh')
+    model.compile(optimizer='nadam', loss='logcosh')
     self.embgen_model = model
     self.embgen_model_trained = False
     self.P("Unknown words embeddings generator model:\n{}".format(
-        self.log.GetKerasModelSummary(self.embgen_model)))
+        self.log.get_keras_model_summary(self.embgen_model)))
     return
 
 
@@ -196,14 +200,14 @@ class EmbeddingApproximator(ALLANTaggerEngine):
     tf_emb2 = self.embgen_model(tf_input2)
     tf_emb3 = self.embgen_model(tf_input3)
       
-    triple_loss_layer = tf.keras.layers.Lambda(function=self.log.K_triplet_loss,
+    triple_loss_layer = tf.keras.layers.Lambda(function=K_triplet_loss,
                                                name='triplet_loss_layer')
     
     tf_readout = triple_loss_layer([tf_emb1, tf_emb2, tf_emb3])
     
     model = tf.keras.models.Model(inputs=[tf_input1, tf_input2, tf_input3], outputs=tf_readout)  
-    
-    model.compile(optimizer='adam', loss=self.log.K_identity_loss)    
+    opt = tf.keras.optimizers.Nadam(0.0005)
+    model.compile(optimizer=opt, loss=K_identity_loss)    
     self.siamese_model = model
     return model
   
@@ -294,7 +298,8 @@ class EmbeddingApproximator(ALLANTaggerEngine):
     return new_word
   
   def _get_siamese_datasets(self, min_word_size=4, min_nr_words=5,
-                            max_word_min_count=15, force_generate=False, save=False):
+                            max_word_min_count=15, force_generate=False, 
+                            save=False, name=None):
     if self.dic_word2index is None:
       raise ValueError("Vocab not loaded!")
     lst_anchor = []
@@ -302,7 +307,7 @@ class EmbeddingApproximator(ALLANTaggerEngine):
     lst_false  = []
     
     if (not force_generate) and ('DATAFILE' in self.embgen_model_config.keys()):
-      fn = self.embgen_model_config['DATAFILE']
+      fn = self.embgen_model_config['DATAFILE'] if name is None else name
       if self.log.get_data_file(fn) is not None:
         xa, xd, xf = self.log.load_pickle_from_data(fn)
         self._siam_data_lens = [len(x) for x in xa]
@@ -351,7 +356,7 @@ class EmbeddingApproximator(ALLANTaggerEngine):
       if self.log.get_data_file(fn) is not None:
         pairs = self.log.load_pickle_from_data(fn)
         for s_duplic, s_anchor in pairs:
-          idx = self.dic_word2index[s_anchor]
+          idx = self.dic_word2index[s_anchor.lower()]
           i_false = (idx + np.random.randint(100,1000)) % len(self.dic_index2word)
           s_false = self.dic_index2word[i_false]
           _len = max(len(s_anchor), len(s_duplic))
@@ -375,7 +380,7 @@ class EmbeddingApproximator(ALLANTaggerEngine):
     self.P(" Done generating in {:.1f}s".format(t2-t1))    
     self._siam_data_lens = [x.size for x in lst_anchor]
     self.P("")
-    self.log.ShowTextHistogram(self._siam_data_lens, 
+    self.log.show_text_histogram(self._siam_data_lens, 
                                caption='Siam data len distrib',
                                show_both_ends=True)
     self._siam_data_unique_lens = np.unique(self._siam_data_lens)
@@ -386,8 +391,8 @@ class EmbeddingApproximator(ALLANTaggerEngine):
     self.P("Prepared siamese data with {} obs".format(x_anchor.shape[0]))
     data = x_anchor, x_duplic, x_false
     if save and 'DATAFILE' in self.embgen_model_config.keys():
-      fn = self.embgen_model_config['DATAFILE']
-      self.log.SavePickleToData(data, fn)
+      fn = self.embgen_model_config['DATAFILE'] if name is None else name
+      self.log.save_pickle_to_data(data, fn)
     return data
   
   
@@ -471,11 +476,13 @@ class EmbeddingApproximator(ALLANTaggerEngine):
     
     
     xa,xd,xf = self._get_siamese_datasets(force_generate=force_generate, save=False)
-    xa_t, xd_t, _ = self._get_siamese_datasets(force_generate=True, save=True)
+    xa_t, xd_t, _ = self._get_siamese_datasets(
+      force_generate=False, save=True, name='ro_embgen_dataset_test.pkl')
     unk_words, true_words = self._get_performance_comput_input(xa_t, xd_t, nr_pairs=2000)
-    self.P("Siamese data sanity check:")
-    for i in range(10):
-      irnd = np.random.randint(0, xa.shape[0])
+    self.P("Siamese data sanity check on {} obs dataset:".format(xa.shape[0]))
+    nr_tests = 10
+    indices = np.random.choice(xa.shape[0], nr_tests, replace=False)
+    for irnd in indices:
       sa = self.char_tokens_to_word(xa[irnd])
       sd = self.char_tokens_to_word(xd[irnd])
       sf = self.char_tokens_to_word(xf[irnd])
@@ -487,7 +494,9 @@ class EmbeddingApproximator(ALLANTaggerEngine):
 
     avg_loss1 = []
     avg_loss2 = []
-    self.P("Training EmbGen model for {} epochs".format(epochs))
+    best_score = 0
+    best_epoch = None
+    self.P("Training EmbGen model for {} epochs on {} obs".format(epochs, xa.shape[0]))
     for epoch in range(epochs):
       if approximate_embeddings:
         loss1 = self._train_basic(gen, n_batches, epoch)
@@ -501,17 +510,23 @@ class EmbeddingApproximator(ALLANTaggerEngine):
       self.P("Epoch {} siam training done. loss:{:>7.4f}  avg:{:>7.4f}".format(
           epoch+1, loss2, np.mean(avg_loss2)))
       if (((epoch+1) % save_embeds_every) == 0 or epoch == 0) and epoch < (epochs-1):
-        self.save_model(epoch=epoch+1)
         self._get_generated_embeddings()
         self.debug_unk_words_model()
-        self.compute_performance(unk_words, true_words, tops=[1,3,5])
+        tops, _, _ = self.compute_performance(unk_words, true_words, tops=[1,3,5])
         self.P("")
-    self.save_model(overwrite_pretrained=overwrite_pretrained, epoch=epochs)                
+        top1 = tops[0]
+        if top1 > best_score:
+          best_score = top1
+          best_epoch = epoch
+          self.P("New best score {:.2f} @ epoch {}".format(best_score, best_epoch+1), color='g')
+          self.save_model(epoch=epoch+1, score=top1)
+    self.save_model(overwrite_pretrained=overwrite_pretrained, epoch=epochs, score=top1)
+    self.P("Best score {:.2f}% @ epoch {}".format(best_score, best_epoch), color='g')
     self._get_generated_embeddings()
     return
   
   
-  def save_model(self, overwrite_pretrained=False, epoch=None):
+  def save_model(self, overwrite_pretrained=False, epoch=None, score=None):
     if not overwrite_pretrained:
       label = 'embgen_model'
       use_prefix = True
@@ -520,9 +535,11 @@ class EmbeddingApproximator(ALLANTaggerEngine):
       use_prefix = False
     
     if epoch is not None:
-      label += '_ep{}'.format(epoch)
+      label += '_sc_{:02}_ep{:03}'.format(int(score), epoch)
 
-    self.log.SaveKerasModel(self.embgen_model, label=label, use_prefix=use_prefix)
+    fn = os.path.join(self.log.get_models_folder(), l.file_prefix + '_' + label +'.h5')
+    self.P("Saving '{}'...".format(fn))
+    self.embgen_model.save(fn)
     
     return
     
@@ -578,6 +595,7 @@ class EmbeddingApproximator(ALLANTaggerEngine):
                                              ]):
     self.P("Testing for {} (dist='{}')".format(
                 unk_words, self.dist_func_name))
+    dct_tops = {}
     for uword in unk_words:
       if uword in self.dic_word2index.keys():
         self.P(" 'Unk' word {} found in dict at pos {}".format(
@@ -585,7 +603,8 @@ class EmbeddingApproximator(ALLANTaggerEngine):
         continue
       top = self.get_unk_word_similar_word(uword, top=3)
       self.P(" unk: '{}' results in: {}".format(uword, top))
-    return
+      dct_tops[uword] = top[0]
+    return dct_tops
       
       
   def debug_known_words(self, good_words=['ochi', 'gura','gat','picior','mana','genunchi']):
@@ -622,6 +641,7 @@ class EmbeddingApproximator(ALLANTaggerEngine):
     max_top = max(tops)
     
     cnt_top = [0 for _ in range(len(tops))]
+    dct_top = {}
     nr_skipped = 0
     
     from tqdm import tqdm
@@ -643,15 +663,18 @@ class EmbeddingApproximator(ALLANTaggerEngine):
     nr_computed = len(unk_words) - nr_skipped
 
     str_log = ""
+    percentages = []
     for j,t in enumerate(tops):
       _p = 100 * cnt_top[j] / nr_computed
+      percentages.append(_p)
+      dct_top['Acc@Top{}'.format(t)] = _p
       str_log += '\n{}/{} ({:.2f}%) @Top{}'.format(cnt_top[j], nr_computed, _p, tops[j])
 
     str_log += '\n{} words were skipped because they were found in dict'.format(nr_skipped)
 
-    self.P("Results:{}".format(str_log))
+    self.P("Results for {}:{}".format(self.embgen_model_name, str_log))
 
-    return cnt_top, nr_skipped
+    return percentages, dct_top, nr_skipped
 
     
   
@@ -664,9 +687,11 @@ if __name__ == '__main__':
 
   eng = EmbeddingApproximator(log=l,)
 
-  if True:
+  if False:
+    # just generate training data
     #eng._get_siamese_datasets(min_nr_words=0)
-    xa, xd, xf = eng._get_siamese_datasets(force_generate=True)
+    xa, xd, xf = eng._get_siamese_datasets(force_generate=True, save=True)
+    _, _, _ = eng._get_siamese_datasets(force_generate=True, save=True, name='ro_embgen_dataset_test.pkl')
     indices = np.random.choice(xa.shape[0], size=50, replace=False)
     for irnd in indices:
       sa = eng.char_tokens_to_word(xa[irnd])
@@ -676,19 +701,53 @@ if __name__ == '__main__':
 
 
   if False:
-    eng.train_unk_words_model(epochs=100, force_generate=True, overwrite_pretrained=False,
-                              save_embeds_every=10)
+    # train and validate
+    eng.train_unk_words_model(epochs=150, force_generate=False, overwrite_pretrained=False,
+                              save_embeds_every=5)
 
     eng.debug_known_words()
     
-  if False:
-    eng.maybe_load_pretrained_embgen()
-    eng._get_generated_embeddings()
+  if True:
+    # prepare similarity embeddings and run some simple tests
+    import pandas as pd
+    dct_res = {
+      'MODEL' : []
+      }
+    SHOW_UNK = ['salarul', 'biruol', 'zoma', 'trbuie']
+    MODELS = [
+      '20211125_180259_embgen_model_sc_35_ep100.h5',
+      '20211125_203842_embgen_model_sc_39_ep040.h5',
+      '20211125_203842_embgen_model_sc_39_ep140.h5',
+      '20211125_203842_embgen_model_sc_39_ep150.h5',
+      ]
+    for model_name in MODELS:
+      eng.maybe_load_pretrained_embgen()
+      eng._get_generated_embeddings()
+      dct_top_unk = eng.debug_unk_words_model()
+      eng.debug_known_words()
+      xa, xd, _ = eng._get_siamese_datasets(force_generate=False, save=False, name='ro_embgen_dataset_test.pkl')
+      unk_words, true_words = eng._get_performance_comput_input(xa, xd, nr_pairs=1000)
+      _, dct_top_acc, _ = eng.compute_performance(unk_words, true_words)
+      dct_res['MODEL'].append(model_name)
+      for k,v in dct_top_acc.items():
+        if k not in dct_res:
+          dct_res[k] = []
+        dct_res[k].append(v)
+      for k in SHOW_UNK:
+        if k not in dct_res:
+          dct_res[k] = []
+        dct_res[k].append(dct_top_unk[k])
+      df_res = pd.DataFrame(dct_res)
+      sort_col = df_res.columns[1]
+      l.P("Results:\n{}".format(df_res.sort_values(sort_col)))
   
   if False:
-    xa, xd, _ = eng._get_siamese_datasets(force_generate=False, save=False)
+    # extensive test similarity embeddings on validation dataset
+    xa, xd, _ = eng._get_siamese_datasets(force_generate=False, save=False, name='ro_embgen_dataset_test.pkl')
     unk_words, true_words = eng._get_performance_comput_input(xa, xd, nr_pairs=20000)
-    res = eng.compute_performance(unk_words, true_words)
+    _, dct_res, _ = eng.compute_performance(unk_words, true_words)
+    l.P("Result dict: {}".format(dct_res))
     
+
     
     

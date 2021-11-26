@@ -7,7 +7,7 @@
   "TOP_TAGS"  : 10,   
   
   "WORD2IDX" : "#####",
-  "IDX2WORD" : "ro_i2w.pkl",
+  "IDX2WORD" : "lai_ro_i2w_191K.pkl",
   "TOPIC2TAGS": "EY_topic_tag_map.pkl",
   
   "TOKENS" : {
@@ -53,7 +53,7 @@
 
     "USE_CUDA"    : 0,
     
-    "EMBED_FILE"  : "embeddings.pkl",
+    "EMBED_FILE"  : "lai_embeddings_191K.pkl",
     "####EMBED_SIZE"  : 128,
 
     "COLUMNS" : [
@@ -107,61 +107,60 @@
     "DATAFILE"      : "ro_embgen_dataset.pkl",
     "CUSTOM_MISTAKES_FILE" : "20190912_ALLAN_EY_TYPOS.pickle",
     "SAME_CAPS"     : 1,
-    "PRETRAINED"    : "#####",
+    "PRETRAINED"    : "20211125_203842_embgen_model_sc_40_ep140.h5",
+    "EMBED_FILE"    : "embgen_full_embeds.npy",
     "BATCH_SIZE"    : 512,
     "FINAL_DROP"    : 0.5,
     "USE_CUDA"      : 0, 
     "CHR_EMB_SIZE"  : 16, 
     "COLUMNS" : {      
-        "COL_2" : 
-          {
-              "####LAYERS" : 
-              [
-                {
-                  "NAME"     : "RNN1",
-                  "TYPE"     : "lstm",
-                  "FEATS"    : 128,
-                  "RESIDUAL" : 1
-                },
-                {
-                  "NAME"     : "RNN2",
-                  "TYPE"     : "lstm",
-                  "FEATS"    : 256,
-                  "RESIDUAL" : 0
-                }
-              ],
+        "COL_k1" : 
+          {              
             "LAYERS" : 
               [
                 {
-                  "NAME"    : "CNV1",
+                  "NAME"    : "CNV64",
                   "TYPE"    : "conv",
-                  "FEATS"   : 64,
+                  "FEATS"   : 128,
+                  "KERNEL"  : 1
+                }
+              ]               
+          },
+
+        "COL_k2" : 
+          {              
+            "LAYERS" : 
+              [
+                {
+                  "NAME"    : "CNV64",
+                  "TYPE"    : "conv",
+                  "FEATS"   : 128,
                   "KERNEL"  : 2
                 }
               ]               
           },
           
-        "COL_3" : 
+        "COL_k3" : 
           {
               "LAYERS" : 
               [
                 {
-                  "NAME"    : "CNV1",
+                  "NAME"    : "CNV64",
                   "TYPE"    : "conv",
-                  "FEATS"   : 64,
+                  "FEATS"   : 128,
                   "KERNEL"  : 3
                 }
               ]               
           },
           
-        "COL_4" : 
+        "COL_k4" : 
           {
               "LAYERS" : 
               [
                 {
-                  "NAME"    : "CNV1",
+                  "NAME"    : "CNV64",
                   "TYPE"    : "conv",
-                  "FEATS"   : 64,
+                  "FEATS"   : 128,
                   "KERNEL"  : 4
                 }
               ]               

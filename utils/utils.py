@@ -36,3 +36,21 @@ def test_model(log,
   if name is not None:
     log.P("*" * 80)
   return
+
+
+def K_triplet_loss(y_pred, beta=0.5,):
+   import tensorflow.keras.backend as K
+
+   anchor = y_pred[0]
+   positive = y_pred[1]
+   negative = y_pred[2]
+
+   similar_dist = K.sum(K.square(anchor - positive), axis=1)
+   diff_dist = K.sum(K.square(anchor - negative), axis=1)
+   loss = K.maximum(similar_dist - diff_dist + beta, 0.0)
+   loss = K.expand_dims(loss)
+   return loss
+
+def K_identity_loss(y_true, y_pred):
+  import tensorflow.keras.backend as K
+  return K.mean(y_pred - 0 * y_true)

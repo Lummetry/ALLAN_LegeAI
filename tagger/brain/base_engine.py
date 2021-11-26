@@ -20,6 +20,7 @@ from collections import OrderedDict
 from libraries.generic_obj import LummetryObject
 from libraries.logger import Logger
 from time import time
+from utils.utils import K_identity_loss, K_triplet_loss
 
 __VER__ = '1.0.0'
 
@@ -56,6 +57,7 @@ class ALLANTaggerEngine(LummetryObject):
     self.generated_embeddings = None
     self.model = None
     self.embgen_model = None
+    self.embgen_model_name = 'embgen_model'
     self.x_data_vocab = None
     self.output_size = len(dict_label2index) if dict_label2index is not None else output_size
     self.vocab_size = len(dict_word2index) if dict_word2index is not None else vocab_size
@@ -111,6 +113,15 @@ class ALLANTaggerEngine(LummetryObject):
         self.dic_topic2tags = self.log.load_dict_from_data(self.fn_topic2tags)
       else:
         self.dic_topic2tags = self.log.load_pickle_from_data(self.fn_topic2tags)
+      if self.dic_topic2tags is not None:
+        sample = ["{}:{}".format(k,v) for i,(k,v) in enumerate(self.dic_topic2tags.items()) if i<3]
+        self.P("Loaded topic2tags. Obs({}/{}): {}".format(
+          len(sample),
+          len(self.dic_topic2tags),
+          sample
+          ))
+      else:
+        self.P("WARNING: topic2tags NOT loaded.")
 
     return
         
@@ -122,7 +133,7 @@ class ALLANTaggerEngine(LummetryObject):
     else:
       dict_labels2idx = self.log.load_pickle_from_data(self.fn_labels2idx)
     if dict_labels2idx is None:
-      self.log.P(" No labels2idx dict found")
+      self.log.P("WARNING: No labels2idx dict found")
     
     dic_index2label = {v:k for k,v in dict_labels2idx.items()}
     self.dic_labels = dict_labels2idx
@@ -140,7 +151,7 @@ class ALLANTaggerEngine(LummetryObject):
     if os.path.isfile(fn_emb):
       self.P("Loading embeddings {}...".format(fn_emb[-25:]))
       self.embeddings = np.load(fn_emb, allow_pickle=True)
-      self.P(" Loaded embeddings: {}".format(self.embeddings.shape))    
+      self.P("Loaded embeddings: {}".format(self.embeddings.shape), color='y')
       self.emb_size = self.embeddings.shape[-1]
       self.vocab_size = self.embeddings.shape[-2]
     else:
@@ -291,9 +302,9 @@ class ALLANTaggerEngine(LummetryObject):
     else:
       dict_word2idx = self.log.load_pickle_from_data(fn_words_dict)
     if dict_word2idx is None:
-      self.P("  No word2idx dict found")
+      self.P("No word2idx dict found. This wil be solved from reversing idx2word", color='y')
     else:
-      self.P(" Found word2idx[{}]".format(len(dict_word2idx)))
+      self.P("Found word2idx[{}]".format(len(dict_word2idx)), color='g')
 
     if ".txt" in fn_idx_dict:
       dict_idx2word = self.log.load_dict_from_data(fn_idx_dict)
@@ -302,9 +313,9 @@ class ALLANTaggerEngine(LummetryObject):
       if type(dict_idx2word) in [list, tuple]:
         dict_idx2word = {i:v for i,v in enumerate(dict_idx2word)}
     if dict_idx2word is None:
-      self.P(" No idx2word dict found")
+      self.P("WARNING: No idx2word dict found")
     else:
-      self.P(" Found idx2word[{}]".format(len(dict_idx2word)))
+      self.P("Loaded idx2word[{}]".format(len(dict_idx2word)), color='g')
       
     if (dict_word2idx is None) and (dict_idx2word is not None):
       dict_word2idx = {v:k for k,v in dict_idx2word.items()}
@@ -314,6 +325,11 @@ class ALLANTaggerEngine(LummetryObject):
       
     self.dic_word2index = dict_word2idx
     self.dic_index2word = dict_idx2word
+    sample = ["{}:'{}'".format(i,self.dic_index2word[i]) for i in range(7)]
+    self.P("Loaded dicts. I2W({}/{}): {}".format(
+      len(sample),len(self.dic_index2word),
+      ", ".join(sample)
+      ))
     return
   
   
@@ -921,10 +937,8 @@ class ALLANTaggerEngine(LummetryObject):
     
     if debug:      
       self.P("Saving tagger model '{}'".format(s_name))
-    fn = self.log.SaveKerasModel(self.model, 
-                                 s_name, 
-                                 use_prefix=True,
-                                 DEBUG=debug)
+    fn = os.path.join(self.log.get_models_folder(), l.file_prefix + '_' + s_name +'.h5')
+    self.model.save(fn)
 
     if delete_prev_named:
       if self.prev_saved_model != []:
@@ -1147,14 +1161,21 @@ class ALLANTaggerEngine(LummetryObject):
     return _res
   
   
-  def maybe_load_pretrained_embgen(self):
+  def maybe_load_pretrained_embgen(self, embgen_model_file=None):
     _res = False
-    if "PRETRAINED" in self.embgen_model_config.keys():
-      fn = self.embgen_model_config['PRETRAINED']
-      if self.log.get_models_file(fn) is not None:
-        self.P("Loading pretrained embgen model {}".format(fn))
-        self.embgen_model = self.log.LoadKerasModel(fn,)
+    if "PRETRAINED" in self.embgen_model_config.keys() or embgen_model_file is not None:
+      fn = self.embgen_model_config['PRETRAINED'] if embgen_model_file is None else embgen_model_file
+      fn_model = self.log.get_models_file(fn)
+      if fn_model is not None:
+        self.P("Loading pretrained embgen model {}".format(fn), color='y')
+        self.embgen_model = tf.keras.models.load_model(
+          filepath=fn_model,
+          custom_objects=None,
+          )
+        self.embgen_model_name = fn
         _res = True
+      else:
+        self.P("WARNING: attempt to load pretrained embgen '{}' failed.".format(fn))
     return _res
   
   
@@ -1167,7 +1188,7 @@ class ALLANTaggerEngine(LummetryObject):
   def setup_pretrained_model(self):
     if self.maybe_load_pretrained():
       self.P("Pretrained model:\n{}".format(
-          self.log.GetKerasModelSummary(self.model)))
+          self.log.get_keras_model_summary(self.model)))
       self.trained = True
     return  
     
