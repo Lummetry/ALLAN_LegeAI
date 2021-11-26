@@ -706,7 +706,7 @@ if __name__ == '__main__':
                               save_embeds_every=5)
 
     eng.debug_known_words()
-    
+
   if True:
     # prepare similarity embeddings and run some simple tests
     import pandas as pd
@@ -714,21 +714,25 @@ if __name__ == '__main__':
       'MODEL' : []
       }
     SHOW_UNK = ['salarul', 'biruol', 'zoma', 'trbuie']
+    test_text = 'Cat ește salarilu la compamia vostra?'
     MODELS = [
-      '20211125_180259_embgen_model_sc_35_ep100.h5',
-      '20211125_203842_embgen_model_sc_39_ep040.h5',
-      '20211125_203842_embgen_model_sc_39_ep140.h5',
-      '20211125_203842_embgen_model_sc_39_ep150.h5',
+      # '20211125_180259_embgen_model_sc_35_ep100.h5',
+      # '20211125_203842_embgen_model_sc_39_ep040.h5',
+      '20211125_203842_embgen_model_sc_40_ep140.h5', # BEST
+      # '20211125_203842_embgen_model_sc_40_ep150.h5',
       ]
+    n_pairs = 5000 if len(MODELS) > 1 else 100
+    xa, xd, _ = eng._get_siamese_datasets(force_generate=False, save=False, name='ro_embgen_dataset_test.pkl')
+    unk_words, true_words = eng._get_performance_comput_input(xa, xd, nr_pairs=n_pairs)
     for model_name in MODELS:
-      eng.maybe_load_pretrained_embgen()
+      if l.get_models_file(model_name) is None:
+        raise ValueError("Could not find file '{}'".format(model_name))
+      eng.maybe_load_pretrained_embgen(embgen_model_file=model_name)
       eng._get_generated_embeddings()
       dct_top_unk = eng.debug_unk_words_model()
       eng.debug_known_words()
-      xa, xd, _ = eng._get_siamese_datasets(force_generate=False, save=False, name='ro_embgen_dataset_test.pkl')
-      unk_words, true_words = eng._get_performance_comput_input(xa, xd, nr_pairs=1000)
       _, dct_top_acc, _ = eng.compute_performance(unk_words, true_words)
-      dct_res['MODEL'].append(model_name)
+      dct_res['MODEL'].append(eng.embgen_model_name)
       for k,v in dct_top_acc.items():
         if k not in dct_res:
           dct_res[k] = []
@@ -739,6 +743,18 @@ if __name__ == '__main__':
         dct_res[k].append(dct_top_unk[k])
       df_res = pd.DataFrame(dct_res)
       sort_col = df_res.columns[1]
+      text_embs = eng.encode(
+        text=test_text,
+        direct_embeddings=True,
+        fixed_len=50,
+        )
+      decoded_text = eng.decode(
+        tokens=text_embs,
+        tokens_as_embeddings=True,
+        )
+      l.P("  SOURCE: '{}'".format(test_text))
+      l.P("  ENCODE:  {}".format(text_embs.shape if isinstance(text_embs, np.ndarray) else text_embs))
+      l.P("  DECODE: '{}'".format(decoded_text))
       l.P("Results:\n{}".format(df_res.sort_values(sort_col)))
   
   if False:
@@ -747,7 +763,3 @@ if __name__ == '__main__':
     unk_words, true_words = eng._get_performance_comput_input(xa, xd, nr_pairs=20000)
     _, dct_res, _ = eng.compute_performance(unk_words, true_words)
     l.P("Result dict: {}".format(dct_res))
-    
-
-    
-    

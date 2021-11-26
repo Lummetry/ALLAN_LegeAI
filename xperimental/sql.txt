@@ -1,0 +1,67 @@
+SELECT     id_tip_tematica, COUNT(id_document) AS cnt
+FROM        dbo.entitate_x_tematica
+GROUP BY id_tip_tematica
+
+/*************************************************************************************/
+
+select * from
+	(SELECT     id_tip_tematica, COUNT(id_document) AS cnt
+	FROM        dbo.entitate_x_tematica
+	GROUP BY id_tip_tematica) vw1
+where vw1.cnt > 1000
+
+/*************************************************************************************/
+
+select * from
+(
+select id_document, count(id_tip_tematica) cnt
+	FROM        dbo.entitate_x_tematica
+	GROUP BY id_document
+) vw2
+where vw2.cnt > 2
+
+/*************************************************************************************/
+
+select * from 
+(
+	select id_document, count(id_tip_tematica) cnt_tematica from
+		(
+			select id_document, id_tip_tematica from  [dbo].[entitate_x_tematica]
+			where id_tip_tematica in 
+				(select id_tip_tematica from
+					(SELECT     id_tip_tematica, COUNT(id_document) AS cnt
+					FROM        dbo.entitate_x_tematica
+					GROUP BY id_tip_tematica
+					) vw1
+				where vw1.cnt > 1000
+				)
+		) as vw3
+	group by vw3.id_document
+) vw4
+where vw4.cnt_tematica > 1
+
+
+/*************************************************************************************/
+
+
+select * from [entitate_x_tematica] 
+where id_document in
+	(
+		select id_document from 
+		(
+			select id_document, count(id_tip_tematica) cnt_tematica from
+				(
+					select id_document, id_tip_tematica from  [dbo].[entitate_x_tematica]
+					where id_tip_tematica in 
+						(select id_tip_tematica from
+							(SELECT     id_tip_tematica, COUNT(id_document) AS cnt
+							FROM        dbo.entitate_x_tematica
+							GROUP BY id_tip_tematica
+							) vw1
+						where vw1.cnt > 1000
+						)
+				) as vw3
+			group by vw3.id_document
+		) vw4
+		where vw4.cnt_tematica > 1 
+	)

@@ -210,7 +210,8 @@ class ALLANTaggerEngine(LummetryObject):
   def _get_generated_embeddings(self, x_data_vocab=None):
     if self.embgen_model is None:
       raise ValueError("`embgen_model` must be trained before generating embeddings")
-    self.P("Inferring generated embeddings with `embgen_model`...")
+    self.P("Inferring generated embeddings with embgen_model '{}'...".format(
+      self.embgen_model_name))
     if x_data_vocab is None:
       if self.x_data_vocab is None:        
         x_data_vocab = self._convert_vocab_to_training_data()
@@ -527,7 +528,7 @@ class ALLANTaggerEngine(LummetryObject):
     """
     this function will tokenize or directly output the embedding represenation
     of the input list of documents together with the given labels for each
-    document
+    document (if labels are provided)
     """
     s = "Starting text corpus conversion"
     if direct_embeddings:
