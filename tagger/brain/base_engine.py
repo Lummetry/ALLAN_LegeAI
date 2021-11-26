@@ -20,7 +20,7 @@ from collections import OrderedDict
 from libraries.generic_obj import LummetryObject
 from libraries.logger import Logger
 from time import time
-from utils.utils import K_identity_loss, K_triplet_loss
+from utils.utils import K_identity_loss, K_triplet_loss, simple_levenshtein_distance
 
 __VER__ = '1.0.0'
 
@@ -89,16 +89,16 @@ class ALLANTaggerEngine(LummetryObject):
         self.EOS_ID,
         ]
     self.train_folder = self.train_config['FOLDER']
-    self.embgen_model_config = self.config_data['EMB_GEN_MODEL'] if 'EMB_GEN_MODEL' in self.config_data.keys() else None    
+    self.embgen_model_config = self.config_data.get('EMB_GEN_MODEL')
     self.model_config = self.config_data['MODEL']
     self.doc_ext = self.train_config['DOCUMENT']
     self.label_ext = self.train_config['LABEL']
     if self.TOP_TAGS is None:
-      self.TOP_TAGS = self.config_data['TOP_TAGS'] if 'TOP_TAGS' in self.config_data.keys() else 10
-    self.fn_word2idx = self.config_data['WORD2IDX'] if 'WORD2IDX' in self.config_data.keys() else None
-    self.fn_idx2word = self.config_data['IDX2WORD'] if 'IDX2WORD' in self.config_data.keys() else None
-    self.fn_labels2idx = self.config_data['LABEL2IDX'] if 'LABEL2IDX' in self.config_data.keys() else None
-    self.fn_topic2tags = self.config_data['TOPIC2TAGS'] if 'TOPIC2TAGS' in self.config_data.keys() else None
+      self.TOP_TAGS = self.config_data.get('TOP_TAGS',10)
+    self.fn_word2idx = self.config_data.get('WORD2IDX')
+    self.fn_idx2word = self.config_data.get('IDX2WORD')
+    self.fn_labels2idx = self.config_data.get('LABEL2IDX')
+    self.fn_topic2tags = self.config_data.get('TOPIC2TAGS')
     self.doc_size = self.model_config['DOC_SIZE']
     self.model_name = self.model_config['NAME']
     self.dist_func_name = self.config_data['DIST_FUNC']
@@ -146,7 +146,7 @@ class ALLANTaggerEngine(LummetryObject):
     self.embeddings = None
     fn_emb = embeds_filename
     if fn_emb is None:
-      fn_emb = self.model_config['EMBED_FILE'] if 'EMBED_FILE' in self.model_config.keys() else ""
+      fn_emb = self.model_config.get('EMBED_FILE', '')
       fn_emb = self.log.get_data_file(fn_emb)
     if os.path.isfile(fn_emb):
       self.P("Loading embeddings {}...".format(fn_emb[-25:]))
@@ -166,7 +166,7 @@ class ALLANTaggerEngine(LummetryObject):
     self.generated_embeddings = None
     fn_emb = embeds_filename
     if fn_emb is None:
-      fn_emb = self.embgen_model_config['EMBED_FILE'] if 'EMBED_FILE' in self.embgen_model_config.keys() else ""
+      fn_emb = self.embgen_model_config.get('EMBED_FILE', '')
     if self.log.get_data_file(fn_emb) is not None:
       self.P("Loading similarity embeddings {}...".format(fn_emb))
       self.generated_embeddings = self.log.load_pickle_from_data(fn_emb)
@@ -183,11 +183,11 @@ class ALLANTaggerEngine(LummetryObject):
       self.model_config = dict_model_config    
       self.P("Using external model parameters")
       
-    self.seq_len = self.model_config['SEQ_LEN'] if 'SEQ_LEN' in self.model_config.keys() else None
+    self.seq_len = self.model_config.get('SEQ_LEN', None)
     if self.seq_len == 0:
       self.seq_len = None
-    self.emb_size = self.model_config['EMBED_SIZE'] if 'EMBED_SIZE' in self.model_config.keys() else 0
-    self.emb_trainable = self.model_config['EMBED_TRAIN'] if 'EMBED_TRAIN' in self.model_config.keys() else True
+    self.emb_size = self.model_config.get('EMBED_SIZE',0)
+    self.emb_trainable = self.model_config('EMBED_TRAIN', True)
     self.model_columns = self.model_config['COLUMNS']
     
     if self.pre_inputs is not None:
@@ -195,14 +195,13 @@ class ALLANTaggerEngine(LummetryObject):
     else:
       self.model_input = self.model_config['INPUT']
       
-    self.use_cuda = self.model_config['USE_CUDA'] if 'USE_CUDA' in self.model_config.keys() else True
     
     if self.pre_outputs:
       self.model_output = self.pre_outputs
     else:
       self.model_output = self.model_config['OUTPUT']
       
-    self.dropout_end = self.model_config['DROPOUT_CONCAT'] if 'DROPOUT_CONCAT' in self.model_config.keys() else 0.2 
+    self.dropout_end = self.model_config.get('DROPOUT_CONCAT', 0.2 )
     self.end_fc = self.model_config['END_FC']    
     return
   
@@ -211,7 +210,7 @@ class ALLANTaggerEngine(LummetryObject):
     if self.embgen_model is None:
       raise ValueError("`embgen_model` must be trained before generating embeddings")
     self.P("Inferring generated embeddings with embgen_model '{}'...".format(
-      self.embgen_model_name))
+      self.embgen_model_name), color='y')
     if x_data_vocab is None:
       if self.x_data_vocab is None:        
         x_data_vocab = self._convert_vocab_to_training_data()
@@ -452,24 +451,42 @@ class ALLANTaggerEngine(LummetryObject):
     return tokens
   
   
-  def get_unk_word_similar_id(self, unk_word, top=1):
+  def get_unk_word_similar_id(self, unk_word, top=1, raw_test_mode=False):
     if unk_word in self.dic_word2index.keys():
       self.P("WARNING: presumed '{}' unk word is already in vocab!".format(unk_word))
     if self.generated_embeddings is None:
       raise ValueError("`generated_embeddings` matrix must be initialized before calculating unk word similarity")
     # first compute generated embedding
     aprox_emb = self.__get_approx_embed(unk_word)
-    # get closest words id from the generated embeddings the ids will be the same in the real embeddings matrix
-    idx = self._get_closest_idx(aprox_emb=aprox_emb, top=top, np_embeds=self.generated_embeddings)
+    if top > 1 or raw_test_mode:
+      # get closest words id from the generated embeddings the ids will be the same in the real embeddings matrix
+      idx = self._get_closest_idx(aprox_emb=aprox_emb, top=top, np_embeds=self.generated_embeddings)
+    else:      
+      # now we get top 10 and return most similar
+      idxs = self._get_closest_idx(aprox_emb=aprox_emb, top=10, np_embeds=self.generated_embeddings)
+      words = [self.dic_index2word[x] for x in idxs]
+      min_dist = 1000
+      candidate = words[0]
+      for word in words:
+        # calc levenshtein distance
+        dist = simple_levenshtein_distance(unk_word, word)
+        if dist <= min_dist:
+          candidate = word
+          min_dist = dist
+      idx = self.dic_word2index[candidate]      
     return idx
   
   
-  def get_unk_word_similar_word(self, unk_word, top=1):
-    ids = self.get_unk_word_similar_id(unk_word, top=top)
+  def get_unk_word_similar_word(self, unk_word, top=1, raw_test_mode=False, debug=False):
+    ids = self.get_unk_word_similar_id(unk_word, top=top, raw_test_mode=raw_test_mode)
     if type(ids) is np.ndarray:
       _result = [self.dic_index2word[x] for x in ids]
     else:
       _result = self.dic_index2word[ids]
+    if debug:
+      if isinstance(_result,str):
+        _result = [_result]
+      _result = [(x, simple_levenshtein_distance(unk_word, x)) for x in _result]
     return _result
   
   
@@ -494,14 +511,14 @@ class ALLANTaggerEngine(LummetryObject):
     return _result
 
   
-  def _word_encoder(self, word, convert_unknown_words=False,):
+  def _word_encoder(self, word, convert_unknown_words=False, raw_conversion=False):
     if self.embeddings is None:
       self._setup_word_embeddings()
       if self.embeddings is None:
         raise ValueError("Embeddings loading failed!")
-    idx = self.dic_word2index[word] if word in self.dic_word2index.keys() else self.UNK_ID
+    idx = self.dic_word2index.get(word, self.UNK_ID)
     if convert_unknown_words and (idx == self.UNK_ID):
-      idx = self.get_unk_word_similar_id(word)
+      idx = self.get_unk_word_similar_id(word, raw_test_mode=raw_conversion)
     if idx in self.SPECIALS:
       idx = self.UNK_ID      
     emb = self.embeddings[idx]
@@ -524,6 +541,7 @@ class ALLANTaggerEngine(LummetryObject):
              convert_unknown_words=True,
              direct_embeddings=False,
              fixed_len=0,
+             raw_conversion=False,
              DEBUG=False):
     """
     this function will tokenize or directly output the embedding represenation
@@ -563,6 +581,7 @@ class ALLANTaggerEngine(LummetryObject):
       for word in splitted:
         tk,em = self._word_encoder(word, 
                                    convert_unknown_words=convert_unknown_words,
+                                   raw_conversion=raw_conversion,
                                    )
         tkns.append(tk)
         embs.append(em)

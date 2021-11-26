@@ -18,6 +18,24 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 
 """
 
+from difflib import ndiff
+
+def simple_levenshtein_distance(reference, hypothesis, normalize=True):
+  str1 = reference
+  str2 = hypothesis
+  counter = {"+": 0, "-": 0}
+  distance = 0
+  for edit_code, *_ in ndiff(str1, str2):
+      if edit_code == " ":
+          distance += max(counter.values())
+          counter = {"+": 0, "-": 0}
+      else: 
+          counter[edit_code] += 1
+  distance += max(counter.values())
+  if normalize:
+    distance /= len(reference)
+  return distance
+
 def test_model(log, 
                model, 
                words=['leafa', 'salarizare', 'impozit', 'tva', 'divort', 'munca', 'frauda', 'copil'], 

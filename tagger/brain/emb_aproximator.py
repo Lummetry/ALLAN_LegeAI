@@ -16,7 +16,7 @@ import tensorflow.keras.backend as K
 from tagger.brain.base_engine import ALLANTaggerEngine
 from utils.utils import K_identity_loss, K_triplet_loss
 
-
+__VER__ = '2.0.0.0'
 
 class EmbeddingApproximator(ALLANTaggerEngine):
   def __init__(self, np_embeds=None, dct_w2i=None, dct_i2w=None, **kwargs):
@@ -300,6 +300,7 @@ class EmbeddingApproximator(ALLANTaggerEngine):
   def _get_siamese_datasets(self, min_word_size=4, min_nr_words=5,
                             max_word_min_count=15, force_generate=False, 
                             save=False, name=None):
+    self.P("Generating siamese datasets...")
     if self.dic_word2index is None:
       raise ValueError("Vocab not loaded!")
     lst_anchor = []
@@ -531,7 +532,7 @@ class EmbeddingApproximator(ALLANTaggerEngine):
       label = 'embgen_model'
       use_prefix = True
     else:
-      label = self.embgen_model_config['PRETRAINED'] if 'PRETRAINED' in self.embgen_model_config.keys() else 'embgen_model'
+      label = self.embgen_model_config.get('PRETRAINED', 'embgen_model') 
       use_prefix = False
     
     if epoch is not None:
@@ -714,7 +715,7 @@ if __name__ == '__main__':
       'MODEL' : []
       }
     SHOW_UNK = ['salarul', 'biruol', 'zoma', 'trbuie']
-    test_text = 'Cat ește salarilu la compamia vostra?'
+    test_text = 'Cat ește salarilu la compamia vostra si vreu sa sti daca avet suventie governmentala?'
     MODELS = [
       # '20211125_180259_embgen_model_sc_35_ep100.h5',
       # '20211125_203842_embgen_model_sc_39_ep040.h5',
@@ -727,6 +728,7 @@ if __name__ == '__main__':
     for model_name in MODELS:
       if l.get_models_file(model_name) is None:
         raise ValueError("Could not find file '{}'".format(model_name))
+      # load pretrained model
       eng.maybe_load_pretrained_embgen(embgen_model_file=model_name)
       eng._get_generated_embeddings()
       dct_top_unk = eng.debug_unk_words_model()
@@ -743,18 +745,29 @@ if __name__ == '__main__':
         dct_res[k].append(dct_top_unk[k])
       df_res = pd.DataFrame(dct_res)
       sort_col = df_res.columns[1]
-      text_embs = eng.encode(
+      text_embs_raw = eng.encode(
+        text=test_text,
+        direct_embeddings=True,
+        fixed_len=50,
+        raw_conversion=True,
+        )
+      text_embs_heu = eng.encode(
         text=test_text,
         direct_embeddings=True,
         fixed_len=50,
         )
-      decoded_text = eng.decode(
-        tokens=text_embs,
+      decoded_text_raw = eng.decode(
+        tokens=text_embs_raw,
         tokens_as_embeddings=True,
         )
-      l.P("  SOURCE: '{}'".format(test_text))
-      l.P("  ENCODE:  {}".format(text_embs.shape if isinstance(text_embs, np.ndarray) else text_embs))
-      l.P("  DECODE: '{}'".format(decoded_text))
+      decoded_text_heu = eng.decode(
+        tokens=text_embs_heu,
+        tokens_as_embeddings=True,
+        )
+      l.P("  SOURCE:     '{}'".format(test_text))
+      l.P("  ENCODE:      {}".format(text_embs_raw.shape if isinstance(text_embs_raw, np.ndarray) else text_embs_raw))
+      l.P("  DECODE RAW: '{}'".format(decoded_text_raw))
+      l.P("  DECODE HEU: '{}'".format(decoded_text_heu))
       l.P("Results:\n{}".format(df_res.sort_values(sort_col)))
   
   if False:
