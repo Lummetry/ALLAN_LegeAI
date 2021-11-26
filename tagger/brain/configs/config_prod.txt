@@ -1,0 +1,140 @@
+{
+  "BASE_FOLDER": "Dropbox",
+  "APP_FOLDER": "_allan_data/_allan_tagger",
+  
+  "HOST"      : "0.0.0.0",
+  "PORT"      : 5000,
+  "TOP_TAGS"  : 10,   
+  
+  "WORD2IDX" : "#####",
+  "IDX2WORD" : "ro_full_index2word.pickle",
+  
+  "TOKENS" : {
+    "PAD" : 0,
+    "UNK" : 1,
+    "SOS" : 2,
+    "EOS" : 3
+  },
+  
+  "DIST_FUNC" : "l2",
+  
+  "TRAINING" : {
+    "####FOLDER": "test1_one_folder",
+    "FOLDER"    : "EY_FAQ/v1",
+    "SUBFOLDERS" : 
+        {
+          "ENABLED" : 1,
+          "DOCS"    : "Texts",
+          "LABELS"  : "Labels"
+        },
+    "DOCUMENT"   : ".txt",
+    "LABEL"      : ".txt"
+  },
+  
+  
+  "MODEL" : {
+    "NAME"        : "uX3_112233_x_g2_512_256_d07",
+    "PRETRAINED"  : "",
+    
+    "DOC_SIZE"    : 75,
+    "#DOC_SIZE INFO" : "0 will not pad and will force training obs by obs but carefull at architecture",
+
+    "SEQ_LEN"     : 75,
+    "## SEQ_LEN"  : "0 means automatic, 50 means we must pad, batch, etc",
+
+
+    "###INPUT_TYPES"  : ["direct-embeds", "tokens"],
+    "INPUT"       : "direct-embeds",
+
+    "###OUTPUT_TYPES" : ["single-ranking", "multi-ranking", "tagging"],
+    "OUTPUT"      : "tagging",
+
+    "USE_CUDA"    : 0,
+    
+    "EMBED_FILE"  : "ro_full_embeds.npy",
+    "####EMBED_SIZE"  : 128,
+
+    "COLUMNS" : [
+  			{ "KERNEL": 1, "FEATURES": 1024, "DEPTH" : 1, "END" : "gp" },
+  			{ "KERNEL": 1, "FEATURES": 256, "DEPTH" : 1, "END" : "lstm" },
+  			{ "KERNEL": 2, "FEATURES": 512, "DEPTH" : 1, "END" : "gp" , "STEP": 1},
+  			{ "KERNEL": 2, "FEATURES": 256, "DEPTH" : 1, "END" : "lstm" , "STEP": 1},
+  			{ "KERNEL": 3, "FEATURES": 512, "DEPTH" : 1, "END" : "gp" },
+  			{ "KERNEL": 3, "FEATURES": 256, "DEPTH" : 1, "END" : "lstm" }
+      ],
+      
+     "DROPOUT_CONCAT" : 0.7,
+  
+     "END_FC" : [
+  			{ "NAME": "FC1g", "TYPE": "gated", "UNITS": 512, "ACTIV": "selu", "BN": 1, "DROP"  : 0.7 },
+  			{ "NAME": "FC2g", "TYPE": "gated", "UNITS": 256, "ACTIV": "selu", "BN": 1, "DROP"  : 0.7 }
+      ]
+    
+  },
+  
+  "EMB_GEN_MODEL" : {
+    "DATAFILE"      : "ro_embgen_dataset.pkl",
+    "PRETRAINED"    : "20190822_production/ro_embgen_model.h5",
+    "BATCH_SIZE"    : 512,
+    "FINAL_DROP"    : 0.5,
+    "USE_CUDA"      : 0, 
+    "CHR_EMB_SIZE"  : 16, 
+    "COLUMNS" : {      
+        "COL_2" : 
+          {
+              "####LAYERS" : 
+              [
+                {
+                  "NAME"     : "RNN1",
+                  "TYPE"     : "lstm",
+                  "FEATS"    : 128,
+                  "RESIDUAL" : 1
+                },
+                {
+                  "NAME"     : "RNN2",
+                  "TYPE"     : "lstm",
+                  "FEATS"    : 256,
+                  "RESIDUAL" : 0
+                }
+              ],
+            "LAYERS" : 
+              [
+                {
+                  "NAME"    : "CNV1",
+                  "TYPE"    : "conv",
+                  "FEATS"   : 64,
+                  "KERNEL"  : 2
+                }
+              ]               
+          },
+          
+        "COL_3" : 
+          {
+              "LAYERS" : 
+              [
+                {
+                  "NAME"    : "CNV1",
+                  "TYPE"    : "conv",
+                  "FEATS"   : 64,
+                  "KERNEL"  : 3
+                }
+              ]               
+          },
+          
+        "COL_4" : 
+          {
+              "LAYERS" : 
+              [
+                {
+                  "NAME"    : "CNV1",
+                  "TYPE"    : "conv",
+                  "FEATS"   : 64,
+                  "KERNEL"  : 4
+                }
+              ]               
+          }
+    }
+    
+  }
+     
+}

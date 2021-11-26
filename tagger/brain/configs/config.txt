@@ -1,0 +1,172 @@
+{
+  "BASE_FOLDER": ".",
+  "APP_FOLDER": "_cache",
+  
+  "HOST"      : "0.0.0.0",
+  "PORT"      : 5000,
+  "TOP_TAGS"  : 10,   
+  
+  "WORD2IDX" : "#####",
+  "IDX2WORD" : "lai_ro_i2w_191K.pkl",
+  "TOPIC2TAGS": "EY_topic_tag_map.pkl",
+  
+  "TOKENS" : {
+    "PAD" : 0,
+    "UNK" : 1,
+    "SOS" : 2,
+    "EOS" : 3
+  },
+  
+  "LABEL2IDX" : "labels2idx.txt",
+  "DIST_FUNC" : "l2",
+  
+  "TRAINING" : {
+    "####FOLDER"     : "test1_one_folder",
+    "FOLDER"    : "EY_FAQ",
+    "SUBFOLDERS" : 
+        {
+          "ENABLED" : 1,
+          "DOCS"    : "Texts",
+          "LABELS"  : "Labels"
+        },
+    "DOCUMENT"   : ".txt",
+    "LABEL"      : ".txt"
+  },
+  
+  
+  "MODEL" : {
+    "NAME"        : "allan_tagger",
+    "PRETRAINED"  : "_20190822_033431_uX3_112233_x_g2_512_256_d07_ep105_R47_ANZ.h5",
+    
+    "DOC_SIZE"    : 75,
+    "#DOC_SIZE INFO" : "0 will not pad and will force training obs by obs but carefull at architecture",
+
+    "SEQ_LEN"     : 75,
+    "## SEQ_LEN"  : "0 means automatic, 50 means we must pad, batch, etc",
+
+
+    "###INPUT_TYPES"  : ["direct-embeds", "tokens"],
+    "INPUT"       : "direct-embeds",
+
+    "###OUTPUT_TYPES" : ["single-ranking", "multi-ranking", "tagging"],
+    "OUTPUT"      : "tagging",
+
+    "USE_CUDA"    : 0,
+    
+    "EMBED_FILE"  : "lai_embeddings_191K.pkl",
+    "####EMBED_SIZE"  : 128,
+
+    "COLUMNS" : [
+      {
+        "KERNEL"  : 2,
+        "STEP"    : 1,
+        "FEATURES" : 256,
+        "DEPTH" : 0,
+        "END" : "lstm", 
+        "### END_TYPES" : ["gp", "lstm"]
+      },
+
+      {
+        "KERNEL" : 3,
+        "FEATURES" : 256,
+        "DEPTH" : 0,
+        "END" : "lstm" 
+      },
+
+      {
+        "KERNEL" : 5,
+        "FEATURES" : 256,
+        "DEPTH" : 0,
+        "END" : "lstm" 
+      },
+      
+      {
+        "KERNEL" : 7,
+        "FEATURES" : 256,
+        "DEPTH" : 1,
+        "END" : "lstm" 
+      }
+    ],
+    
+    "DROPOUT_CONCAT" : 0.7,
+
+    "END_FC" : [
+        {
+          "NAME"  : "FC1d",
+          "TYPE"  : "gated",
+          "UNITS" : 0,
+          "ACTIV" : "selu",
+          "BN"    : 1,
+          "DROP"  : 0.7
+        }
+    ]
+    
+  },
+  
+  "EMB_GEN_MODEL" : {
+    "DATAFILE"      : "ro_embgen_dataset.pkl",
+    "CUSTOM_MISTAKES_FILE" : "20190912_ALLAN_EY_TYPOS.pickle",
+    "SAME_CAPS"     : 1,
+    "PRETRAINED"    : "20211125_203842_embgen_model_sc_40_ep140.h5",
+    "EMBED_FILE"    : "embgen_full_embeds.npy",
+    "BATCH_SIZE"    : 512,
+    "FINAL_DROP"    : 0.5,
+    "USE_CUDA"      : 0, 
+    "CHR_EMB_SIZE"  : 16, 
+    "COLUMNS" : {      
+        "COL_k1" : 
+          {              
+            "LAYERS" : 
+              [
+                {
+                  "NAME"    : "CNV64",
+                  "TYPE"    : "conv",
+                  "FEATS"   : 128,
+                  "KERNEL"  : 1
+                }
+              ]               
+          },
+
+        "COL_k2" : 
+          {              
+            "LAYERS" : 
+              [
+                {
+                  "NAME"    : "CNV64",
+                  "TYPE"    : "conv",
+                  "FEATS"   : 128,
+                  "KERNEL"  : 2
+                }
+              ]               
+          },
+          
+        "COL_k3" : 
+          {
+              "LAYERS" : 
+              [
+                {
+                  "NAME"    : "CNV64",
+                  "TYPE"    : "conv",
+                  "FEATS"   : 128,
+                  "KERNEL"  : 3
+                }
+              ]               
+          },
+          
+        "COL_k4" : 
+          {
+              "LAYERS" : 
+              [
+                {
+                  "NAME"    : "CNV64",
+                  "TYPE"    : "conv",
+                  "FEATS"   : 128,
+                  "KERNEL"  : 4
+                }
+              ]               
+          }
+    }
+    
+  }
+     
+}
