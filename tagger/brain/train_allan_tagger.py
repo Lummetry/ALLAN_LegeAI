@@ -4,7 +4,7 @@ import tensorflow as tf
 import numpy as np
 from libraries.lummetry_layers.gated import GatedDense
 from collections import OrderedDict
-from libraries.logger import Logger
+from libraries import Logger
 from tagger.brain.data_loader import ALLANDataLoader
 import pandas as pd
 import os

@@ -233,7 +233,7 @@ class ALLANTaggerCreator(ALLANTaggerEngine):
         
 
 if __name__ == '__main__':
-  from libraries.logger import Logger
+  from libraries import Logger
   from tagger.brain.data_loader import ALLANDataLoader
   import pandas as pd
   

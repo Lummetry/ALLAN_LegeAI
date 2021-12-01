@@ -173,7 +173,7 @@ class ALLANDataLoader(ALLANTaggerEngine):
 if __name__ == '__main__':
   cfg1 = "tagger/brain/config.txt"
   
-  from libraries.logger import Logger
+  from libraries import Logger
 
 
   l = Logger(lib_name="ALNT",config_file=cfg1)

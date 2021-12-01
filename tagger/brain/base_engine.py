@@ -17,8 +17,8 @@ import os
 import numpy as np
 from collections import OrderedDict
 
-from libraries.generic_obj import LummetryObject
-from libraries.logger import Logger
+from libraries import LummetryObject
+from libraries import Logger
 from time import time
 from utils.utils import K_identity_loss, K_triplet_loss, simple_levenshtein_distance
 
@@ -1480,7 +1480,7 @@ class ALLANTaggerEngine(LummetryObject):
 
   
 if __name__ == '__main__':
-  from libraries.logger import Logger
+  from libraries import Logger
   
   cfg1 = "tagger/brain/configs/config.txt"
   
