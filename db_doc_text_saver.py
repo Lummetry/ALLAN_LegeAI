@@ -66,8 +66,8 @@ if __name__ == '__main__':
   lst_X_docs = []
   lst_y_labels = []
   unique_labels = set()
-  log.P("Running params: {}".format(sys.argv))
-  DEBUG = len(sys.argv) > 2 and sys.argv[1].upper() == 'DEBUG'
+  DEBUG = len(sys.argv) > 1 and sys.argv[1].upper() == 'DEBUG'
+  log.P("Running params: {}. Debug mode {}".format(sys.argv, "ON" if DEBUG else "OFF"))
   n_iters = df_docs.shape[0]
   timings = deque(maxlen=10)
   for idx_doc in range(n_iters):
@@ -98,14 +98,30 @@ if __name__ == '__main__':
     mean_time = np.mean(timings)
     remaining_time = (n_iters - (idx_doc + 1)) * mean_time
     if (idx_doc % 10) == 0:
-      print("\rProcessing document {}/{} ({:.1f}%). Remaining time {} \r".format(
+      print("\rProcessed {}/{} document ({:.1f}%). Remaining time {} \r".format(
         idx_doc+1, n_iters, 
         (idx_doc+1) / df_docs.shape[0] * 100, 
         time.strftime("%H:%M:%S", time.gmtime(remaining_time)),
         ),
         end='', flush=True)    
-    if DEBUG and idx_doc > 100:
-      break
+    
+    if ((idx_doc + 1) % 1000) == 0 or (DEBUG and idx_doc > 100):
+      log.save_pickle(
+        data=lst_X_docs,
+        fn='x_data_{}K.pkl'.format((idx_doc + 1) // 1000),
+        folder='data',
+        use_prefix=True,
+        )
+    
+      log.save_pickle(
+        data=lst_y_labels,
+        fn='y_data_{}K.pkl'.format((idx_doc + 1) // 1000),
+        folder='data',
+        use_prefix=True,
+        )  
+      if DEBUG and idx_doc > 100:
+        break
+      
 
   lens = [len(x) for x in lst_X_docs]  
   log.P("Obtained {} documents:".format(len(lst_X_docs)))
@@ -123,6 +139,7 @@ if __name__ == '__main__':
     folder='data',
     use_prefix=True,
     )  
+  
   n_labels = [len(x) for x in lst_y_labels]
   
   dct_labels = {k:v for v,k in enumerate(unique_labels)}
