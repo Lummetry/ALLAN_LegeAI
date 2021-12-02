@@ -98,7 +98,7 @@ if __name__ == '__main__':
     mean_time = np.mean(timings)
     remaining_time = (n_iters - (idx_doc + 1)) * mean_time
     if (idx_doc % 10) == 0:
-      print("\rProcessed {}/{} document ({:.1f}%). Remaining time {} \r".format(
+      print("\rProcessed {}/{} documents ({:.1f}%). Remaining time {} \r".format(
         idx_doc+1, n_iters, 
         (idx_doc+1) / df_docs.shape[0] * 100, 
         time.strftime("%H:%M:%S", time.gmtime(remaining_time)),
@@ -126,6 +126,7 @@ if __name__ == '__main__':
   lens = [len(x) for x in lst_X_docs]  
   log.P("Obtained {} documents:".format(len(lst_X_docs)))
   log.show_text_histogram(lens, show_both_ends=True, caption='Words per document')
+  log.P("Hist:\n{}".format(np.histogram(lens)))
   log.save_pickle(
     data=lst_X_docs,
     fn='x_data.pkl',
