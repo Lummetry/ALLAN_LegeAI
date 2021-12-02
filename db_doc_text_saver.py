@@ -25,6 +25,8 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 from libraries import Logger
 from libraries.db_conn.odbc_conn import ODBCConnector
 
+from utils.utils import raw_text_to_words, clean_words_list
+
 if __name__ == '__main__':
   log = Logger(
     lib_name='DBSV', base_folder='.', app_folder='_cache',
@@ -41,11 +43,7 @@ if __name__ == '__main__':
       'Pwd' : '4Esoft1234!@#$2021',
     },
 
-    'QUERY_PARAMS' : {
-      'TABLE_DATA' : 'Invoices',
-      'SQL_QUERY' : "", ### custom sql query on 'TABLE_DATA' (groupby etc etc); if empty it uses a default sql query
-      # 'CHUNKSIZE' : 200, ### if removed, then the generator `conn.data_chunk_generator()` will have only one step
-    }
+    'QUERY_PARAMS' : None
   }
   
   qry_docs = 'select distinct id_document  from vw_docs'
@@ -56,7 +54,7 @@ if __name__ == '__main__':
   where tip_tematica.id=entitate_x_tematica.id_tip_tematica and id_document={}  
   """
 
-  conn = ODBCConnector(log=log, config=config)
+  conn = ODBCConnector(log=log, verbose=False, config=config)
   conn.connect(nr_retries=5)
   
   df_docs = conn.get_data(sql_query=qry_docs)
@@ -72,11 +70,14 @@ if __name__ == '__main__':
     for idx_txt in range(df_text.shape[0]):
       txt = df_text.iloc[idx_txt,0]
       lst_doc_txt.append(txt)
-    doc_str = " ".join(lst_doc_txt)
+    raw_doc_str = " ".join(lst_doc_txt)
+    doc_str = raw_text_to_words(raw_doc_str)
+    
     
     # process labels
     df_labels = conn.get_data(sql_query=qry_lbl.format(id_doc))
-    lst_labels = [df_labels.iloc[iii, 0] for iii in range(df_labels.shape[0])]
+    lst_raw_labels = [df_labels.iloc[iii, 0] for iii in range(df_labels.shape[0])]
+    lst_labels = clean_words_list(lst_raw_labels)
     
     lst_X_docs.append(doc_str)
     lst_y_labels.append(lst_labels)
@@ -89,9 +90,15 @@ if __name__ == '__main__':
     break
   
   
+  print(raw_doc_str)
+  print('*'*80)
+  print(lst_raw_labels)
+  print('*'*80)
+  print('*'*80)
   print(doc_str)
   print('*'*80)
   print(lst_labels)
+  print(lst_raw_labels)
     
     
     

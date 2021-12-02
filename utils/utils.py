@@ -30,6 +30,15 @@ def raw_text_to_words(text):
   preprocessed = utils.simple_preprocess(clean_line, deacc=True)
   return preprocessed
 
+def clean_words_list(lst_words):
+  lst_new = []
+  for word in lst_words:
+    preprocessed = utils.simple_preprocess(word, deacc=True)
+    new_word = "_".join(preprocessed)
+    lst_new.append(new_word)
+  return lst_new
+
+
 def simple_levenshtein_distance(reference, hypothesis, normalize=True):
   str1 = reference
   str2 = hypothesis
