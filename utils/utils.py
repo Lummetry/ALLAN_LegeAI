@@ -19,6 +19,16 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 """
 
 from difflib import ndiff
+import re
+from gensim import utils
+
+HTML_TAG_CLEANER = re.compile('<.*?>')
+
+
+def raw_text_to_words(text):
+  clean_line = re.sub(HTML_TAG_CLEANER, '', text)
+  preprocessed = utils.simple_preprocess(clean_line, deacc=True)
+  return preprocessed
 
 def simple_levenshtein_distance(reference, hypothesis, normalize=True):
   str1 = reference
