@@ -34,6 +34,7 @@ class ALLANTaggerEngine(LummetryObject):
                output_size=None,
                vocab_size=None,
                embed_size=None,
+               model=None,
                DEBUG=False, MAX_CHR=100000,
                TOP_TAGS=None):
     if log is None or (type(log).__name__ != 'Logger'):
@@ -55,7 +56,7 @@ class ALLANTaggerEngine(LummetryObject):
     self.model_ouput = None
     self.embeddings = None
     self.generated_embeddings = None
-    self.model = None
+    self.model = model
     self.embgen_model = None
     self.embgen_model_name = 'embgen_model'
     self.x_data_vocab = None
@@ -68,7 +69,7 @@ class ALLANTaggerEngine(LummetryObject):
     self.emb_layer_name = 'emb_layer'
     super().__init__(log=log, DEBUG=DEBUG)
     return
-  
+
   
   def startup(self):
     super().startup()

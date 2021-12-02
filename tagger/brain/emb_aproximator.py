@@ -9,7 +9,7 @@ import os
 from time import time
 
 import tensorflow as tf
-tf.compat.v1.disable_eager_execution()
+# tf.compat.v1.disable_eager_execution()
 import tensorflow.keras.backend as K
 
 
