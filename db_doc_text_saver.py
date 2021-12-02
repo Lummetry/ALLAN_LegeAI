@@ -59,7 +59,7 @@ if __name__ == '__main__':
   conn = ODBCConnector(log=log, config=config)
   conn.connect(nr_retries=5)
   
-  df_docs = conn.get_data(qry_docs)
+  df_docs = conn.get_data(sql_query=qry_docs)
 
   lst_X_docs = []
   lst_y_labels = []
@@ -67,7 +67,7 @@ if __name__ == '__main__':
     id_doc = df_docs.iloc[idx_doc,0]
     
     # process text
-    df_text = conn.get_data(qry_txt.format(id_doc))
+    df_text = conn.get_data(sql_query=qry_txt.format(id_doc))
     lst_doc_txt = []
     for idx_txt in range(df_text.shape[0]):
       txt = df_text.iloc[idx_txt,0]
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     doc_str = " ".join(lst_doc_txt)
     
     # process labels
-    df_labels = conn.get_data(qry_lbl.format(id_doc))
+    df_labels = conn.get_data(sql_query=qry_lbl.format(id_doc))
     lst_labels = [df_labels.iloc[iii, 0] for iii in range(df_labels.shape[0])]
     
     lst_X_docs.append(doc_str)
