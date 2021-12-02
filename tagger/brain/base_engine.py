@@ -591,7 +591,11 @@ class ALLANTaggerEngine(LummetryObject):
       if not DEBUG and (len(text) > 10):
         print("\rProcessing {:.1f}% of input documents...".format(
             i/nr_obs * 100), end='', flush=True)
-      splitted = self._get_words(txt)
+      if isinstance(txt, list):
+        # text is already splitted. thank you :)
+        splitted = txt
+      else:
+        splitted = self._get_words(txt)
       self.last_max_size = max(self.last_max_size, len(splitted))
       tkns = []
       embs = []
