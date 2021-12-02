@@ -22,7 +22,7 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 @created by: damia
 """
 
-from libraries.logger import Logger
+from libraries import Logger
 from libraries.db_conn.odbc_conn import ODBCConnector
 
 if __name__ == '__main__':
@@ -67,10 +67,6 @@ if __name__ == '__main__':
   lst_X_docs = []
   lst_y_labels = []
   for idx_doc in range(df_docs.shape[0]):
-    if (idx_doc % 100) == 0:
-      print("\rProcessing document {}/{} ({:1f}%)".format(
-        idx_doc+1, df_docs.shape[0], 
-        (idx_doc+1) / df_docs.shape[0] * 100))
     id_doc = df_docs.iloc[idx_doc,0]
     
     # process text
@@ -87,9 +83,17 @@ if __name__ == '__main__':
     
     lst_X_docs.append(doc_str)
     lst_y_labels.append(lst_labels)
-    
+
+    if (idx_doc % 100) == 0:
+      print("\rProcessing document {}/{} ({:1f}%): \r".format(
+        idx_doc+1, df_docs.shape[0], 
+        (idx_doc+1) / df_docs.shape[0] * 100, ),
+        end='', flush=True)    
     break
-    
+  
+  print(doc_str)
+  print('*'*80)
+  print(lst_labels)
     
     
     
