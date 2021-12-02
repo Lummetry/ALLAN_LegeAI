@@ -745,6 +745,7 @@ if __name__ == '__main__':
         dct_res[k].append(dct_top_unk[k])
       df_res = pd.DataFrame(dct_res)
       sort_col = df_res.columns[1]
+      
       text_embs_raw = eng.encode(
         text=test_text,
         direct_embeddings=True,
