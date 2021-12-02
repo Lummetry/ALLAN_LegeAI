@@ -715,7 +715,7 @@ if __name__ == '__main__':
       'MODEL' : []
       }
     SHOW_UNK = ['salarul', 'biruol', 'zoma', 'trbuie']
-    test_text = 'Cat ește salarilu la compamia vostra si vreu sa sti daca avet suventie governmentala?'
+    test_text = 'Cat ește salarilu la compamia vostra si vreu sa sti daca avet suventie governmentala si Constituţionalitate?'
     batch_test = [test_text, test_text]
     labels = [['L1','L2','L4'], ['L1', 'L3']]
     

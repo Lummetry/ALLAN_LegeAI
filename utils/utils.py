@@ -25,15 +25,15 @@ from gensim import utils
 HTML_TAG_CLEANER = re.compile('<.*?>')
 
 
-def raw_text_to_words(text):
+def raw_text_to_words(text, max_len=20):
   clean_line = re.sub(HTML_TAG_CLEANER, '', text)
-  preprocessed = utils.simple_preprocess(clean_line, deacc=True)
+  preprocessed = utils.simple_preprocess(clean_line, deacc=True, max_len=20)
   return preprocessed
 
-def clean_words_list(lst_words):
+def clean_words_list(lst_words, max_len=20):
   lst_new = []
   for word in lst_words:
-    preprocessed = utils.simple_preprocess(word, deacc=True)
+    preprocessed = utils.simple_preprocess(word, deacc=True, max_len=20)
     new_word = "_".join(preprocessed)
     lst_new.append(new_word)
   return lst_new
