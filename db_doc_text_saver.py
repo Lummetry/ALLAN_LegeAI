@@ -21,7 +21,10 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 @created on: Fri Nov 26 12:24:06 2021
 @created by: damia
 """
+import numpy as np
 import sys
+from collections import deque
+import time
 
 from libraries import Logger
 from libraries.db_conn.odbc_conn import ODBCConnector
@@ -63,8 +66,12 @@ if __name__ == '__main__':
   lst_X_docs = []
   lst_y_labels = []
   unique_labels = set()
-  DEBUG = len(sys.argv) > 2 and sys.arv[2].upper() == 'DEBUG'
-  for idx_doc in range(df_docs.shape[0]):
+  log.P("Running params: {}".format(sys.argv))
+  DEBUG = len(sys.argv) > 2 and sys.argv[2].upper() == 'DEBUG'
+  n_iters = df_docs.shape[0]
+  timings = deque(maxlen=10)
+  for idx_doc in range(n_iters):
+    t0 = time.time()
     id_doc = df_docs.iloc[idx_doc,0]
     
     # process text
@@ -86,10 +93,16 @@ if __name__ == '__main__':
     lst_X_docs.append(doc_str)
     lst_y_labels.append(lst_labels)
 
+    lap_time = time.time() - t0
+    timings.append(lap_time)
+    mean_time = np.mean(timings)
+    remaining_time = (n_iters - (idx_doc + 1)) * mean_time
     if (idx_doc % 10) == 0:
-      print("\rProcessing document {}/{} ({:1f}%): \r".format(
-        idx_doc+1, df_docs.shape[0], 
-        (idx_doc+1) / df_docs.shape[0] * 100, ),
+      print("\rProcessing document {}/{} ({:.1f}%). Remaining time {} \r".format(
+        idx_doc+1, n_iters, 
+        (idx_doc+1) / df_docs.shape[0] * 100, 
+        time.strftime("%H:%M:%S", time.gmtime(remaining_time)),
+        ),
         end='', flush=True)    
     if DEBUG and idx_doc > 100:
       break
