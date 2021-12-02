@@ -91,6 +91,7 @@ if __name__ == '__main__':
         end='', flush=True)    
     break
   
+  
   print(doc_str)
   print('*'*80)
   print(lst_labels)
