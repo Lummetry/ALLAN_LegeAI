@@ -25,6 +25,8 @@ from libraries import Logger
 
 import constants as ct
 
+from utils.utils import raw_text_to_words
+
 
 if __name__ == '__main__':
   l = Logger('LAIP', base_folder='.', app_folder='_cache')
@@ -45,7 +47,7 @@ if __name__ == '__main__':
     with open(fn, encoding=ct.WV.RO_ENCODING) as fh:
       for line in fh:
         clean_line = re.sub(tag_cleaner, '', line)
-        preprocessed = utils.simple_preprocess(clean_line, deacc=True)
+        preprocessed = raw_text_to_words(line)
         wordlist += preprocessed
         if (len(wordlist) % 1000) == 0:
           print("\rPreparing file '{}': {:.1f}%\r".format(
