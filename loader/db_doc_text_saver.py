@@ -54,15 +54,18 @@ if __name__ == '__main__':
   qry_docs = 'select distinct id_document  from vw_docs'
   qry_txt = 'select continut from paragraf where id_document={}'
   qry_lbl = """
-  select entitate_x_tematica.id_tip_tematica, tip_tematica.nume2 from 
+  select tip_tematica.nume2 from 
   entitate_x_tematica, tip_tematica 
   where tip_tematica.id=entitate_x_tematica.id_tip_tematica and id_document={}  
   """
 
   conn = ODBCConnector(log=log, config=config)
   conn.connect(nr_retries=5)
+  
   df_docs = conn.get_data(qry_docs)
 
+  lst_X_docs = []
+  lst_y_labels = []
   for idx_doc in range(df_docs.shape[0]):
     if (idx_doc % 100) == 0:
       print("\rProcessing document {}/{} ({:1f}%)".format(
@@ -79,6 +82,13 @@ if __name__ == '__main__':
     doc_str = " ".join(lst_doc_txt)
     
     # process labels
+    df_labels = conn.get_data(qry_lbl.format(id_doc))
+    lst_labels = [df_labels.iloc[iii, 0] for iii in range(df_labels.shape[0])]
+    
+    lst_X_docs.append(doc_str)
+    lst_y_labels.append(lst_labels)
+    
+    break
     
     
     
