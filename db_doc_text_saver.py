@@ -67,7 +67,7 @@ if __name__ == '__main__':
   lst_y_labels = []
   unique_labels = set()
   log.P("Running params: {}".format(sys.argv))
-  DEBUG = len(sys.argv) > 2 and sys.argv[2].upper() == 'DEBUG'
+  DEBUG = len(sys.argv) > 2 and sys.argv[1].upper() == 'DEBUG'
   n_iters = df_docs.shape[0]
   timings = deque(maxlen=10)
   for idx_doc in range(n_iters):
