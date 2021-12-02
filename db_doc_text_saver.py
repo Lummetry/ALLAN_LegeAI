@@ -21,6 +21,7 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 @created on: Fri Nov 26 12:24:06 2021
 @created by: damia
 """
+import sys
 
 from libraries import Logger
 from libraries.db_conn.odbc_conn import ODBCConnector
@@ -61,6 +62,8 @@ if __name__ == '__main__':
 
   lst_X_docs = []
   lst_y_labels = []
+  unique_labels = set()
+  DEBUG = len(sys.argv) > 2 and sys.arv[2].upper() == 'DEBUG'
   for idx_doc in range(df_docs.shape[0]):
     id_doc = df_docs.iloc[idx_doc,0]
     
@@ -71,34 +74,53 @@ if __name__ == '__main__':
       txt = df_text.iloc[idx_txt,0]
       lst_doc_txt.append(txt)
     raw_doc_str = " ".join(lst_doc_txt)
-    doc_str = raw_text_to_words(raw_doc_str)
-    
+    doc_str = raw_text_to_words(raw_doc_str, max_len=15)    
     
     # process labels
     df_labels = conn.get_data(sql_query=qry_lbl.format(id_doc))
     lst_raw_labels = [df_labels.iloc[iii, 0] for iii in range(df_labels.shape[0])]
     lst_labels = clean_words_list(lst_raw_labels)
+    for lbl in lst_labels:
+      unique_labels.add(lbl)
     
     lst_X_docs.append(doc_str)
     lst_y_labels.append(lst_labels)
 
-    if (idx_doc % 100) == 0:
+    if (idx_doc % 10) == 0:
       print("\rProcessing document {}/{} ({:1f}%): \r".format(
         idx_doc+1, df_docs.shape[0], 
         (idx_doc+1) / df_docs.shape[0] * 100, ),
         end='', flush=True)    
-    break
+    if DEBUG and idx_doc > 100:
+      break
+
+  lens = [len(x) for x in lst_X_docs]  
+  log.P("Obtained {} documents:".format(len(lst_X_docs)))
+  log.show_text_histogram(lens, show_both_ends=True, caption='Words per document')
+  log.save_pickle(
+    data=lst_X_docs,
+    fn='x_data.pkl',
+    folder='data',
+    use_prefix=True,
+    )
+
+  log.save_pickle(
+    data=lst_y_labels,
+    fn='y_data.pkl',
+    folder='data',
+    use_prefix=True,
+    )  
+  n_labels = [len(x) for x in lst_y_labels]
   
+  dct_labels = {k:v for v,k in enumerate(unique_labels)}
+  log.P("Obtained {} labels:".format(len(dct_labels)))
+  log.show_text_histogram(n_labels, show_both_ends=True, caption='Labels per observation')
+
+  log.save_pickle(
+    data=dct_labels,
+    fn='labels_dict.pkl',
+    folder='data',
+    use_prefix=True,
+    )  
+
   
-  print(raw_doc_str)
-  print('*'*80)
-  print(lst_raw_labels)
-  print('*'*80)
-  print('*'*80)
-  print(doc_str)
-  print('*'*80)
-  print(lst_labels)
-    
-    
-    
-    
