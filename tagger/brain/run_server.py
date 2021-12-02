@@ -5,7 +5,7 @@ Created on Mon Aug 19 21:14:55 2019
 @author: Andrei
 """
 
-from libraries.logger import Logger
+from libraries import Logger
 from libraries.model_server.simple_model_server import SimpleFlaskModelServer
 
 from tagger.brain.base_engine import ALLANTaggerEngine

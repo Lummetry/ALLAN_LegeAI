@@ -18,7 +18,7 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 
 """
 
-from libraries.logger import Logger
+from libraries import Logger
 
 if __name__ == '__main__':
   l = Logger('TEST', base_folder='.', app_folder='_cache')

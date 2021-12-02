@@ -20,7 +20,7 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 
 import os
 
-from libraries.logger import Logger
+from libraries import Logger
 
 import unicodedata
 

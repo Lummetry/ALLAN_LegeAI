@@ -21,7 +21,7 @@ import os
 import re
 from gensim import utils
 
-from libraries.logger import Logger
+from libraries import Logger
 
 import constants as ct
 

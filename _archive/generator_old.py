@@ -31,8 +31,8 @@ from gensim.models import Word2Vec
 from gensim import utils
 from gensim.models.callbacks import CallbackAny2Vec
 
-from libraries.logger import Logger
-from libraries.generic_obj import LummetryObject
+from libraries import Logger
+from libraries import LummetryObject
 
 import constants as ct
 

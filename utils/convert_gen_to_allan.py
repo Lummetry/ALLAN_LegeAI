@@ -25,7 +25,7 @@ import numpy as np
 
 from gensim.models import Word2Vec
 
-from libraries.logger import Logger
+from libraries import Logger
 
 if __name__ == '__main__':
   l = Logger('LAICNV', base_folder='.', app_folder='_cache')

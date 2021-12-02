@@ -1,3 +1,4 @@
 [submodule "libraries"]
 	path = libraries
 	url = https://github.com/Lummetry/libraries_pub
+	branch = main

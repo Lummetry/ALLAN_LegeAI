@@ -10,3 +10,11 @@ _data/_logs/
 _cache/_logs/
 
 _cache/_models/
+
+.idea/inspectionProfiles/Project_Default.xml
+
+.idea/inspectionProfiles/
+
+.idea/
+
+tagger/brain/paragraph_tagger/_cache/_logs/

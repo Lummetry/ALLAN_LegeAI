@@ -20,7 +20,7 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 
 from gensim.models import Word2Vec
 
-from libraries.logger import Logger
+from libraries import Logger
 from utils.utils import test_model
 import constants as ct
 
