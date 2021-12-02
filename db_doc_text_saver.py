@@ -39,9 +39,6 @@ if __name__ == '__main__':
       'DATABASE' : 'LegeV_New',
       'Uid' : 'damian',
       'Pwd' : '4Esoft1234!@#$2021',
-      'Encrypt' : 'yes',
-      'TrustServerCertificate' : 'no',
-      'Connection Timeout': 30,
     },
 
     'QUERY_PARAMS' : {

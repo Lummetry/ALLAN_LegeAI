@@ -2,7 +2,7 @@
 
 ### Deployment
 ```
-conda create -n allan1 tensorflow-gpu scikit-learn gensim python-Levenshtein pyodbc pytorch -c pytorch
+conda create -n allan1 tensorflow-gpu scikit-learn gensim python-Levenshtein pandas pyodbc pytorch -c pytorch
 ```
 
 
