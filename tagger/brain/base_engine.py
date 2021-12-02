@@ -124,6 +124,22 @@ class ALLANTaggerEngine(LummetryObject):
         self.P("WARNING: topic2tags NOT loaded.")
 
     return
+  
+  def set_labels_dict(self, labels):
+    if isinstance(labels, dict):
+      self.dic_labels = labels
+      
+    elif isinstance(labels, (list, tuple, np.ndarray)):
+      unique_labels = set()
+      for obs in labels:
+        for label in obs:
+          unique_labels.add(label)
+      self.dic_labels = {k:v for v,k in enumerate(list(unique_labels))}
+    else:
+      raise ValueError("Unknown labels type {}".format(type(labels)))
+                    
+    self.output_size = len(self.dic_labels) 
+    return
         
   
   def _setup_vocabs_and_dicts(self):
@@ -606,6 +622,10 @@ class ALLANTaggerEngine(LummetryObject):
       lst_enc_texts.append(tokens)
     if text_label is not None:
       assert type(text_label) in [list, tuple, np.ndarray], "labels must be provided as list/list or lists"
+      if self.dic_labels is None:
+        self.P("WARNING: not labels dictionary - using current set of {} observations as label basis".format(
+          len(text_label)))
+        self.set_labels_dict(text_label)
       if type(text_label[0]) in [str]:
         text_label = [text_label]
       if to_onehot:

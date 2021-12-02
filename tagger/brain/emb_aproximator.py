@@ -716,6 +716,18 @@ if __name__ == '__main__':
       }
     SHOW_UNK = ['salarul', 'biruol', 'zoma', 'trbuie']
     test_text = 'Cat ește salarilu la compamia vostra si vreu sa sti daca avet suventie governmentala?'
+    batch_test = [test_text, test_text]
+    labels = [['L1','L2','L4'], ['L1', 'L3']]
+    
+    embeds, gold = eng.encode(
+      text=batch_test,
+      text_label=labels,
+      direct_embeddings=True,
+      fixed_len=50,
+      raw_conversion=True,
+      convert_unknown_words=False,
+      )
+    
     MODELS = [
       # '20211125_180259_embgen_model_sc_35_ep100.h5',
       # '20211125_203842_embgen_model_sc_39_ep040.h5',
@@ -777,3 +789,5 @@ if __name__ == '__main__':
     unk_words, true_words = eng._get_performance_comput_input(xa, xd, nr_pairs=20000)
     _, dct_res, _ = eng.compute_performance(unk_words, true_words)
     l.P("Result dict: {}".format(dct_res))
+
+
