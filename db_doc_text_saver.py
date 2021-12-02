@@ -126,6 +126,7 @@ if __name__ == '__main__':
   lens = [len(x) for x in lst_X_docs]  
   log.P("Obtained {} documents:".format(len(lst_X_docs)))
   log.show_text_histogram(lens, show_both_ends=True, caption='Words per document')
+  log.P("Hist:\n{}".format(np.histogram(lens)))
   log.save_pickle(
     data=lst_X_docs,
     fn='x_data.pkl',
