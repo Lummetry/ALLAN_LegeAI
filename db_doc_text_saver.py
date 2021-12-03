@@ -98,14 +98,16 @@ if __name__ == '__main__':
     mean_time = np.mean(timings)
     remaining_time = (n_iters - (idx_doc + 1)) * mean_time
     if (idx_doc % 10) == 0:
-      print("\rProcessed {}/{} documents ({:.1f}%). Remaining time {} \r".format(
+      print("\rProcessed {}/{} documents ({:.1f}%). Remaining time {:.0f}s/{} ({:.1f}s/doc\r".format(
         idx_doc+1, n_iters, 
         (idx_doc+1) / df_docs.shape[0] * 100, 
+        remaining_time,
         time.strftime("%H:%M:%S", time.gmtime(remaining_time)),
+        mean_time
         ),
         end='', flush=True)    
     
-    if ((idx_doc + 1) % 1000) == 0 or (DEBUG and idx_doc > 100):
+    if ((idx_doc + 1) % 10000) == 0 or (DEBUG and idx_doc > 100):
       log.save_pickle(
         data=lst_X_docs,
         fn='x_data_{}K.pkl'.format((idx_doc + 1) // 1000),

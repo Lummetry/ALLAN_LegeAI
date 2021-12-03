@@ -19,21 +19,21 @@ from utils.utils import K_identity_loss, K_triplet_loss
 __VER__ = '2.0.0.0'
 
 class EmbeddingApproximator(ALLANTaggerEngine):
-  def __init__(self, np_embeds=None, dct_w2i=None, dct_i2w=None, **kwargs):
+  def __init__(self, np_embeds=None, dct_w2i=None, dct_i2w=None, fn_embeds=None, fn_idx2word=None, **kwargs):
     super().__init__(**kwargs)
     self.__name__ = 'EMBA'
     self.trained = False
     self.siamese_model = None
 
     if np_embeds is None:
-      self._setup_word_embeddings()
+      self._setup_word_embeddings(embeds_filename=fn_embeds)
       self.emb_size = self.embeddings.shape[-1]
     else:
       self.embeddings = np_embeds
       
     
     if dct_w2i is None:
-      self._setup_vocabs()
+      self._setup_vocabs(fn_idx_dict=fn_idx2word)
     else:
       self.dic_word2index = dct_w2i
       if dct_i2w is None:
@@ -44,7 +44,7 @@ class EmbeddingApproximator(ALLANTaggerEngine):
     return
   
   def _setup(self):
-    self.embgen_model_batch_size = self.embgen_model_config['BATCH_SIZE']
+    self.embgen_model_batch_size = self.embgen_model_config.get('BATCH_SIZE')
     return
     
   
@@ -718,6 +718,17 @@ if __name__ == '__main__':
     test_text = 'Cat ește salarilu la compamia vostra si vreu sa sti daca avet suventie governmentala si Constituţionalitate?'
     batch_test = [test_text, test_text]
     labels = [['L1','L2','L4'], ['L1', 'L3']]
+
+
+    eng.setup_embgen_model()
+    e1 = eng.encode('Constituţionalitate Constituţionalitate', 
+                    direct_embeddings=True, fixed_len=10, raw_conversion=True)
+    e2 = eng.encode('Constituţionalitate Constituţionalitate', 
+                    direct_embeddings=True, fixed_len=10, raw_conversion=False)
+    d1 = eng.decode(e1, True)
+    d2 = eng.decode(e2, True)
+    w1 = eng.get_unk_word_similar_word('constituţionalitate')
+    w2 = eng.get_unk_word_similar_word('Constituţionalitate')
     
     embeds, gold = eng.encode(
       text=batch_test,
