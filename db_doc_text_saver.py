@@ -98,10 +98,12 @@ if __name__ == '__main__':
     mean_time = np.mean(timings)
     remaining_time = (n_iters - (idx_doc + 1)) * mean_time
     if (idx_doc % 10) == 0:
-      print("\rProcessed {}/{} documents ({:.1f}%). Remaining time {} \r".format(
+      print("\rProcessed {}/{} documents ({:.1f}%). Remaining time {:.0f}s/{} ({:.1f}s/doc\r".format(
         idx_doc+1, n_iters, 
         (idx_doc+1) / df_docs.shape[0] * 100, 
+        remaining_time,
         time.strftime("%H:%M:%S", time.gmtime(remaining_time)),
+        mean_time
         ),
         end='', flush=True)    
     
