@@ -77,32 +77,32 @@ class ALLANTaggerEngine(LummetryObject):
     self.version = __VER__
     self.P("Init ALLANEngine v{}...".format(self.version))
     self.char_full_voc = "".join([chr(x) for x in range(self.MAX_CHR)])
-    self.train_config = self.config_data['TRAINING']
-    self.token_config = self.config_data['TOKENS']
-    self.UNK_ID = self.token_config['UNK']
-    self.PAD_ID = self.token_config['PAD']
-    self.SOS_ID = self.token_config['SOS']
-    self.EOS_ID = self.token_config['EOS']
+    self.train_config = self.config_data.get('TRAINING', {})
+    self.token_config = self.config_data.get('TOKENS', {})
+    self.PAD_ID = self.token_config.get('PAD', 0)
+    self.UNK_ID = self.token_config.get('UNK', 1)
+    self.SOS_ID = self.token_config.get('SOS', 2)
+    self.EOS_ID = self.token_config.get('EOS', 3)
     self.SPECIALS = [
         self.PAD_ID,
         self.UNK_ID,
         self.SOS_ID,
         self.EOS_ID,
         ]
-    self.train_folder = self.train_config['FOLDER']
-    self.embgen_model_config = self.config_data.get('EMB_GEN_MODEL')
-    self.model_config = self.config_data['MODEL']
-    self.doc_ext = self.train_config['DOCUMENT']
-    self.label_ext = self.train_config['LABEL']
+    self.train_folder = self.train_config.get('FOLDER', '')
+    self.embgen_model_config = self.config_data.get('EMB_GEN_MODEL', {})
+    self.model_config = self.config_data.get('MODEL', {})
+    self.doc_ext = self.train_config.get('DOCUMENT','')
+    self.label_ext = self.train_config.get('LABEL', '')
     if self.TOP_TAGS is None:
       self.TOP_TAGS = self.config_data.get('TOP_TAGS',10)
-    self.fn_word2idx = self.config_data.get('WORD2IDX')
-    self.fn_idx2word = self.config_data.get('IDX2WORD')
+    self.fn_word2idx = self.config_data.get('WORD2IDX','')
+    self.fn_idx2word = self.config_data.get('IDX2WORD','')
     self.fn_labels2idx = self.config_data.get('LABEL2IDX')
     self.fn_topic2tags = self.config_data.get('TOPIC2TAGS')
-    self.doc_size = self.model_config['DOC_SIZE']
-    self.model_name = self.model_config['NAME']
-    self.dist_func_name = self.config_data['DIST_FUNC']
+    self.doc_size = self.model_config.get('DOC_SIZE','')
+    self.model_name = self.model_config.get('NAME', '')
+    self.dist_func_name = self.config_data.get('DIST_FUNC', 'l2')
     if self.dic_word2index is not None:
       self._get_reverse_word_dict()
       self._get_vocab_stats()    
@@ -164,7 +164,9 @@ class ALLANTaggerEngine(LummetryObject):
     fn_emb = embeds_filename
     if fn_emb is None:
       fn_emb = self.model_config.get('EMBED_FILE', '')
-      fn_emb = self.log.get_data_file(fn_emb)
+
+    fn_emb = self.log.get_data_file(fn_emb)
+      
     if os.path.isfile(fn_emb):
       self.P("Loading embeddings {}...".format(fn_emb[-25:]))
       self.embeddings = np.load(fn_emb, allow_pickle=True)
@@ -179,9 +181,9 @@ class ALLANTaggerEngine(LummetryObject):
     return  
   
   
-  def _setup_similarity_embeddings(self, embeds_filename=None):
+  def _setup_similarity_embeddings(self, generated_embeds_filename=None):
     self.generated_embeddings = None
-    fn_emb = embeds_filename
+    fn_emb = generated_embeds_filename
     if fn_emb is None:
       fn_emb = self.embgen_model_config.get('EMBED_FILE', '')
     if self.log.get_data_file(fn_emb) is not None:
@@ -199,25 +201,25 @@ class ALLANTaggerEngine(LummetryObject):
     if dict_model_config is not None:
       self.model_config = dict_model_config    
       self.P("Using external model parameters")
-      
+
     self.seq_len = self.model_config.get('SEQ_LEN', None)
     if self.seq_len == 0:
       self.seq_len = None
     self.emb_size = self.model_config.get('EMBED_SIZE',0)
     self.emb_trainable = self.model_config('EMBED_TRAIN', True)
     self.model_columns = self.model_config['COLUMNS']
-    
+
     if self.pre_inputs is not None:
       self.model_input = self.pre_inputs
     else:
       self.model_input = self.model_config['INPUT']
-      
-    
+
+
     if self.pre_outputs:
       self.model_output = self.pre_outputs
     else:
       self.model_output = self.model_config['OUTPUT']
-      
+
     self.dropout_end = self.model_config.get('DROPOUT_CONCAT', 0.2 )
     self.end_fc = self.model_config['END_FC']    
     return
@@ -407,7 +409,11 @@ class ALLANTaggerEngine(LummetryObject):
         
     """
     char_tokens = np.array(self.word_to_char_tokens(word, pad_up_to=5)).reshape((1,-1))
-    res = self.embgen_model.predict(char_tokens)
+    if self.run_in_cpu:
+      with tf.device('/cpu:0'):
+        res = self.embgen_model.predict(char_tokens)
+    else:
+      res = self.embgen_model.predict(char_tokens)
     return res.ravel()
   
   
@@ -696,12 +702,14 @@ class ALLANTaggerEngine(LummetryObject):
     idx_labels = []
     if type(labels[0][0]) is str:
       idx_labels = [[self.dic_labels[x] for x in obs] for obs in labels]
+      need_one_hot = True
     else:
       idx_labels = labels
+      need_one_hot = False
     maxes = [max(x) for x in idx_labels]
     sizes = [len(x) for x in idx_labels]
     
-    if max(maxes) > 1:
+    if need_one_hot:
       self.P("Converting labels to targets")
       lst_outs = []
       for obs in idx_labels:
@@ -1206,17 +1214,25 @@ class ALLANTaggerEngine(LummetryObject):
     return _res
   
   
-  def maybe_load_pretrained_embgen(self, embgen_model_file=None):
+  def maybe_load_pretrained_embgen(self, embgen_model_file=None, run_in_cpu=False):
     _res = False
+    self.run_in_cpu = run_in_cpu
     if "PRETRAINED" in self.embgen_model_config.keys() or embgen_model_file is not None:
       fn = self.embgen_model_config['PRETRAINED'] if embgen_model_file is None else embgen_model_file
       fn_model = self.log.get_models_file(fn)
       if fn_model is not None:
         self.P("Loading pretrained embgen model {}".format(fn), color='y')
-        self.embgen_model = tf.keras.models.load_model(
-          filepath=fn_model,
-          custom_objects=None,
-          )
+        if self.run_in_cpu:
+          with tf.device('/cpu:0'):
+            self.embgen_model = tf.keras.models.load_model(
+              filepath=fn_model,
+              custom_objects=None,
+              )
+        else:
+          self.embgen_model = tf.keras.models.load_model(
+            filepath=fn_model,
+            custom_objects=None,
+            )          
         self.embgen_model_name = fn
         _res = True
       else:
@@ -1224,9 +1240,9 @@ class ALLANTaggerEngine(LummetryObject):
     return _res
   
   
-  def setup_embgen_model(self):
-    self.maybe_load_pretrained_embgen()
-    self._setup_similarity_embeddings()
+  def setup_embgen_model(self, embgen_model_file=None, generated_embeds_filename=None, run_in_cpu=False):
+    self.maybe_load_pretrained_embgen(embgen_model_file=embgen_model_file, run_in_cpu=run_in_cpu)
+    self._setup_similarity_embeddings(generated_embeds_filename=generated_embeds_filename)
     return
   
 
