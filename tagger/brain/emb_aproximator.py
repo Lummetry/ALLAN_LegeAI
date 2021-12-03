@@ -718,6 +718,17 @@ if __name__ == '__main__':
     test_text = 'Cat ește salarilu la compamia vostra si vreu sa sti daca avet suventie governmentala si Constituţionalitate?'
     batch_test = [test_text, test_text]
     labels = [['L1','L2','L4'], ['L1', 'L3']]
+
+
+    eng.setup_embgen_model()
+    e1 = eng.encode('Constituţionalitate Constituţionalitate', 
+                    direct_embeddings=True, fixed_len=10, raw_conversion=True)
+    e2 = eng.encode('Constituţionalitate Constituţionalitate', 
+                    direct_embeddings=True, fixed_len=10, raw_conversion=False)
+    d1 = eng.decode(e1, True)
+    d2 = eng.decode(e2, True)
+    w1 = eng.get_unk_word_similar_word('constituţionalitate')
+    w2 = eng.get_unk_word_similar_word('Constituţionalitate')
     
     embeds, gold = eng.encode(
       text=batch_test,
