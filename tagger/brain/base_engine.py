@@ -641,7 +641,8 @@ class ALLANTaggerEngine(LummetryObject):
         text_label = [text_label]
       if to_onehot:
         lst_enc_labels = self.labels_to_onehot_targets(text_label, 
-                                                       rank=rank_labels)
+                                                       rank=rank_labels,
+                                                       DEBUG=DEBUG)
       else:
         for lbl in text_label:
           l_labels =[self.dic_labels[x] for x in lbl]
@@ -696,7 +697,7 @@ class ALLANTaggerEngine(LummetryObject):
   def one_hotter(self, data):
     return tf.keras.utils.to_categorical(data, num_classes=self.output_size)
   
-  def labels_to_onehot_targets(self, labels, rank=False):
+  def labels_to_onehot_targets(self, labels, rank=False, DEBUG=False):
     if not type(labels[0]) in [list, tuple, np.ndarray]:
       raise ValueError("labels must be provided as list of lists or 2d ndarray")
     idx_labels = []
