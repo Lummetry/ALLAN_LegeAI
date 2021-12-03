@@ -107,7 +107,7 @@ if __name__ == '__main__':
         ),
         end='', flush=True)    
     
-    if ((idx_doc + 1) % 1000) == 0 or (DEBUG and idx_doc > 100):
+    if ((idx_doc + 1) % 10000) == 0 or (DEBUG and idx_doc > 100):
       log.save_pickle(
         data=lst_X_docs,
         fn='x_data_{}K.pkl'.format((idx_doc + 1) // 1000),
