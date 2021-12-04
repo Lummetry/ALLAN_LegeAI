@@ -48,6 +48,7 @@ if __name__ == '__main__':
     total += bins[i]
   print("Total {:.1f}% of docs in range {} to {} words".format(
     total/len(data)*100, left, right))
+  print(np.histogram(lens, bins=200))
   # plt.hist(lens, bins=100)
   # plt.xlabel('words per doc')
   # plt.ylabel('freq of docs')
