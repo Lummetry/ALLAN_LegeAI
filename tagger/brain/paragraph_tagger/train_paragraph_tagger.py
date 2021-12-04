@@ -23,15 +23,56 @@ Copyright 2019 Lummetry.AI (Knowledge Investment Group SRL). All Rights Reserved
 
 import numpy as np
 import tensorflow as tf
+import os
+# from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, recall_score
+from tqdm import tqdm
 
 from libraries import Logger
 from tagger.brain.emb_aproximator import EmbeddingApproximator
 from tagger.brain.paragraph_tagger.train_paragraph_tagger_data import dataset
-from tagger.brain.paragraph_tagger.train_paragraph_tagger_models import get_tagger_model
+from tagger.brain.paragraph_tagger.train_paragraph_tagger_models import get_model
+
+def multiclass_acc(y, y_hat):
+  m = tf.keras.metrics.Accuracy()
+  m.update_state(y, y_hat)
+  return m.result().numpy()
+
+def multiclass_rec(y, y_hat):
+  m = tf.keras.metrics.Recall()
+  m.update_state(y, y_hat)
+  return m.result().numpy()
 
 
-def train_loop(log, train_dataset, test_dataset, batch_size, n_epochs, model,
-               test_callback,
+def evaluate_callback(model, dev_gen, steps_per_epoch, key, thrs=0.5):
+  log.p("Evaluation for: {}".format(key))
+  lst_y, lst_y_hat = [], []
+  dev_iter = iter(dev_gen)
+  for i in tqdm(range(steps_per_epoch)):
+    x_batch, y_batch = next(dev_iter)
+    lst_y_hat.append(model.predict(x_batch))
+    lst_y.append(y_batch)
+
+  y = np.vstack(lst_y)
+  y_hat = np.vstack(lst_y_hat)
+  y_pred = (y_hat > thrs).astype(np.uint8)
+
+  acc = multiclass_acc(y, y_pred)
+  rec = multiclass_rec(y, y_pred)
+  return {'{}_acc'.format(key.lower()) : acc, '{}_rec'.format(key.lower()): rec}
+
+def save_model_callback(log, model, s_name, delete_prev_named=False, DEBUG=False):
+
+  debug = (not delete_prev_named) or DEBUG
+
+  if debug:
+    log.P("Saving tagger model '{}'".format(s_name))
+  fn = os.path.join(log.get_models_folder(), log.file_prefix + '_' + s_name +'.h5')
+  model.save(fn)
+
+  return
+
+def train_loop(log, train_dataset, dev_dataset, batch_size, n_epochs, steps_per_epoch,  model,
+               eval_callback,
                save_model_callback,
                 save_best=True,
                 save_end=True,
@@ -42,122 +83,115 @@ def train_loop(log, train_dataset, test_dataset, batch_size, n_epochs, model,
   this is the basic 'protected' training loop loop that uses tf.keras methods and
   works both on embeddings inputs or tokenized inputs
   """
-  n_obs = len(train_dataset)
-  log.P("Training on {} obs, {} epochs, batch {}".format(
-    n_obs, n_epochs, batch_size))
-  n_batches = n_obs // batch_size + 1
+
   train_losses = []
-  log.SupressTFWarn()
   best_recall = 0
   train_recall_history = []
-  train_recall_history_epochs = []
-  train_recall_non_zero_epochs = []
+  train_acc_history = []
+  # train_recall_history_epochs = []
   train_epoch = 0
-
-  # TODO: eval
-  #fct_test = self.test_model_on_texts_with_topic if compute_topic else self.test_model_on_texts
 
   for epoch in range(n_epochs):
     train_epoch = epoch + 1
-    epoch_losses = []
-    for i_batch in range(n_batches):
-      ### TODO: refactor ###
-      batch_start = (i_batch * batch_size) % n_obs
-      batch_end = min(batch_start + batch_size, n_obs)
-      X_batch = np.array(X_data[batch_start:batch_end].tolist())
-      y_batch = np.array(y_data[batch_start:batch_end])
-      batch_output = model.train_on_batch(X_batch, y_batch)
-      s_bout = log.EvaluateSummary(model, batch_output)
-      loss = batch_output[0] if type(batch_output) in [list, np.ndarray, tuple] else batch_output
-      batch_info = "Epoch {:>3}: {:>5.1f}% completed [{}]".format(
-        epoch + 1, i_batch / n_batches * 100, s_bout)
-      print("\r {}".format(batch_info), end='', flush=True)
-      train_losses.append(loss)
-      epoch_losses.append(loss)
-      trained = True
-      #########################
-    print("\r", end="")
-    epoch_loss = np.mean(epoch_losses)
-    log.P("Epoch {} done. loss:{:>7.4f}, all avg :{:>7.4f}, last batch: [{}]".format(
-      epoch + 1, epoch_loss, np.mean(train_losses), s_bout))
-    if (epoch > 0) and (test_every_epochs > 0) and (test_dataset is not None) and (
-            (epoch + 1) % test_every_epochs == 0):
-      log.P("Testing on epoch {}".format(epoch + 1))
-      rec = test_callback(
-        test_dataset=test_dataset,
-        DEBUG=True,
-        top=10
-      )
+    hist = model.fit(
+      train_dataset,
+      epochs=1,
+      verbose=1,
+      steps_per_epoch=steps_per_epoch
+    )
+    dct_hist = {k: v[0] for i, (k, v) in enumerate(hist.history.items()) }
+    train_losses.append(dct_hist['loss'])
+    train_recall_history.append(dct_hist['recall'])
+    train_acc_history.append( dct_hist['accuracy'])
 
-      if compute_topic:
-        rec, topic_rec = rec
-      if last_test_non_zero and (best_recall < rec):
-        train_recall_non_zero_epochs.append(epoch + 1)
-        s_name = 'ep{}_R{:.0f}_ANZ'.format(epoch + 1, rec)
-        save_model_callback(model, s_name, delete_prev_named=True) ### TODO: CHECK ORIGINAL `save_model`
-        best_recall = rec
-      elif best_recall < rec:
-        s_name = 'ep{}_R{:.0f}'.format(epoch + 1, rec)
-        save_model_callback(model, s_name, delete_prev_named=True) ### TODO: CHECK ORIGINAL `save_model`
-        best_recall = rec
+    # if (epoch > 0) and (test_every_epochs > 0) and (dev_dataset is not None) and (
+    #         (epoch + 1) % test_every_epochs == 0):
+    log.P("Testing on epoch {}".format(epoch + 1))
+    dct_eval = eval_callback(
+      model=model,
+      dev_gen=dev_dataset,
+      steps_per_epoch=steps_per_epoch,
+      key='dev'
+    )
+    rec = dct_eval['dev_rec']
+    acc = dct_eval['dev_acc']
+
+    if best_recall < rec:
+      s_name = 'ep{}_R{:.2f}_A{:.2f}'.format(epoch + 1, rec, acc)
+      save_model_callback(
+        log=log,
+        model=model,
+        s_name=s_name,
+        delete_prev_named=False
+      ) ### TODO: implement delete prev
+      best_recall = rec
 
   log.P("Model training done.")
   log.P("Train recall history: {}".format(train_recall_history))
-  if compute_topic:
-    log.P("Train topic recall history: {}".format(train_topic_recall_history))
 
-  self._reload_embeds_from_model() ### TODO: Maybe remove
 
   return train_recall_history
 
 if __name__ == '__main__':
-  log = Logger(...)
+  EMB_MODEL_NAME = 'test_model'
+  DATA_SUBFOLDER_PATH = 'tagger_dataset'
+  DATA_MAPPER_FN = '{}/data_mapper.json'.format(DATA_SUBFOLDER_PATH)
+  DCT_LBL_FN = '{}/dict_lbl.pk'.format(DATA_SUBFOLDER_PATH)
 
-  EMB_MODEL_NAME = 'ro_embgen_model.h5'
+  LOGGER_CONFIG = 'tagger/brain/configs/20211202/config_train.txt'
+  MODELS_DEF_FN = 'tagger/brain/configs/20211202/models_defs.json'
 
-  TRAIN_DATA_FILE = ...
-  TEST_DATA_FILE = ...
-  DCT_LBL_FN = 'dict_lbl.pk'
+  FIXED_LENGTH = 50
+  BATCH_SIZE = 512
+  NR_EPOCHS = 2
 
-  BATCH_SIZE = ...
-  NR_EPOCHS = ...
-
-  model_defs = ... # load from config
+  log = Logger(lib_name='TRN', config_file=LOGGER_CONFIG)
+  model_defs = log.load_json(MODELS_DEF_FN)
+  dct_data_mapper = log.load_data_json(DATA_MAPPER_FN)
 
   dct_lbls = log.load_pickle_from_data(DCT_LBL_FN)
 
-  emb_approximator = EmbeddingApproximator(log=log)
-  emb_approximator.dic_labels = dct_lbls
-  emb_approximator.maybe_load_pretrained_embgen(embgen_model_file=EMB_MODEL_NAME)
-  # emb_approximator._get_generated_embeddings()
-
-
-  train_dataset = dataset(
+  emb_approximator = EmbeddingApproximator(
     log=log,
-    data_file=TRAIN_DATA_FILE,
-    batch_size=2,
-    emb_approximator=emb_approximator,
-    fixed_length=50
+    dict_label2index=dct_lbls
   )
-  test_dataset = dataset(
+
+  train_dataset, train_steps_per_epoch = dataset(
     log=log,
-    data_file=TEST_DATA_FILE,
-    batch_size=2,
+    lst_X_paths=dct_data_mapper['train']['X'],
+    lst_y_paths=dct_data_mapper['train']['y'],
+    subfolder_path=DATA_SUBFOLDER_PATH,
+    batch_size=BATCH_SIZE,
     emb_approximator=emb_approximator,
-    fixed_length=50
+    fixed_length=FIXED_LENGTH
+  )
+  dev_dataset, dev_steps_per_epoch = dataset(
+    log=log,
+    lst_X_paths=dct_data_mapper['dev']['X'],
+    lst_y_paths=dct_data_mapper['dev']['y'],
+    subfolder_path=DATA_SUBFOLDER_PATH,
+    batch_size=BATCH_SIZE,
+    emb_approximator=emb_approximator,
+    fixed_length=FIXED_LENGTH
   )
 
   for model_def in model_defs:
-    model = get_tagger_model(**model_def)
+    model = get_model(
+      log=log,
+      input_shape= [FIXED_LENGTH, emb_approximator.emb_size],
+      nr_outputs= len(dct_lbls),
+      **model_def
+    )
     history = train_loop(
       log=log,
       model=model,
       train_dataset=train_dataset,
-      test_dataset=test_dataset,
+      steps_per_epoch=train_steps_per_epoch,
+      dev_dataset=dev_dataset,
       batch_size=BATCH_SIZE,
       n_epochs=NR_EPOCHS,
-      test_callback=lambda x:x,
-      save_model_callback=lambda x:x
+      eval_callback=evaluate_callback,
+      save_model_callback=save_model_callback
     )
     ### save history
 

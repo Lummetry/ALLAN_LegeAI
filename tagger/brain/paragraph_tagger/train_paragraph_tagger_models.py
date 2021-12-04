@@ -27,15 +27,21 @@ from libraries import Logger
 
 
 
-def get_tnn_column(log, tf_x,  lst_filters, kernel_size, act='relu',
+def get_tnn_column(log, tf_x,  lst_filters, kernel_size, end, strides, causal=False, act='relu',
                    base_name='col'):
+
+  if causal:
+    padding = 'causal'
+  else:
+    padding = 'valid'
+  #endif
 
   for i in range(len(lst_filters)):
     lyr = tf.keras.layers.Conv1D(
       filters=lst_filters[i],
       kernel_size=kernel_size,
-      strides=1, ### TODO: remove hardcode
-      padding='causal',
+      strides=strides,
+      padding=padding,
       name='{}_d{}_size{}_filters{}'.format(base_name, i, kernel_size, lst_filters[i]),
       activation=None
     )
@@ -43,6 +49,15 @@ def get_tnn_column(log, tf_x,  lst_filters, kernel_size, act='relu',
     tf_x = tf.keras.layers.BatchNormalization(name='{}_d{}_bn'.format(base_name, i))(tf_x)
     tf_x = tf.keras.layers.Activation(act, name='{}_d{}_act_{}'.format(base_name, i, act))(tf_x)
   # endfor
+
+  if end == 'gp':
+    tf_x1 = tf.keras.layers.GlobalMaxPool1D(name='{}_max_pool'.format(base_name))(tf_x)
+    tf_x2 = tf.keras.layers.GlobalAvgPool1D(name='{}_avg_pool'.format(base_name))(tf_x)
+    tf_x = tf.keras.layers.concatenate([tf_x1, tf_x2], name='{}_concat_gp'.format(base_name))
+  elif end == 'lstm':
+    lstm_lyr = tf.keras.layers.LSTM(lst_filters[-1], name='{}_lstm'.format(base_name))
+    bi_lyr = tf.keras.layers.Bidirectional(lstm_lyr, name='{}_bidirectional'.format(base_name))
+    tf_x = bi_lyr(tf_x)
 
   return tf_x
 
@@ -53,7 +68,10 @@ def get_model(log, input_shape, nr_outputs, optimizer, **kwargs):
   DROP_PRE_READOUT = kwargs.get('DROP_PRE_READOUT', 0)
   FILTERS = kwargs.get("FILTERS")
   KERNELS = kwargs.get("KERNELS")
+  STRIDES = kwargs.get("STRIDES")
+  ENDS = kwargs.get("ENDS")
   CNN_ACT = kwargs.get("CNN_ACT")
+  ACTIV_DENSE = kwargs.get("ACTIV_DENSE")
 
   assert len(FILTERS) == len(KERNELS)
 
@@ -70,6 +88,8 @@ def get_model(log, input_shape, nr_outputs, optimizer, **kwargs):
       tf_x=tf_x,
       lst_filters=FILTERS[i],
       kernel_size=KERNELS[i],
+      strides=STRIDES[i],
+      end=ENDS[i],
       base_name='col_{}'.format(i),
       act=CNN_ACT,
     )
@@ -79,14 +99,13 @@ def get_model(log, input_shape, nr_outputs, optimizer, **kwargs):
   else:
     tf_x = columns[0]
 
-  tf_x = tf.keras.layers.Flatten(name='flatten_tcns')(tf_x)
-
   for i, units in enumerate(UNITS_DENSE):
     tf_x = tf.keras.layers.Dense(
       units=units,
       name='pre_readout_dense_{}'.format(i)
     )(tf_x)
-    tf_x = tf.keras.layers.Activation('relu', name='pre_readout_act_relu_{}'.format(i))(tf_x)
+    tf_x = tf.keras.layers.BatchNormalization(name='pre_readout_bn{}'.format(i))(tf_x)
+    tf_x = tf.keras.layers.Activation(ACTIV_DENSE, name='pre_readout_act_{}_{}'.format(ACTIV_DENSE, i))(tf_x)
     if DROP_PRE_READOUT > 0:
       tf_x = tf.keras.layers.Dropout(rate=DROP_PRE_READOUT, name='drop_{}_{}'.format(DROP_PRE_READOUT, i))(tf_x)
     # endif
@@ -110,7 +129,7 @@ def get_model(log, input_shape, nr_outputs, optimizer, **kwargs):
   model.compile(
     loss=loss,
     optimizer=OPTIMIZER,
-    metrics=['accuracy']
+    metrics=['accuracy', tf.keras.metrics.Recall()]
   )
   log.log_keras_model(model)
   return model

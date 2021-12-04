@@ -1,0 +1,50 @@
+{
+  "BASE_FOLDER": "",
+  "APP_FOLDER": "_cache",
+
+  "TRAINING" : {
+    "####FOLDER"     : "test1_one_folder",
+    "FOLDER"    : "EY_FAQ",
+    "SUBFOLDERS" :
+        {
+          "ENABLED" : 1,
+          "DOCS"    : "Texts",
+          "LABELS"  : "Labels"
+        },
+    "DOCUMENT"   : ".txt",
+    "LABEL"      : ".txt"
+  },
+
+  "TOKENS" : {
+    "PAD" : 0,
+    "UNK" : 1,
+    "SOS" : 2,
+    "EOS" : 3
+  },
+  "WORD2IDX" : "#####",
+  "IDX2WORD" : "ro_full_index2word.pickle",
+  "DIST_FUNC" : "l2",
+
+  "MODEL" : {
+    "NAME"        : "test_model",
+    "PRETRAINED"  : "ro_embgen_model.h5",
+
+
+    "BATCH_SIZE": 2,
+    "DOC_SIZE"    : 75,
+    "#DOC_SIZE INFO" : "0 will not pad and will force training obs by obs but carefull at architecture",
+    "SEQ_LEN"     : 75,
+    "## SEQ_LEN"  : "0 means automatic, 50 means we must pad, batch, etc",
+    "###INPUT_TYPES"  : ["direct-embeds", "tokens"],
+    "INPUT"       : "direct-embeds",
+    "###OUTPUT_TYPES" : ["single-ranking", "multi-ranking", "tagging"],
+    "OUTPUT"      : "tagging",
+    "USE_CUDA"    : 0,
+    "EMBED_FILE"  : "ro_full_embeds.npy"
+  },
+
+  "EMB_GEN_MODEL" : {
+    "BATCH_SIZE": 2
+
+  }
+}

@@ -18,3 +18,5 @@ _cache/_models/
 .idea/
 
 tagger/brain/paragraph_tagger/_cache/_logs/
+
+.pylint.d/
