@@ -24,7 +24,7 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 
 
 import numpy as np
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 from libraries import Logger
 
@@ -48,8 +48,8 @@ if __name__ == '__main__':
     total += bins[i]
   print("Total {:.1f}% of docs in range {} to {} words".format(
     total/len(data)*100, left, right))
-  plt.hist(lens, bins=100)
-  plt.xlabel('words per doc')
-  plt.ylabel('freq of docs')
-  plt.show()
+  # plt.hist(lens, bins=100)
+  # plt.xlabel('words per doc')
+  # plt.ylabel('freq of docs')
+  # plt.show()
     
