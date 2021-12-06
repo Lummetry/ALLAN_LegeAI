@@ -8,7 +8,7 @@ if __name__ == '__main__':
     './_cache/_data/dict_lbl',
     # './_cache/_data/embgen_full_embeds'
     './_cache/_data/lai_ro_i2w_191K',
-    './_cache/_data/lai_embeddings_191K'
+    './_cache/_data/lai_embeddings_191K',
     './_cache/_data/20211203_154548_labels_dict'
   ]
 
