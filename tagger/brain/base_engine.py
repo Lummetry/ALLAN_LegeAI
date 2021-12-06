@@ -711,7 +711,8 @@ class ALLANTaggerEngine(LummetryObject):
     sizes = [len(x) for x in idx_labels]
     
     if need_one_hot:
-      self.P("Converting labels to targets")
+      if DEBUG:
+        self.P("Converting labels to targets")
       lst_outs = []
       for obs in idx_labels:
         np_obs = np.array([self.one_hotter(x) for x in obs])

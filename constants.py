@@ -30,3 +30,8 @@ class WV:
       'mediu', 'petrol', 'gaze', 'eolian', 'solar'
     ]
   
+
+class MODELS:
+  
+  TAG_MAX_LEN = 500
+  

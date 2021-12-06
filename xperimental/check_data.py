@@ -22,7 +22,7 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 @created by: damia
 """
 
-
+import os
 import numpy as np
 import pandas as pd
 
@@ -38,29 +38,32 @@ if __name__ == '__main__':
     data = [['a']*int(np.random.normal(100,30)) for _ in range(1000)]
   
   margins = 10
-  max_len = 100000
+  max_len = 1000
+  min_len = 20
   lens = [len(x) for x in data]
   l.P("Raw lens: \n{}".format(pd.Series(lens).describe()))
   if not l.runs_from_ipython():
     l.save_pickle_to_data(lens, fn_stats)
   else:
-    if l.get_data_file(fn_data):
-      lens = l.load_pickle_from_data(fn_data)
-  lens = [x for x in lens if x < max_len]
+    fld = l.get_dropbox_subfolder('_allan_data/_indaco/_data/tagger_dataset')
+    fn = os.path.join(fld, fn_stats)
+    if l.get_data_file(fn):
+      lens = l.load_pickle_from_data(fn)
+  lens = [x for x in lens if x < max_len and x > min_len]
   bins = np.bincount(lens)
   max_pos = np.argmax(bins)
   left = max_pos - margins
   right = max_pos + margins
   total = 0
   for i in range(left, right +1):
-    l.P('Word: {} => {} docs ({:.1f}%)'.format(i, bins[i], bins[i]/len(data)*100))
+    l.P('Word: {} => {} docs ({:.1f}%)'.format(i, bins[i], bins[i]/len(lens)*100))
     total += bins[i]
   l.P("Total {} ({:.1f}%) of docs in range {} to {} words".format(
-    total, total/len(data)*100, left, right))
+    total, total/len(lens)*100, left, right))
   l.P("Filtered lens:\n{}".format(pd.Series(lens).describe()))
   if l.runs_from_ipython():
     import matplotlib.pyplot as plt
-    plt.hist(lens, bins=100)
+    plt.hist(lens, bins=200)
     plt.xlabel('words per doc')
     plt.ylabel('freq of docs')
     plt.show()

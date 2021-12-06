@@ -129,7 +129,7 @@ def get_model(log, input_shape, nr_outputs, optimizer, **kwargs):
   model.compile(
     loss=loss,
     optimizer=OPTIMIZER,
-    metrics=['accuracy', tf.keras.metrics.Recall()]
+    metrics=[tf.keras.metrics.Accuracy(), tf.keras.metrics.Recall()]
   )
   log.log_keras_model(model)
   return model
