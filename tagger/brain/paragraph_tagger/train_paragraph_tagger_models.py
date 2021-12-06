@@ -112,7 +112,7 @@ def get_model(log, input_shape, nr_outputs, optimizer, **kwargs):
   # endfor
 
   act = 'sigmoid'
-  loss = 'binary_crossentropy' if UNITS_READOUT == 1 else 'categorical_crossentropy'
+  loss = 'binary_crossentropy' #if UNITS_READOUT == 1 else 'categorical_crossentropy'
 
   tf_x = tf.keras.layers.Dense(
     units=UNITS_READOUT,
@@ -129,7 +129,7 @@ def get_model(log, input_shape, nr_outputs, optimizer, **kwargs):
   model.compile(
     loss=loss,
     optimizer=OPTIMIZER,
-    metrics=[tf.keras.metrics.Accuracy(), tf.keras.metrics.Recall()]
+    metrics=[tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]
   )
   log.log_keras_model(model)
   return model

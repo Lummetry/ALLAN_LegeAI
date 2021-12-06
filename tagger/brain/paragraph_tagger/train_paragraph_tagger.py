@@ -42,6 +42,12 @@ def multiclass_rec(y, y_hat):
   m.update_state(y, y_hat)
   return m.result().numpy()
 
+def multiclass_prec(y, y_hat):
+  m = tf.keras.metrics.Precision()
+  m.update_state(y, y_hat)
+  return m.result().numpy()
+
+
 
 def evaluate_callback(model, dev_gen, steps_per_epoch, key, thrs=0.5):
   log.p("Evaluation for: {}".format(key))
@@ -56,11 +62,17 @@ def evaluate_callback(model, dev_gen, steps_per_epoch, key, thrs=0.5):
   y_hat = np.vstack(lst_y_hat)
   y_pred = (y_hat > thrs).astype(np.uint8)
 
-  acc = multiclass_acc(y, y_pred)
+
+
   rec = multiclass_rec(y, y_pred)
-  dct_res = {'{}_acc'.format(key.lower()) : acc, '{}_rec'.format(key.lower()): rec}
+  prc = multiclass_prec(y, y_pred)
+  f1 = 2 * prc * rec / (prc + rec)
+  dct_res = {'{}_f1'.format(key.lower()) : f1, '{}_rec'.format(key.lower()): rec, '{}_prc'.format(key.lower()): prc}
   log.P("Evaluation finished: {}".format(dct_res))
   return dct_res
+
+
+
 
 def save_model_callback(log, model, s_name, delete_prev_named=False, DEBUG=False):
 
@@ -89,7 +101,7 @@ def train_loop(log, train_dataset, dev_dataset, test_dataset, batch_size, n_epoc
 
   best_name = None
   train_losses = []
-  best_recall = 0
+  best_f1 = 0
   train_recall_history = []
   train_acc_history = []
   # train_recall_history_epochs = []
@@ -118,20 +130,19 @@ def train_loop(log, train_dataset, dev_dataset, test_dataset, batch_size, n_epoc
       key='dev'
     )
     rec = dct_eval['dev_rec']
-    acc = dct_eval['dev_acc']
+    prc = dct_eval['dev_prc']
+    f1 = dct_eval['dev_f1']
 
-    if best_recall < rec:
-      s_name = 'ep{}_R{:.2f}_A{:.2f}'.format(epoch + 1, rec, acc)
+    if best_f1 < f1:
+      s_name = 'ep{}_R{:.2f}_P{:.2f}_F1{:.2f}'.format(epoch + 1, rec, prc, f1)
       save_model_callback(
         log=log,
         model=model,
         s_name=s_name,
         delete_prev_named=False
-      )
-      best_recall = rec
+      ) ### TODO: implement delete prev
+      best_f1 = f1
       best_name = s_name
-    #endif
-  #endfor
 
   model = tf.keras.models.load_model(os.path.join(log.get_models_folder(), log.file_prefix + '_' + best_name +'.h5'))
 
@@ -158,7 +169,7 @@ if __name__ == '__main__':
   LOGGER_CONFIG = 'tagger/brain/configs/20211202/config_train.txt'
   MODELS_DEF_FN = 'tagger/brain/configs/20211202/models_defs.json'
 
-  FIXED_LENGTH = 500
+  FIXED_LENGTH = 50
   BATCH_SIZE = 512
   NR_EPOCHS = 30
 
@@ -166,12 +177,12 @@ if __name__ == '__main__':
   model_defs = log.load_json(MODELS_DEF_FN)
   dct_data_mapper = {
     "X": [
-      "20211203_154548_x_data.pkl",
-      # "20211202_220937_x_data_19K.pkl"
+      # "20211203_154548_x_data.pkl",
+      "20211202_220937_x_data_19K.pkl"
     ],
     "y": [
-      "20211203_154548_y_data.pkl"
-    # '20211202_220937_y_data_19K.pkl'
+      # "20211203_154548_y_data.pkl"
+    '20211202_220937_y_data_19K.pkl'
     ]
   }
 
