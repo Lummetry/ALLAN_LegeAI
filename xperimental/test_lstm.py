@@ -33,3 +33,4 @@ if __name__ == '__main__':
   input = np.arange(10).reshape((1,10,1))
 
   res = mdl(input)
+  print(res)
