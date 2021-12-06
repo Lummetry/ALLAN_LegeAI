@@ -17,10 +17,10 @@ if __name__ == '__main__':
 
   log = Logger(lib_name='TRN', config_file=LOGGER_CONFIG)
 
-  y = log.load_pickle_from_data("20211202_220937_y_data_19K.pkl")
+  y = log.load_pickle_from_data("20211203_154548_y_data.pkl")
   y_set = set()
   for _y in y:
     y_set = y_set.union(set(_y))
   dct_y = {v: k for k, v in enumerate(y_set)}
 
-  log.save_pickle_to_data(dct_y, '20211203_154548_y_data.pk')
+  log.save_pickle_to_data(dct_y, 'dict_lbl.pk')
