@@ -153,7 +153,7 @@ if __name__ == '__main__':
   EMB_MODEL_NAME = 'test_model'
   DATA_SUBFOLDER_PATH = 'tagger_dataset'
   # DATA_MAPPER_FN = '{}/data_mapper.json'.format(DATA_SUBFOLDER_PATH)
-  DCT_LBL_FN = '{}/dict_lbl.pk'.format(DATA_SUBFOLDER_PATH)
+  DCT_LBL_FN = 'dict_lbl.pk'
   EMBEDS_FN = ''
   LOGGER_CONFIG = 'tagger/brain/configs/20211202/config_train.txt'
   MODELS_DEF_FN = 'tagger/brain/configs/20211202/models_defs.json'
@@ -166,10 +166,12 @@ if __name__ == '__main__':
   model_defs = log.load_json(MODELS_DEF_FN)
   dct_data_mapper = {
     "X": [
-      "20211203_154548_x_data.pkl"
+      # "20211203_154548_x_data.pkl",
+      "20211202_220937_x_data_19K.pkl"
     ],
     "y": [
-      "20211203_154548_y_data.pkl"
+      # "20211203_154548_y_data.pkl"
+    '20211202_220937_y_data_19K.pkl'
     ]
   }
 
@@ -180,14 +182,14 @@ if __name__ == '__main__':
     dict_label2index=dct_lbls
   )
 
-  emb_approximator.setup_embgen_model()
+  # emb_approximator.setup_embgen_model()
   # emb_approximator._setup_similarity_embeddings(generated_embeds_filename=log.get_data_file(EMBEDS_FN))
 
   train_dataset, train_steps_per_epoch, dev_dataset, dev_steps_per_epoch, test_dataset, test_steps_per_epoch = dataset(
     log=log,
     lst_X_paths=dct_data_mapper['X'],
     lst_y_paths=dct_data_mapper['y'],
-    subfolder_path='',
+    subfolder_path=None,
     batch_size=BATCH_SIZE,
     emb_approximator=emb_approximator,
     fixed_length=FIXED_LENGTH
