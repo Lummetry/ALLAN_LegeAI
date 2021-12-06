@@ -19,6 +19,6 @@ if __name__ == '__main__':
 
     print('Saving {}'.format(path))
     with open(path + "_37.pkl", 'wb') as f:
-      pk.dump(f, data, protocol=4)
+      pk.dump(data, f,protocol=4)
 
   print("Convering done")
