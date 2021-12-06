@@ -22,7 +22,7 @@
     "EOS" : 3
   },
   "WORD2IDX" : "#####",
-  "IDX2WORD" : "embeds/lai_ro_i2w_191K.pkl",
+  "IDX2WORD" : "lai_ro_i2w_191K.pkl",
   "DIST_FUNC" : "l2",
 
   "MODEL" : {
@@ -40,7 +40,7 @@
     "###OUTPUT_TYPES" : ["single-ranking", "multi-ranking", "tagging"],
     "OUTPUT"      : "tagging",
     "USE_CUDA"    : 0,
-    "EMBED_FILE"  : "embeds/lai_embeddings_191K.pkl"
+    "EMBED_FILE"  : "lai_embeddings_191K.pkl"
   },
 
   "EMB_GEN_MODEL" : {
