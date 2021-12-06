@@ -160,18 +160,18 @@ if __name__ == '__main__':
 
   FIXED_LENGTH = 500
   BATCH_SIZE = 512
-  NR_EPOCHS = 1
+  NR_EPOCHS = 30
 
   log = Logger(lib_name='TRN', config_file=LOGGER_CONFIG)
   model_defs = log.load_json(MODELS_DEF_FN)
   dct_data_mapper = {
     "X": [
-      # "20211203_154548_x_data.pkl",
-      "20211202_220937_x_data_19K.pkl"
+      "20211203_154548_x_data.pkl",
+      # "20211202_220937_x_data_19K.pkl"
     ],
     "y": [
-      # "20211203_154548_y_data.pkl"
-    '20211202_220937_y_data_19K.pkl'
+      "20211203_154548_y_data.pkl"
+    # '20211202_220937_y_data_19K.pkl'
     ]
   }
 
