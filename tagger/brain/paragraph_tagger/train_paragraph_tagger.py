@@ -32,11 +32,6 @@ from tagger.brain.emb_aproximator import EmbeddingApproximator
 from tagger.brain.paragraph_tagger.train_paragraph_tagger_data import dataset
 from tagger.brain.paragraph_tagger.train_paragraph_tagger_models import get_model
 
-def multiclass_acc(y, y_hat):
-  m = tf.keras.metrics.Accuracy()
-  m.update_state(y, y_hat)
-  return m.result().numpy()
-
 def multiclass_rec(y, y_hat):
   m = tf.keras.metrics.Recall()
   m.update_state(y, y_hat)
@@ -103,7 +98,6 @@ def train_loop(log, train_dataset, dev_dataset, test_dataset, batch_size, n_epoc
   train_losses = []
   best_f1 = 0
   train_recall_history = []
-  train_acc_history = []
   # train_recall_history_epochs = []
   train_epoch = 0
 
@@ -118,7 +112,6 @@ def train_loop(log, train_dataset, dev_dataset, test_dataset, batch_size, n_epoc
     dct_hist = {k: v[0] for i, (k, v) in enumerate(hist.history.items()) }
     train_losses.append(dct_hist['loss'])
     train_recall_history.append(dct_hist['recall'])
-    train_acc_history.append( dct_hist['accuracy'])
 
     # if (epoch > 0) and (test_every_epochs > 0) and (dev_dataset is not None) and (
     #         (epoch + 1) % test_every_epochs == 0):
@@ -231,7 +224,4 @@ if __name__ == '__main__':
     )
     ### save history
 
-
-
-  # train
 
