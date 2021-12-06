@@ -56,7 +56,7 @@ class GetSimWorker(FlaskWorker):
       - custom verification
     """
     word = inputs['QUERY']
-    n_hits = inputs.get('TOP_N', 5)
+    n_hits = int(inputs.get('TOP_N', 5))
     self.__include_raw = inputs.get('raw', False)
     if word not in self.model.wv:
       raise ValueError("Word '{}' not found in database".format(word))

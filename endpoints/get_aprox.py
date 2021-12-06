@@ -75,7 +75,7 @@ class GetAproxWorker(FlaskWorker):
     word = inputs['QUERY']
     if word in self.eng.dic_word2index:
       raise ValueError("Presumed unknown word '{}' already is in existing vacabulary".format(word))
-    top_n = inputs.get('TOP_N', 1)
+    top_n = int(inputs.get('TOP_N', 1))
     word = word.lower() # this is important as the model is lowercase biased
     return word, top_n
 

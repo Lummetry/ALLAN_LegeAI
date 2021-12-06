@@ -1,8 +1,8 @@
 [
-  {
+{
     "optimizer":"adam",
     "MODEL_NAME":"test_model",
-    "UNITS_DENSE":[512,256],
+    "UNITS_DENSE":[2048,512],
     "ACTIV_DENSE": "selu",
     "DROP_PRE_READOUT":0.7,
     "FILTERS":[
@@ -36,25 +36,5 @@
     "STRIDES": [1, 1, 1, 1, 3, 3],
     "KERNELS":[1, 1, 2, 2, 3, 3],
     "CNN_ACT":"relu"
-  },
-    {
-    "optimizer":"adam",
-    "MODEL_NAME":"test_model",
-    "UNITS_DENSE":[512,256],
-    "ACTIV_DENSE": "selu",
-    "DROP_PRE_READOUT":0.7,
-    "FILTERS":[
-      [1024],
-      [256],
-      [512],
-      [256],
-      [512],
-      [256]
-    ],
-    "ENDS": ["gp", "lstm", "gp", "lstm", "gp", "lstm"],
-    "STRIDES": [3, 3, 3, 3, 3, 3],
-    "KERNELS":[3, 3, 3, 3, 3, 3],
-    "CNN_ACT":"relu"
   }
-
 ]

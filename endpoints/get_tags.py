@@ -36,9 +36,9 @@ _CONFIG = {
   'IDX2WORD' : 'lai_ro_i2w_191K.pkl'
   }
 
-class GetQAWorker(FlaskWorker):
+class GetTagsWorker(FlaskWorker):
   def __init__(self, **kwargs):
-    super(GetQAWorker, self).__init__(**kwargs)
+    super(GetTagsWorker, self).__init__(**kwargs)
     return
   
   def _load_model(self):
@@ -57,18 +57,17 @@ class GetQAWorker(FlaskWorker):
     
 
   def _pre_process(self, inputs):
-    query = inputs['QUERY']
-    if len(query) > ct.MODELS.QA_MAX_INPUT:
-      raise ValueError("Query: '{}' exceedes max number of allowed words of {}".format(
-        query, ct.MODELS.QA_MAX_INPUT))
+    doc = inputs['DOCUMENT']
+    if len(doc) < ct.MODELS.TAG_MIN_INPUT:
+      raise ValueError("Document: '{}' is below the minimum of {} words".format(
+        doc, ct.MODELS.TAG_MIN_INPUT))
     embeds = self.encoder.encode(
-      query,
+      doc,
       direct_embeddings=True, 
       fixed_len=ct.MODELS.TAG_MAX_LEN, 
       raw_conversion=False,
       convert_unknown_words=True,
       )
-    self.current_query_embeds = embeds # not needed in tagger
     return embeds
     
 
@@ -80,16 +79,10 @@ class GetQAWorker(FlaskWorker):
 
   def _post_process(self, pred):
     res =  {'results' : pred}
-    res['input_query'] = self.encoder.decode(
-      tokens=self.current_query_embeds,
-      tokens_as_embeddings=True
-      )
     return res
     
     
 if __name__ == '__main__':
   from libraries import Logger
   l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
-  eng = GetQAWorker(log=l, default_config=_CONFIG, verbosity_level=1)
-  eng._load_model()
   
