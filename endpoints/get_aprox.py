@@ -36,11 +36,22 @@ _CONFIG = {
   }
 
 class GetAproxWorker(FlaskWorker):
+  """
+  Implementation of the worker for GET_APPROX endpoit;
+  - as the worker runs on thread, then no prints are allowed; use `_create_notification` and see all the notifications
+    when calling /notifications of the server.
+  """
+
   def __init__(self, **kwargs):
     super(GetAproxWorker, self).__init__(**kwargs)
     return
   
   def _load_model(self):
+    """
+    See docstring in parent
+    Abstract method implementation:
+      - in this case, `EmbeddingApproximator` is our model
+    """
     fn_model = self.config_worker['EMBGEN_MODEL']
     fn_gen_emb = self.config_worker['GENERATED_EMBEDS']
     fn_emb = self.config_worker['WORD_EMBEDS']
@@ -56,20 +67,34 @@ class GetAproxWorker(FlaskWorker):
     
 
   def _pre_process(self, inputs):
-    word = inputs['query']
+    """
+    See docstring in parent
+    Abstract method implementation:
+      - parses the request inputs and keep the value for 'QUERY' (with some custom logic - lower()) and 'TOP_N'
+    """
+    word = inputs['QUERY']
     if word in self.eng.dic_word2index:
       raise ValueError("Presumed unknown word '{}' already is in existing vacabulary".format(word))
-    top_n = inputs.get('top_n', 1)
+    top_n = inputs.get('TOP_N', 1)
     word = word.lower() # this is important as the model is lowercase biased
     return word, top_n
-    
 
   def _predict(self, prep_inputs):
+    """
+    See docstring in parent
+    Abstract method implementation:
+      - calls the model to get aprox words
+    """
     word, top_n = prep_inputs
     res = self.eng.get_unk_word_similar_word(word, top=top_n) 
     return res
 
   def _post_process(self, pred):
+    """
+    See docsting in parent
+    Abstract method implementation:
+      - packs the predictio for the end-user
+    """
     res =  {'results' : pred}
     return res
     

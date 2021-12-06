@@ -1,0 +1,12 @@
+{
+    "CONFIG_ENDPOINTS" : {
+        "get_fake" : {
+            "NR_WORKERS" : 7,
+            "MINUS" : 3
+        },
+
+        "get_fake_2" : {
+            "NR_WORKERS" : 2
+        }
+    }
+}
