@@ -67,6 +67,12 @@ def dataset(log, lst_X_paths, lst_y_paths, batch_size, emb_approximator, subfold
     corpus += log.load_pickle_from_data(x_path, subfolder_path=subfolder_path)
     lbls += log.load_pickle_from_data(y_path, subfolder_path=subfolder_path)
 
+
+  corpus_idxs = [i for i, sent in enumerate(corpus) if len(sent) > 5]
+  corpus = [corpus[i] for i in corpus_idxs]
+  lbls = [lbls[i] for i in corpus_idxs]
+
+
   c = list(zip(corpus, lbls))
   random.shuffle(c)
 
