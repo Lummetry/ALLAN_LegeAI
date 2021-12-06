@@ -37,6 +37,11 @@ class GetSimWorker(FlaskWorker):
     return
   
   def _load_model(self):
+    """
+    See docstring in parent
+    Abstract method implementation:
+      - in this case, we have to deal with a Word2Vec model and we load it in memory
+    """
     model_fn = self.log.get_models_file(self.config_worker['MODEL'])
     self.model = Word2Vec.load(model_fn)
     self._create_notification('LOAD', 'Loaded model {}'.format(model_fn))
@@ -44,17 +49,28 @@ class GetSimWorker(FlaskWorker):
     
 
   def _pre_process(self, inputs):
-    word = inputs['query']
-    n_hits = inputs.get('top_n', 5)
+    """
+    See docstring in parent
+    Abstract method implementation:
+      - parses the request inputs and keep the value for 'QUERY' and 'TOP_N'
+      - custom verification
+    """
+    word = inputs['QUERY']
+    n_hits = inputs.get('TOP_N', 5)
     self.__include_raw = inputs.get('raw', False)
     if word not in self.model.wv:
       raise ValueError("Word '{}' not found in database".format(word))
     if n_hits > 10:
       raise ValueError("top_n max value is 10, received {}".format(n_hits))
     return word, n_hits
-    
 
   def _predict(self, prep_inputs):
+    """
+    See docstring in parent
+    Abstract method implementation:
+      - calls the model to get most similar words
+      - custom logic based on lavenshtein_distance to discard words that LOOK! similar.
+    """
     word, n_hits = prep_inputs
     lst_words = self.model.wv.most_similar(word, topn=100)
     lst_raw = self.model.wv.most_similar(word, topn=n_hits)
@@ -68,6 +84,11 @@ class GetSimWorker(FlaskWorker):
     return lst_proposed, lst_raw
 
   def _post_process(self, pred):
+    """
+    See docsting in parent
+    Abstract method implementation:
+      - packs the predictio for the end-user
+    """
     res =  {'results' : pred[0]}
     if self.__include_raw:
       res['raw_results'] = pred[1]

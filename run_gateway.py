@@ -22,8 +22,9 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 import argparse
 
 from libraries import Logger
-from libraries.model_server_v2 import FlaskModelServer
+from libraries.model_server_v2.gateway import FlaskGateway
 
+### Example for running a gateway
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
 
@@ -40,23 +41,34 @@ if __name__ == '__main__':
   )
 
   parser.add_argument(
-    '--port', type=int, default=5002
+    '--host', type=str, default='127.0.0.1'
   )
 
+  parser.add_argument(
+    '--port', type=int, default=5002
+  )
 
   args = parser.parse_args()
   base_folder = args.base_folder
   app_folder = args.app_folder
+  host = args.host
   port = args.port
 
-  log = Logger(lib_name='SVR', base_folder=base_folder, app_folder=app_folder, TF_KERAS=False)
-
-  svr = FlaskModelServer(
-    log=log,
-    plugins_location='endpoints',
-    plugin_name='get_sim',
-    plugin_suffix='Worker',
-    port=port,
-    nr_workers=5
+  ### Attention! config_file should contain the configuration for each endpoint; 'NR_WORKERS' and upstream configuration
+  log = Logger(
+    lib_name='GTW',
+    config_file='config_gateway.txt',
+    base_folder=base_folder, app_folder=app_folder,
+    TF_KERAS=False
   )
 
+  gtw = FlaskGateway(
+    log=log,
+    server_names=['get_fake', 'get_fake_2'],
+    workers_location='endpoints',
+    workers_suffix='Worker',
+    host=host,
+    port=port,
+    first_server_port=port+1,
+    server_execution_path='/analyze'
+  )

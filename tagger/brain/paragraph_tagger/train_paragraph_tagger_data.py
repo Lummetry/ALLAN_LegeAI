@@ -119,7 +119,7 @@ def dataset(log, lst_X_paths, lst_y_paths, batch_size, emb_approximator, subfold
     corpus=test_corpus, lbls=test_lbls,
     emb_approximator=emb_approximator,
     fixed_length=fixed_length,
-    convert_unk_word=True
+    convert_unk_word=False
   )
   test_steps_per_epoch = (test_br - dev_br) // batch_size + 1
 
