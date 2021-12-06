@@ -64,11 +64,11 @@ if __name__ == '__main__':
 
   gtw = FlaskGateway(
     log=log,
-    server_names=['get_fake', 'get_fake_2'],
+    server_names=['get_sim'],
     workers_location='endpoints',
     workers_suffix='Worker',
     host=host,
     port=port,
-    first_server_port=port+1,
+    #first_server_port=5020,
     server_execution_path='/analyze'
   )
