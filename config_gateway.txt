@@ -1,12 +1,19 @@
 {
     "CONFIG_ENDPOINTS" : {
-        "get_fake" : {
-            "NR_WORKERS" : 7,
-            "MINUS" : 3
+        "get_aprox" : {
+            "NR_WORKERS" : 7
         },
 
-        "get_fake_2" : {
+        "get_sim" : {
             "NR_WORKERS" : 2
+        },
+
+        "get_qa" : {
+            "NR_WORKERS" : 2,
+            "EMBGEN_MODEL" : "20211125_203842_embgen_model_sc_40_ep140.h5",
+            "GENERATED_EMBEDS" : "embgen_full_embeds.npy",
+            "WORD_EMBEDS" : "lai_embeddings_191K.pkl",
+            "IDX2WORD" : "lai_ro_i2w_191K.pkl"            
         }
     }
 }
