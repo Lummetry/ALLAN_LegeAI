@@ -34,4 +34,6 @@ class WV:
 class MODELS:
   
   TAG_MAX_LEN = 500
+  QA_MAX_INPUT = 25
+  TAG_MIN_INPUT = 50
   
