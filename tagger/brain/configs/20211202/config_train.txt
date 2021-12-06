@@ -22,12 +22,12 @@
     "EOS" : 3
   },
   "WORD2IDX" : "#####",
-  "IDX2WORD" : "ro_full_index2word.pickle",
+  "IDX2WORD" : "embeds/lai_ro_i2w_191K.pkl",
   "DIST_FUNC" : "l2",
 
   "MODEL" : {
     "NAME"        : "test_model",
-    "PRETRAINED"  : "ro_embgen_model.h5",
+    "PRETRAINED"  : "20211125_203842_embgen_model_sc_40_ep140.h5",
 
 
     "BATCH_SIZE": 2,
@@ -40,11 +40,12 @@
     "###OUTPUT_TYPES" : ["single-ranking", "multi-ranking", "tagging"],
     "OUTPUT"      : "tagging",
     "USE_CUDA"    : 0,
-    "EMBED_FILE"  : "ro_full_embeds.npy"
+    "EMBED_FILE"  : "embeds/lai_embeddings_191K.pkl"
   },
 
   "EMB_GEN_MODEL" : {
-    "BATCH_SIZE": 2
+    "BATCH_SIZE": 2,
+    "PRETRAINED": "20211125_203842_embgen_model_sc_40_ep140.h5"
 
   }
 }

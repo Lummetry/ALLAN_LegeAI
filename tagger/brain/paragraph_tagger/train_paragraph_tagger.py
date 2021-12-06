@@ -58,7 +58,9 @@ def evaluate_callback(model, dev_gen, steps_per_epoch, key, thrs=0.5):
 
   acc = multiclass_acc(y, y_pred)
   rec = multiclass_rec(y, y_pred)
-  return {'{}_acc'.format(key.lower()) : acc, '{}_rec'.format(key.lower()): rec}
+  dct_res = {'{}_acc'.format(key.lower()) : acc, '{}_rec'.format(key.lower()): rec}
+  log.P("Evaluation finished: {}".format(dct_res))
+  return dct_res
 
 def save_model_callback(log, model, s_name, delete_prev_named=False, DEBUG=False):
 
@@ -71,7 +73,8 @@ def save_model_callback(log, model, s_name, delete_prev_named=False, DEBUG=False
 
   return
 
-def train_loop(log, train_dataset, dev_dataset, batch_size, n_epochs, steps_per_epoch,  model,
+def train_loop(log, train_dataset, dev_dataset, test_dataset, batch_size, n_epochs, model,
+              train_steps_per_epoch, dev_steps_per_epoch, test_steps_per_epoch,
                eval_callback,
                save_model_callback,
                 save_best=True,
@@ -84,6 +87,7 @@ def train_loop(log, train_dataset, dev_dataset, batch_size, n_epochs, steps_per_
   works both on embeddings inputs or tokenized inputs
   """
 
+  best_name = None
   train_losses = []
   best_recall = 0
   train_recall_history = []
@@ -97,7 +101,7 @@ def train_loop(log, train_dataset, dev_dataset, batch_size, n_epochs, steps_per_
       train_dataset,
       epochs=1,
       verbose=1,
-      steps_per_epoch=steps_per_epoch
+      steps_per_epoch=train_steps_per_epoch
     )
     dct_hist = {k: v[0] for i, (k, v) in enumerate(hist.history.items()) }
     train_losses.append(dct_hist['loss'])
@@ -110,7 +114,7 @@ def train_loop(log, train_dataset, dev_dataset, batch_size, n_epochs, steps_per_
     dct_eval = eval_callback(
       model=model,
       dev_gen=dev_dataset,
-      steps_per_epoch=steps_per_epoch,
+      steps_per_epoch=dev_steps_per_epoch,
       key='dev'
     )
     rec = dct_eval['dev_rec']
@@ -123,12 +127,25 @@ def train_loop(log, train_dataset, dev_dataset, batch_size, n_epochs, steps_per_
         model=model,
         s_name=s_name,
         delete_prev_named=False
-      ) ### TODO: implement delete prev
+      )
       best_recall = rec
+      best_name = s_name
+    #endif
+  #endfor
+
+  model = tf.keras.models.load_model(os.path.join(log.get_models_folder(), log.file_prefix + '_' + best_name +'.h5'))
+
+  log.P("Testing model {}".format(best_name))
+  dct_test = eval_callback(
+    model=model,
+    dev_gen=test_dataset,
+    steps_per_epoch=test_steps_per_epoch,
+    key='test'
+  )
+
 
   log.P("Model training done.")
   log.P("Train recall history: {}".format(train_recall_history))
-
 
   return train_recall_history
 
@@ -137,13 +154,13 @@ if __name__ == '__main__':
   DATA_SUBFOLDER_PATH = 'tagger_dataset'
   DATA_MAPPER_FN = '{}/data_mapper.json'.format(DATA_SUBFOLDER_PATH)
   DCT_LBL_FN = '{}/dict_lbl.pk'.format(DATA_SUBFOLDER_PATH)
-
+  EMBEDS_FN = ''
   LOGGER_CONFIG = 'tagger/brain/configs/20211202/config_train.txt'
   MODELS_DEF_FN = 'tagger/brain/configs/20211202/models_defs.json'
 
   FIXED_LENGTH = 50
   BATCH_SIZE = 512
-  NR_EPOCHS = 2
+  NR_EPOCHS = 1
 
   log = Logger(lib_name='TRN', config_file=LOGGER_CONFIG)
   model_defs = log.load_json(MODELS_DEF_FN)
@@ -156,7 +173,10 @@ if __name__ == '__main__':
     dict_label2index=dct_lbls
   )
 
-  train_dataset, train_steps_per_epoch = dataset(
+  emb_approximator.setup_embgen_model()
+  # emb_approximator._setup_similarity_embeddings(generated_embeds_filename=log.get_data_file(EMBEDS_FN))
+
+  train_dataset, train_steps_per_epoch, dev_dataset, dev_steps_per_epoch, test_dataset, test_steps_per_epoch = dataset(
     log=log,
     lst_X_paths=dct_data_mapper['train']['X'],
     lst_y_paths=dct_data_mapper['train']['y'],
@@ -165,15 +185,7 @@ if __name__ == '__main__':
     emb_approximator=emb_approximator,
     fixed_length=FIXED_LENGTH
   )
-  dev_dataset, dev_steps_per_epoch = dataset(
-    log=log,
-    lst_X_paths=dct_data_mapper['dev']['X'],
-    lst_y_paths=dct_data_mapper['dev']['y'],
-    subfolder_path=DATA_SUBFOLDER_PATH,
-    batch_size=BATCH_SIZE,
-    emb_approximator=emb_approximator,
-    fixed_length=FIXED_LENGTH
-  )
+
 
   for model_def in model_defs:
     model = get_model(
@@ -186,8 +198,11 @@ if __name__ == '__main__':
       log=log,
       model=model,
       train_dataset=train_dataset,
-      steps_per_epoch=train_steps_per_epoch,
       dev_dataset=dev_dataset,
+      test_dataset=test_dataset,
+      train_steps_per_epoch=train_steps_per_epoch,
+      dev_steps_per_epoch=dev_steps_per_epoch,
+      test_steps_per_epoch=test_steps_per_epoch,
       batch_size=BATCH_SIZE,
       n_epochs=NR_EPOCHS,
       eval_callback=evaluate_callback,

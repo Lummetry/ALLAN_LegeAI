@@ -21,9 +21,8 @@ Copyright 2019 Lummetry.AI (Knowledge Investment Group SRL). All Rights Reserved
 """
 
 import tensorflow as tf
-
+import random
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 
 from functools import partial
@@ -35,20 +34,29 @@ def test_tf_ds(dataset):
     print(y)
   return
 
-def get_generator(corpus, lbls, emb_approximator, fixed_length=50):
+def get_generator(corpus, lbls, emb_approximator, fixed_length=50, convert_unk_word=False):
   while True:
     for i in range(len(corpus)):
-      # with tf.device('/cpu:0'):
-      X, y = emb_approximator.encode(
-        text=[corpus[i]],
-        direct_embeddings=True,
-        text_label=[lbls[i]],
-        fixed_len=fixed_length,
-        raw_conversion=True,
-       # to_onehot=True,
-        convert_unknown_words=False,
-        DEBUG=False
-      )
+      if convert_unk_word is False:
+        X, y = emb_approximator.encode(
+          text=[corpus[i]],
+          direct_embeddings=True,
+          text_label=[lbls[i]],
+          fixed_len=fixed_length,
+          raw_conversion=True,
+          convert_unknown_words=False,
+          DEBUG=False
+        )
+      else:
+        X, y = emb_approximator.encode(
+          text=[corpus[i]],
+          direct_embeddings=True,
+          text_label=[lbls[i]],
+          fixed_len=fixed_length,
+          raw_conversion=True,
+          convert_unknown_words=True,
+          DEBUG=False
+        )
       yield X.squeeze(axis=0), y.squeeze(axis=0)
 
 def dataset(log, lst_X_paths, lst_y_paths, batch_size, emb_approximator, subfolder_path=None, fixed_length=50):
@@ -59,27 +67,70 @@ def dataset(log, lst_X_paths, lst_y_paths, batch_size, emb_approximator, subfold
     corpus += log.load_pickle_from_data(x_path, subfolder_path=subfolder_path)
     lbls += log.load_pickle_from_data(y_path, subfolder_path=subfolder_path)
 
-  #### PREPARED PATHS:
-  generator = partial(
-    get_generator,
-    corpus=corpus, lbls=lbls,
-    emb_approximator=emb_approximator,
-    fixed_length=fixed_length,
-  )
-  steps_per_epoch = len(corpus) // batch_size + 1
+  c = list(zip(corpus, lbls))
+  random.shuffle(c)
+
+  dataset_size = len(c)
+
+  train_br = int(0.7 * dataset_size)
+  dev_br = int(0.85 * dataset_size)
+  test_br = dataset_size
+
+  train_corpus, train_lbls = zip(*c[:train_br])
+  dev_corpus, dev_lbls = zip(*c[train_br:dev_br])
+  test_corpus, test_lbls = zip(*c[dev_br:test_br])
 
   output_types = (tf.float32, tf.int32)
   output_shapes = ((fixed_length, emb_approximator.emb_size), (emb_approximator.output_size))
 
-  dataset = tf.data.Dataset.from_generator(
-    generator,
+  #### Train:
+  train_generator = partial(
+    get_generator,
+    corpus=train_corpus, lbls=train_lbls,
+    emb_approximator=emb_approximator,
+    fixed_length=fixed_length,
+  )
+  train_steps_per_epoch = train_br // batch_size + 1
+
+  train_dataset = tf.data.Dataset.from_generator(
+    train_generator,
     output_types=output_types,
     output_shapes=output_shapes
+  ).batch(batch_size).prefetch(3)
+
+  #### Dev:
+  dev_generator = partial(
+    get_generator,
+    corpus=dev_corpus, lbls=dev_lbls,
+    emb_approximator=emb_approximator,
+    fixed_length=fixed_length,
   )
+  dev_steps_per_epoch = (dev_br - train_br) // batch_size + 1
 
-  dataset = dataset.batch(batch_size).prefetch(3)
+  dev_dataset = tf.data.Dataset.from_generator(
+    dev_generator,
+    output_types=output_types,
+    output_shapes=output_shapes
+  ).batch(batch_size).prefetch(3)
 
-  return dataset, steps_per_epoch
+  #### Test:
+  test_generator = partial(
+    get_generator,
+    corpus=test_corpus, lbls=test_lbls,
+    emb_approximator=emb_approximator,
+    fixed_length=fixed_length,
+    convert_unk_word=True
+  )
+  test_steps_per_epoch = (test_br - dev_br) // batch_size + 1
+
+  test_dataset = tf.data.Dataset.from_generator(
+    test_generator,
+    output_types=output_types,
+    output_shapes=output_shapes
+  ).batch(batch_size).prefetch(3)
+
+
+  return train_dataset, train_steps_per_epoch, dev_dataset, dev_steps_per_epoch, test_dataset, test_steps_per_epoch
 
 
 if __name__ == '__main__':
