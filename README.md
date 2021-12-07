@@ -1,8 +1,9 @@
 # ALLAN implementation for Indaco LegeAI
 
 ## API documentation
-Each system functionality is hosted in a microservice. All microservices are orchestrated by a gateway.
-The single communication point is the gateway which can be accessed via HTTP REST requests (POST and GET).
+Each system functionality is hosted by a microservice. All microservices are orchestrated by a gateway.
+
+The single communication point is the gateway which can be accessed via `HTTP REST` requests (`POST` and `GET`).
 
 * ### 1\. Endpoints
 
