@@ -85,9 +85,18 @@ class GetQAWorker(FlaskWorker):
     return res
 
   def _post_process(self, pred):
+    top_k = 10
+    top_k_idxs = np.argsort(pred.squeeze())[-top_k:]
+
     idx = (pred.squeeze() > 0.5).astype(np.uint8).tolist()
     lbls = [self.id_to_label[i] for i, v in enumerate(idx) if v == 1]
-    res =  {'results' : lbls}
+    res = {'results' : lbls}
+
+    res['top_k'] = {
+      lbls[i]: pred.squeeze()[i]
+      for i in top_k_idxs
+    }
+
     res['input_query'] = self.encoder.decode(
       tokens=self.current_query_embeds,
       tokens_as_embeddings=True
