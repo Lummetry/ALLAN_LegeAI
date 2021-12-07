@@ -93,8 +93,8 @@ class GetQAWorker(FlaskWorker):
     res = {'results' : lbls}
 
     res['top_k'] = [
-      [self.id_to_label[i], pred.squeeze()[i]]
-      for i in top_k_idxs
+      [self.id_to_label[i], round(pred.squeeze()[i], 3)]
+      for i in top_k_idxs.reverse()
     ]
 
     res['input_query'] = self.encoder.decode(
