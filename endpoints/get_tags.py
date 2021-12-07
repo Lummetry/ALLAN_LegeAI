@@ -99,13 +99,13 @@ class GetTagsWorker(FlaskWorker):
 
   def _post_process(self, pred):
     predictions, n_hits = pred
-    top_k_idxs = np.argsort(pred.squeeze())[-n_hits:]
+    top_k_idxs = np.argsort(predictions.squeeze())[-n_hits:]
 
     idx = (predictions.squeeze() > 0.5).astype(np.uint8).tolist()
     lbls = [self.id_to_label[i] for i, v in enumerate(idx) if v == 1]
     res = {'results': lbls}
     res['top_k'] = [
-      [self.id_to_label[i], round(predictions.squeeze()[i], 3)]
+      [self.id_to_label[i], np.round(predictions.squeeze()[i], 3)]
       for i in top_k_idxs
     ]
     res['top_k'].reverse()
