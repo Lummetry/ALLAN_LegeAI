@@ -70,7 +70,7 @@ class GetTagsWorker(FlaskWorker):
       convert_unknown_words=True,
     )
     self.tagger_model(warmup_input)
-    
+
     self._create_notification('LOAD', 'Loaded EmbeddingApproximator')
     return
 
@@ -105,14 +105,15 @@ class GetTagsWorker(FlaskWorker):
     lbls = [self.id_to_label[i] for i, v in enumerate(idx) if v == 1]
     res = {'results': lbls}
     res['top_k'] = [
-      [self.id_to_label[i], np.round(predictions.squeeze()[i], 3)]
+      [self.id_to_label[i], round(predictions.squeeze()[i].astype(float), 3)]
       for i in top_k_idxs
     ]
+    # print(res)
     res['top_k'].reverse()
-    res['input_query'] = self.encoder.decode(
-      tokens=self.current_query_embeds,
-      tokens_as_embeddings=True
-    )
+    # res['input_query'] = self.encoder.decode(
+    #   tokens=self.current_query_embeds,
+    #   tokens_as_embeddings=True
+    # )
     return res
 
 

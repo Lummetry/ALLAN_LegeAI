@@ -89,7 +89,7 @@ class GetQAWorker(FlaskWorker):
     )
     self.current_query_embeds = embeds # not needed in tagger
 
-    n_hits = inputs.get('TOP_K', 10)
+    n_hits = int(inputs.get('TOP_K', 10))
 
     return embeds, n_hits
     
@@ -108,17 +108,17 @@ class GetQAWorker(FlaskWorker):
     res = {'results' : lbls}
 
     res['top_k'] = [
-      [self.id_to_label[i], np.round(predictions.squeeze()[i], 3)]
+      [self.id_to_label[i], round(predictions.squeeze()[i].astype(float), 3)]
       for i in top_k_idxs
     ]
 
     res['top_k'].reverse()
 
 
-    res['input_query'] = self.encoder.decode(
-      tokens=self.current_query_embeds,
-      tokens_as_embeddings=True
-    )
+    # res['input_query'] = self.encoder.decode(
+    #   tokens=self.current_query_embeds,
+    #   tokens_as_embeddings=True
+    # )
     return res
     
     
