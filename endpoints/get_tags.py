@@ -92,8 +92,8 @@ class GetTagsWorker(FlaskWorker):
     res = {'results': lbls}
     res['top_k'] = [
       [self.id_to_label[i], round(pred.squeeze()[i], 3)]
-      for i in top_k_idxs.reverse()
-    ]
+      for i in top_k_idxs
+    ].reverse()
     res['input_query'] = self.encoder.decode(
       tokens=self.current_query_embeds,
       tokens_as_embeddings=True
