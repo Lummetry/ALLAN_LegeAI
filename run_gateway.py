@@ -70,5 +70,5 @@ if __name__ == '__main__':
     host=host,
     port=port,
     #first_server_port=5020,
-    server_execution_path='/analyze'
+    server_execution_path='/run'
   )
