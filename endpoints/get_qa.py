@@ -66,7 +66,7 @@ class GetQAWorker(FlaskWorker):
 
   def _pre_process(self, inputs):
     query = inputs['QUERY']
-    if len(query) > ct.MODELS.QA_MAX_INPUT:
+    if len(query.split(' ')) > ct.MODELS.QA_MAX_INPUT:
       raise ValueError("Query: '{}' exceedes max number of allowed words of {}".format(
         query, ct.MODELS.QA_MAX_INPUT))
     embeds = self.encoder.encode(
