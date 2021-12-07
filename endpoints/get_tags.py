@@ -61,6 +61,16 @@ class GetTagsWorker(FlaskWorker):
       generated_embeds_filename=fn_gen_emb,
       run_in_cpu=True
     )
+
+    warmup_input = self.encoder.encode(
+      "Warmup",
+      direct_embeddings=True,
+      fixed_len=ct.MODELS.TAG_MAX_LEN,
+      raw_conversion=False,
+      convert_unknown_words=True,
+    )
+    self.tagger_model(warmup_input)
+    
     self._create_notification('LOAD', 'Loaded EmbeddingApproximator')
     return
 
@@ -77,21 +87,25 @@ class GetTagsWorker(FlaskWorker):
       convert_unknown_words=True,
     )
     self.current_query_embeds = embeds
-    return embeds
+
+    n_hits = inputs.get('TOP_K', 10)
+
+    return embeds, n_hits
 
   def _predict(self, prep_inputs):
-    res = self.tagger_model(prep_inputs).numpy()
-    return res
+    inputs, n_hits = prep_inputs
+    res = self.tagger_model(inputs).numpy()
+    return res, n_hits
 
   def _post_process(self, pred):
-    top_k = 10
-    top_k_idxs = np.argsort(pred.squeeze())[-top_k:]
+    predictions, n_hits = pred
+    top_k_idxs = np.argsort(pred.squeeze())[-n_hits:]
 
-    idx = (pred.squeeze() > 0.5).astype(np.uint8).tolist()
+    idx = (predictions.squeeze() > 0.5).astype(np.uint8).tolist()
     lbls = [self.id_to_label[i] for i, v in enumerate(idx) if v == 1]
     res = {'results': lbls}
     res['top_k'] = [
-      [self.id_to_label[i], round(pred.squeeze()[i], 3)]
+      [self.id_to_label[i], round(predictions.squeeze()[i], 3)]
       for i in top_k_idxs
     ]
     res['top_k'].reverse()
