@@ -1,12 +1,12 @@
 # ALLAN implementation for Indaco LegeAI
 
-### API documentation
+## API documentation
 Each system functionality is hosted in a microservice. All microservices are orchestrated by a gateway.
 The single communication point is the gateway which can be accessed via HTTP REST requests (POST and GET).
 
-1. Endpoints
+* ### 1\. Endpoints
 
-    1. Run AI
+    * #### 1.1\. Run AI
      
        `POST http://195.60.78.150:5002/run`
        
@@ -47,7 +47,7 @@ The single communication point is the gateway which can be accessed via HTTP RES
         }
         ```
     
-    2. Display microservices logs
+    * #### 1.2\. Display microservices logs
     
         `POST http://195.60.78.150:5002/notifications`
         
@@ -76,7 +76,7 @@ The single communication point is the gateway which can be accessed via HTTP RES
         }
         ```
   
-    3. Start server
+    * #### 1.3\. Start server
     
         `POST http://195.60.78.150:5002/start_server`
         
@@ -101,7 +101,7 @@ The single communication point is the gateway which can be accessed via HTTP RES
         }
         ```
     
-    4. Kill server
+    * #### 1.4\. Kill server
     
         `POST http://195.60.78.150:5002/kill_server`
         
@@ -126,9 +126,9 @@ The single communication point is the gateway which can be accessed via HTTP RES
         }
         ```
 
-2. Developed microservices
+* ### 2\. Developed microservices
 
-    1. get_sim - utilitary
+    * #### 2.1\. get_sim - utilitary
     
         Given a word returns the most semantically similar words in the vocabulary.
         
@@ -150,7 +150,7 @@ The single communication point is the gateway which can be accessed via HTTP RES
         }
         ```
        
-    2. get_aprox - utilitary
+    * #### 2.2\. get_aprox - utilitary
     
         Given a mispelled word returns the most similar words in the vocabulary.
         
@@ -172,7 +172,7 @@ The single communication point is the gateway which can be accessed via HTTP RES
         }
         ```
 
-    3. get_tags - system functionality
+    * #### 2.3\. get_tags - system functionality
         
         Given a document, returns top n associated tags and their scores
         
@@ -198,7 +198,7 @@ The single communication point is the gateway which can be accessed via HTTP RES
         }
         ```
 
-    4. get_qa - system functionality
+    * #### 2.4\. get_qa - system functionality
     
         Given a natural language written question/sentence, returns top n associated tags and their scores
         
@@ -224,15 +224,15 @@ The single communication point is the gateway which can be accessed via HTTP RES
         }
         ```
 
-3. Microservices configuration
+* ### 3\. Microservices configuration
 
 Each microservice can be configured in `config_gateway.txt`. The number of workers per each microservice is controlled with `NR_WORKERS`.
 
 
+---
 
 
-
-### Deployment
+## Deployment
 ```
 conda create -n allan1 python=3.8 cudatoolkit=10.1 scikit-learn python-Levenshtein pandas pyodbc tqdm flask psutil pytorch -c pytorch
 pip install tensorflow-gpu==2.3.0
@@ -240,14 +240,14 @@ pip install gensim
 ```
 
 
-### Dev Windows including GUI
+## Dev Windows including GUI
 ```
 conda create -n allan_dev tensorflow-gpu=2.3 tensorflow=2.3=mkl_py38h1fcfbd6_0 tensorflow-hub spyder==4.2.5 pandas matplotlib psutil tqdm shapely seaborn scikit-learn dropbox ipykernel=6.2.0 python-Levenshtein pyodbc flask pytorch=1.8 -c pytorch 
 conda install numpy=1.18.5
 pip install gensim=4.1.2
 ```
 
-##### Ubuntu - OPTIONAL
+## Ubuntu - OPTIONAL
 ```
 conda create -n allan python=3.8 cudatoolkit=10.1  pandas matplotlib psutil tqdm shapely seaborn scikit-learn dropbox python-Levenshtein pyodbc 
 conda activate allan
