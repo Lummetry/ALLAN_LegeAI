@@ -41,7 +41,7 @@ if __name__ == '__main__':
   )
 
   parser.add_argument(
-    '--host', type=str, default='127.0.0.1'
+    '--host', type=str, default='0.0.0.0'
   )
 
   parser.add_argument(
@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
   gtw = FlaskGateway(
     log=log,
-    server_names=['get_tags', 'get_qa', 'get_sim', 'get_aprox'],
+    # server_names=['get_tags', 'get_qa', 'get_sim', 'get_aprox'],
     workers_location='endpoints',
     workers_suffix='Worker',
     host=host,
