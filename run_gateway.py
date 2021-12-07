@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
   gtw = FlaskGateway(
     log=log,
-    server_names=['get_tags'],
+    server_names=['get_tags', 'get_qa'],
     workers_location='endpoints',
     workers_suffix='Worker',
     host=host,
