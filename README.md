@@ -41,7 +41,7 @@ The single communication point is the gateway which can be accessed via `HTTP RE
         }
         ```
         
-        **Response if the signature is not correct:**
+        **Response if the signature is not started:**
         ```python
         {
             "ERROR": "Bad signature $(SIGNATURE). Available signatures: $(list_of_started_microservices)"
@@ -150,6 +150,25 @@ The single communication point is the gateway which can be accessed via `HTTP RE
             "results" : <List[string]> # List of most similar words
         }
         ```
+        
+        **Example:**
+        ```python
+        POST http://195.60.78.150:5002/run
+        ----------------------------------
+        {
+            "SIGNATURE": "get_sim",
+            "QUERY": "inginer",
+            "TOP_N" : 3
+        }
+        
+        Response json
+        -------------
+        {
+            "call_id": 9,
+            "results": ["constructor", "subinginer", "proiectant"],
+            "signature": "GetSimWorker:0"
+        }
+        ```
        
     * #### 2.2\. get_aprox - utilitary
     
@@ -169,7 +188,25 @@ The single communication point is the gateway which can be accessed via `HTTP RE
         {
             "call_id" : <Integer>, # counter - the number of requests processed so far
             "signature" : <String>, # worker signature - which worker resolved the input,
-            "results" : <List[string]> # List of most similar words
+            "results" : <String> or <List[string]> # most similar word (if TOP_N=1) or list containing most similar words
+        }
+        ```
+        
+        **Example:**
+        ```python
+        POST http://195.60.78.150:5002/run
+        ----------------------------------
+        {
+            "SIGNATURE": "get_aprox",
+            "QUERY": "stlicla"
+        }
+        
+        Response json
+        -------------
+        {
+            "call_id": 13,
+            "results": "sticla",
+            "signature": "GetAproxWorker:2"
         }
         ```
 
@@ -194,6 +231,27 @@ The single communication point is the gateway which can be accessed via `HTTP RE
             "results" : <List[[String, Integer]]> # [[tag1, score1], [tag2, score2], ...]
         }
         ```
+        
+        **Example:**
+        ```python
+        POST http://195.60.78.150:5002/run
+        ----------------------------------
+        {
+            "SIGNATURE": "get_tags",
+            "DOCUMENT": " Art. 20. - Jurisprudenţă, Reviste (10), Doctrină (4) (1) Publicitatea asigură opozabilitatea dreptului, actului, faptului, precum şi a oricărui alt raport juridic supus publicităţii, stabileşte rangul acestora şi, dacă legea prevede în mod expres, condiţionează constituirea sau efectele lor juridice. Reviste (12), Doctrină (1) (2) Între părţi sau succesorii lor, universali ori cu titlu universal, după caz, drepturile, actele sau faptele juridice, precum şi orice alte raporturi juridice produc efecte depline, chiar dacă nu au fost îndeplinite formalităţile de publicitate, afară de cazul în care prin lege se dispune altfel. Reviste (6), Doctrină (1) (3) Publicitatea nu validează dreptul, actul sau faptul supus ori admis la publicitate. Cu toate acestea, în cazurile şi condiţiile expres prevăzute de lege, ea poate produce efecte achizitive în favoarea terţilor dobânditori de bună-credinţă. Reviste (4), Doctrină (1)(4) Publicitatea nu întrerupe cursul prescripţiei extinctive, afară de cazul în care prin lege se dispune altfel. Doctrină (1)",
+            "TOP_N": 1
+        }
+        
+        Response json
+        -------------
+        {
+            "call_id": 5,
+            "results": [
+                 ["administratie_publica", 0.07]
+            ],
+            "signature": "GetTagsWorker:0"
+        }
+        ```
 
     * #### 2.4\. get_qa - system functionality
     
@@ -202,7 +260,7 @@ The single communication point is the gateway which can be accessed via `HTTP RE
         **Input parameters:**
         ```python
         {
-            "SIGNATURE" : "get_tags",
+            "SIGNATURE" : "get_qa",
             "QUERY" : <String: mandatory>, # question to be tested>
             "TOP_N" : <Integer: optional> # default value 10
         }
@@ -214,6 +272,29 @@ The single communication point is the gateway which can be accessed via `HTTP RE
             "call_id" : <Integer>, # counter - the number of requests processed so far
             "signature" : <String>, # worker signature - which worker resolved the input,
             "results" : <List[[String, Integer]]> # [[tag1, score1], [tag2, score2], ...]
+        }
+        ```
+        
+        **Example:**
+        ```python
+        POST http://195.60.78.150:5002/run
+        ----------------------------------
+        {
+            "SIGNATURE": "get_qa",
+            "QUERY": "Care este regimul de tva intracomunitar si dubla taxare daca vreau sa cumpar o masina second hand din germania?",
+            "TOP_N": 3
+        }
+        
+        Response json
+        -------------
+        {
+            "call_id": 5,
+            "results": [
+                 ["impozite_si_taxe", 0.356],
+                 ["taxa_pe_valoare_adaugata", 0.098],
+                 ["import_export", 0.04]
+            ],
+            "signature": "GetQAWorker:0"
         }
         ```
 
