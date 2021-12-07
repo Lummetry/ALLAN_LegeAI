@@ -76,6 +76,7 @@ class GetTagsWorker(FlaskWorker):
       raw_conversion=False,
       convert_unknown_words=True,
     )
+    self.current_query_embeds = embeds
     return embeds
 
   def _predict(self, prep_inputs):
@@ -86,6 +87,10 @@ class GetTagsWorker(FlaskWorker):
     idx = (pred.squeeze() > 0.5).astype(np.uint8).tolist()
     lbls = [self.id_to_label[i] for i, v in enumerate(idx) if v == 1]
     res = {'results': lbls}
+    res['input_query'] = self.encoder.decode(
+      tokens=self.current_query_embeds,
+      tokens_as_embeddings=True
+    )
     return res
 
 
