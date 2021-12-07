@@ -88,7 +88,7 @@ class GetTagsWorker(FlaskWorker):
     )
     self.current_query_embeds = embeds
 
-    n_hits = int(inputs.get('TOP_K', 10))
+    n_hits = int(inputs.get('TOP_N', 10))
 
     return embeds, n_hits
 
@@ -99,12 +99,12 @@ class GetTagsWorker(FlaskWorker):
 
   def _post_process(self, pred):
     predictions, n_hits = pred
-    top_k_idxs = np.argsort(predictions.squeeze())[-n_hits:]
+    top_n_idxs = np.argsort(predictions.squeeze())[-n_hits:]
 
     res = {}
     res['results'] = [
       [self.id_to_label[i], round(predictions.squeeze()[i].astype(float), 3)]
-      for i in top_k_idxs
+      for i in top_n_idxs
     ]
     res['results'].reverse()
 
