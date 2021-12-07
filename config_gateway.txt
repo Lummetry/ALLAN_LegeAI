@@ -14,6 +14,10 @@
             "GENERATED_EMBEDS" : "embgen_full_embeds.npy",
             "WORD_EMBEDS" : "lai_embeddings_191K.pkl",
             "IDX2WORD" : "lai_ro_i2w_191K.pkl"            
+        },
+
+        "get_tags" : {
+            "NR_WORKERS" : 1
         }
     }
 }
