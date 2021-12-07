@@ -144,27 +144,36 @@ if __name__ == '__main__':
   from tagger.brain.emb_aproximator import EmbeddingApproximator
   EMB_MODEL_NAME = 'test_model'
   DATA_SUBFOLDER_PATH = 'tagger_dataset'
-  DATA_MAPPER_FN = '{}/data_mapper.json'.format(DATA_SUBFOLDER_PATH)
+  # DATA_MAPPER_FN = '{}/data_mapper.json'.format(DATA_SUBFOLDER_PATH)
   DCT_LBL_FN = '{}/dict_lbl.pk'.format(DATA_SUBFOLDER_PATH)
 
   log = Logger(lib_name='test_dataset', config_file='tagger/brain/configs/20211202/config_test_data.txt')
 
-  dct_data_mapper = log.load_data_json(DATA_MAPPER_FN)
+  dct_data_mapper = {
+    "X": [
+      # "20211203_154548_x_data_37.pkl",
+      "20211202_220937_x_data_19K.pkl"
+    ],
+    "y": [
+      # "20211203_154548_y_data_37.pkl"
+    '20211202_220937_y_data_19K.pkl'
+    ]
+  }
   dct_lbls = log.load_pickle_from_data(DCT_LBL_FN)
   emb_approximator = EmbeddingApproximator(
     log=log,
     dict_label2index=dct_lbls
   )
 
-  tf_ds, steps_per_epoch = dataset(
+  train_dataset, train_steps_per_epoch, dev_dataset, dev_steps_per_epoch, test_dataset, test_steps_per_epoch = dataset(
     log=log,
-    lst_X_paths=dct_data_mapper['train']['X'],
-    lst_y_paths=dct_data_mapper['train']['y'],
-    batch_size=2,
+    lst_X_paths=dct_data_mapper['X'],
+    lst_y_paths=dct_data_mapper['y'],
+    subfolder_path=None,
+    batch_size=1,
     emb_approximator=emb_approximator,
-    subfolder_path=DATA_SUBFOLDER_PATH,
     fixed_length=50
   )
 
-  test_tf_ds(tf_ds)
+  # test_tf_ds(tf_ds)
 
