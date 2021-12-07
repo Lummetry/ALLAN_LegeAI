@@ -11,20 +11,20 @@ The single communication point is the gateway which can be accessed via HTTP RES
        `POST http://195.60.78.150:5002/run`
        
        **Request body:**
-        ```
+        ```python
         {
-            "SIGNATURE" : "<the name of the microservice: Mandatory>",
-            "<PARAM1>" : ..., # specific parameter of microservice - described in section 2 of the API documentation
-            "<PARAM2>" : ..., # specific parameter of microservice - described in section 2 of the API documentation
-            ...               # specific parameter of microservice - described in section 2 of the API documentation
+            "SIGNATURE" : <String: mandatory>, # the name of the microservice
+            "<PARAM1>"  : ..., # specific parameter of microservice - described in section 2 of the API documentation
+            "<PARAM2>"  : ..., # specific parameter of microservice - described in section 2 of the API documentation
+            ...                # specific parameter of microservice - described in section 2 of the API documentation
         }
         ```
         
         **Response if the AI runs successfully:**
-        ```
+        ```python
         {
-            "call_id" : ..., # counter - the number of requests processed so far
-            "signature" : ..., # worker signature - which worker resolved the input,
+            "call_id"    : <Integer>, # counter - the number of requests processed so far
+            "signature"  : <String>, # worker signature - which worker resolved the input
             "<output_1>" : ..., # specific output of microservice - described in section 2 of the API documentation
             "<output_2>" : ..., # specific output of microservice - described in section 2 of the API documentation
             ...                 # specific output of microservice - described in section 2 of the API documentation
@@ -32,18 +32,18 @@ The single communication point is the gateway which can be accessed via HTTP RES
         ```
         
         **Response if the AI encounters an error:**
-        ```
+        ```python
         {
-            "call_id" : ..., # counter - the number of requests processed so far
-            "signature" : ..., # worker signature - which worker resolved the input,
-            "ERROR" : "<error message that helps debugging>"
+            "call_id"   : <Integer>, # counter - the number of requests processed so far
+            "signature" : <String>, # worker signature - which worker resolved the input,
+            "ERROR" : <String> # error message that helps debugging
         }
         ```
         
         **Response if the signature is not correct:**
-        ```
+        ```python
         {
-            "ERROR": "Bad signature <SIGNATURE>. Available signatures: <List of started microservices>"
+            "ERROR": "Bad signature $(SIGNATURE). Available signatures: $(list_of_started_microservices)"
         }
         ```
     
@@ -52,27 +52,27 @@ The single communication point is the gateway which can be accessed via HTTP RES
         `POST http://195.60.78.150:5002/notifications`
         
         **Request body:**
-        ```
+        ```python
         {
-            "SIGNATURE" : "<the name of the microservice: Mandatory>"
+            "SIGNATURE" : <String: mandatory> # the name of the microservice
         }
         ```
         
         **Response on success:**
-        ```
+        ```python
         {
-            "1" : [List of messages reported at call_id=1],
-            "2" : [List of messages reported at call_id=2],
+            "1" : <List[dict]>, # List of messages reported at call_id=1; each message is a dictionary
+            "2" : <List[dict]>, # List of messages reported at call_id=2; each message is a dictionary
             ...,
-            "INIT"    : [List of messages reported at workers initialization],
-            "GENERAL" : [List of messages reported at microservice initialization]
+            "INIT"    : <List[dict]>, # List of messages reported at workers initialization; each message is a dictionary
+            "GENERAL" : <List[dict]>  # List of messages reported at microservice initialization; each message is a dictionary
         }
         ```
         
         **Response if the signature is not started:**
-        ```
+        ```python
         {
-            "ERROR": "Bad signature <SIGNATURE>. Available signatures: <List of started microservices>"
+            "ERROR": "Bad signature $(SIGNATURE). Available signatures: $(list_of_started_microservices)"
         }
         ```
   
@@ -81,23 +81,23 @@ The single communication point is the gateway which can be accessed via HTTP RES
         `POST http://195.60.78.150:5002/start_server`
         
         **Request body:**
-        ```
+        ```python
         {
-            "SIGNATURE" : "<the name of the microservice: Mandatory>"
+            "SIGNATURE" : <String: mandatory> # the name of the microservice
         }
         ```
         
         **Response on success:**
-        ```
+        ```python
         {
             "MESSAGE": "OK."
         }
         ```
         
         **Response if microservice already started:**
-        ```
+        ```python
         {
-            "ERROR" : "Signature <SIGNATURE> already started"
+            "ERROR" : "Signature $(SIGNATURE) already started"
         }
         ```
     
@@ -106,23 +106,23 @@ The single communication point is the gateway which can be accessed via HTTP RES
         `POST http://195.60.78.150:5002/kill_server`
         
         **Request body:**
-        ```
+        ```python
         {
-            "SIGNATURE" : "<the name of the microservice: Mandatory>"
+            "SIGNATURE" : <String: mandatory> # the name of the microservice
         }
         ```
         
         **Response on success:**
-        ```
+        ```python
         {
-            "MESSAGE" : 'OK. Killed PID=<process_pid> with return_code <return_code>.
+            "MESSAGE" : "OK. Killed PID=$(process_pid) with return_code $(return_code)."
         }
         ```
         
         **Response if the signature is not started:**
-        ```
+        ```python
         {
-            "ERROR": "Bad signature <SIGNATURE>. Available signatures: <List of started microservices>"
+            "ERROR": "Bad signature $(SIGNATURE). Available signatures: $(list_of_started_microservices)>"
         }
         ```
 
@@ -130,45 +130,45 @@ The single communication point is the gateway which can be accessed via HTTP RES
 
     * #### 2.1\. get_sim - utilitary
     
-        Given a word returns the most semantically similar words in the vocabulary.
+        Given a word returns top n most semantically similar words in the vocabulary.
         
         **Input parameters:**
-        ```
+        ```python
         {
             "SIGNATURE" : "get_sim",
-            "QUERY" : "<word>",
-            "TOP_N" : <Integer : optional> # default value 5
+            "QUERY" : <String: mandatory>, # the word for which is called the microservice 
+            "TOP_N" : <Integer: optional>  # default value 5
         }
         ```
         
         **Output:**
-        ```
+        ```python
         {
-            "call_id" : ..., # counter - the number of requests processed so far
-            "signature" : ..., # worker signature - which worker resolved the input,
-            "results" : [List of most similar words]
+            "call_id" : <Integer>, # counter - the number of requests processed so far
+            "signature" : <String>, # worker signature - which worker resolved the input,
+            "results" : <List[string]> # List of most similar words
         }
         ```
        
     * #### 2.2\. get_aprox - utilitary
     
-        Given a mispelled word returns the most similar words in the vocabulary.
+        Given a mispelled word returns top n most similar words in the vocabulary.
         
         **Input parameters:**
-        ```
+        ```python
         {
             "SIGNATURE" : "get_aprox",
-            "QUERY" : "<word>",
-            "TOP_N" : <Integer : optional> # default value 1
+            "QUERY" : <String: mandatory>, # the word for which is called the microservice
+            "TOP_N" : <Integer: optional> # default value 1
         }
         ```
         
         **Output:**
-        ```
+        ```python
         {
-            "call_id" : ..., # counter - the number of requests processed so far
-            "signature" : ..., # worker signature - which worker resolved the input,
-            "results" : [List of most similar words]
+            "call_id" : <Integer>, # counter - the number of requests processed so far
+            "signature" : <String>, # worker signature - which worker resolved the input,
+            "results" : <List[string]> # List of most similar words
         }
         ```
 
@@ -177,24 +177,20 @@ The single communication point is the gateway which can be accessed via HTTP RES
         Given a document, returns top n associated tags and their scores
         
         **Input parameters:**
-        ```
+        ```python
         {
             "SIGNATURE" : "get_tags",
-            "DOCUMENT" : "<string=document to be tested>",
+            "DOCUMENT" : <String: mandatory>, # document to be tested
             "TOP_N" : <Integer: optional> # default value 10
         }
         ```
         
         **Output:**
-        ```
+        ```python
         {
-            "call_id" : ..., # counter - the number of requests processed so far
-            "signature" : ..., # worker signature - which worker resolved the input,
-            "results" : [
-                [tag1, score1],
-                [tag2, score2],
-                ...
-            ]
+            "call_id" : <Integer>, # counter - the number of requests processed so far
+            "signature" : <String>, # worker signature - which worker resolved the input,
+            "results" : <List[[String, Integer]]> # [[tag1, score1], [tag2, score2], ...]
         }
         ```
 
@@ -203,24 +199,20 @@ The single communication point is the gateway which can be accessed via HTTP RES
         Given a natural language written question/sentence, returns top n associated tags and their scores
         
         **Input parameters:**
-        ```
+        ```python
         {
             "SIGNATURE" : "get_tags",
-            "QUERY" : "<string=question to be tested>",
+            "QUERY" : <String: mandatory>, # question to be tested>
             "TOP_N" : <Integer: optional> # default value 10
         }
         ```
         
         **Output:**
-        ```
+        ```python
         {
-            "call_id" : ..., # counter - the number of requests processed so far
-            "signature" : ..., # worker signature - which worker resolved the input,
-            "results" : [
-                [tag1, score1],
-                [tag2, score2],
-                ...
-            ]
+            "call_id" : <Integer>, # counter - the number of requests processed so far
+            "signature" : <String>, # worker signature - which worker resolved the input,
+            "results" : <List[[String, Integer]]> # [[tag1, score1], [tag2, score2], ...]
         }
         ```
 
