@@ -88,7 +88,7 @@ class GetTagsWorker(FlaskWorker):
     )
     self.current_query_embeds = embeds
 
-    n_hits = inputs.get('TOP_K', 10)
+    n_hits = int(inputs.get('TOP_K', 10))
 
     return embeds, n_hits
 
