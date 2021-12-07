@@ -103,22 +103,13 @@ class GetQAWorker(FlaskWorker):
     predictions, n_hits = pred
     top_k_idxs = np.argsort(predictions.squeeze())[-n_hits:]
 
-    idx = (predictions.squeeze() > 0.5).astype(np.uint8).tolist()
-    lbls = [self.id_to_label[i] for i, v in enumerate(idx) if v == 1]
-    res = {'results' : lbls}
-
-    res['top_k'] = [
+    res = {}
+    res['results'] = [
       [self.id_to_label[i], round(predictions.squeeze()[i].astype(float), 3)]
       for i in top_k_idxs
     ]
+    res['results'].reverse()
 
-    res['top_k'].reverse()
-
-
-    # res['input_query'] = self.encoder.decode(
-    #   tokens=self.current_query_embeds,
-    #   tokens_as_embeddings=True
-    # )
     return res
     
     
