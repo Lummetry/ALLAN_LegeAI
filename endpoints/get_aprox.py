@@ -26,7 +26,7 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 
 from libraries.model_server_v2 import FlaskWorker
 from utils.utils import simple_levenshtein_distance
-from tagger.brain.emb_aproximator import EmbeddingApproximator
+from tagger.brain.emb_aproximator import EmbeddingApproximator, SimpleEmbeddingApproximatorWrapper
 
 _CONFIG = {
   'EMBGEN_MODEL' : '20211125_203842_embgen_model_sc_40_ep140.h5',
@@ -56,12 +56,13 @@ class GetAproxWorker(FlaskWorker):
     fn_gen_emb = self.config_worker['GENERATED_EMBEDS']
     fn_emb = self.config_worker['WORD_EMBEDS']
     fn_i2w = self.config_worker['IDX2WORD']
-    self.eng = EmbeddingApproximator(log=self.log, fn_embeds=fn_emb, fn_idx2word=fn_i2w)
-    self.eng.setup_embgen_model(
+    self.eng = SimpleEmbeddingApproximatorWrapper(
+      log=self.log,
       embgen_model_file=fn_model,
       generated_embeds_filename=fn_gen_emb,
-      run_in_cpu=True
-      )
+      fn_idx2word=fn_i2w,
+      fn_embeds=fn_emb
+    )
     self._create_notification('LOAD', 'Loaded EmbeddingApproximator')
     return
     
@@ -104,5 +105,5 @@ if __name__ == '__main__':
   l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
   eng = GetAproxWorker(log=l, default_config=_CONFIG, verbosity_level=1)
   eng._load_model()
-  print(eng.eng.get_unk_word_similar_word('tva', top=10, debug=True))
+  print(eng.eng.get_unk_word_similar_word('tva', top=10))
   
