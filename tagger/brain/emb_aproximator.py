@@ -16,7 +16,47 @@ import tensorflow.keras.backend as K
 from tagger.brain.base_engine import ALLANTaggerEngine
 from utils.utils import K_identity_loss, K_triplet_loss
 
-__VER__ = '2.0.0.0'
+__VER__ = '2.0.1.0'
+
+class SimpleEmbeddingApproximatorWrapper:
+  def __init__(self, log, fn_embeds=None, fn_idx2word=None, embgen_model_file=None, generated_embeds_filename=None):
+    self.encoder = EmbeddingApproximator(
+      log=log, fn_embeds=fn_embeds, fn_idx2word=fn_idx2word)
+    self.encoder.setup_embgen_model(
+      embgen_model_file=embgen_model_file,
+      generated_embeds_filename=generated_embeds_filename,
+      run_in_cpu=True
+    )
+
+    self.dic_word2index = self.encoder.dic_word2index
+
+  def encode_convert_unknown_words(self, text, fixed_len):
+    return self.encoder.encode(
+      text=text,
+      direct_embeddings = True,
+      fixed_len = fixed_len,
+      raw_conversion = False,
+      convert_unknown_words = True
+    )
+
+  def encode_without_convert_unknown_words(self, text, max_length):
+    return self.encoder.encode(
+      text=text,
+      direct_embeddings=True,
+      fixed_len=max_length,
+      raw_conversion=False,
+      convert_unknown_words=False
+    )
+
+  def decode(self, text_embs_raw):
+    return self.encoder.decode(
+      tokens=text_embs_raw,
+      tokens_as_embeddings=True
+    )
+
+  def get_unk_word_similar_word(self, word, top):
+    return self.encoder.get_unk_word_similar_word(word, top=top)
+
 
 class EmbeddingApproximator(ALLANTaggerEngine):
   def __init__(self, np_embeds=None, dct_w2i=None, dct_i2w=None, fn_embeds=None, fn_idx2word=None, **kwargs):

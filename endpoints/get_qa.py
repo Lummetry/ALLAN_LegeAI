@@ -25,7 +25,7 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 import numpy as np
 
 from libraries.model_server_v2 import FlaskWorker
-from tagger.brain.emb_aproximator import EmbeddingApproximator
+from tagger.brain.emb_aproximator import EmbeddingApproximator, SimpleEmbeddingApproximatorWrapper
 
 import constants as ct
 
@@ -54,19 +54,18 @@ class GetQAWorker(FlaskWorker):
     self.label_to_id = self.log.load_pickle_from_data(fn_label_to_id)
     self.id_to_label = {v: k for k, v in self.label_to_id.items()}
     self.tagger_model = self.log.load_keras_model(fn_tagger_model)
-    self.encoder = EmbeddingApproximator(log=self.log, fn_embeds=fn_emb, fn_idx2word=fn_i2w)
-    self.encoder.setup_embgen_model(
+
+    self.encoder = SimpleEmbeddingApproximatorWrapper(
+      log=self.log,
+      fn_embeds=fn_emb,
+      fn_idx2word=fn_i2w,
       embgen_model_file=fn_model,
       generated_embeds_filename=fn_gen_emb,
-      run_in_cpu=True
-      )
+    )
 
-    warmup_input = self.encoder.encode(
+    warmup_input = self.encoder.encode_convert_unknown_words(
       "Warmup",
-      direct_embeddings=True,
-      fixed_len=ct.MODELS.TAG_MAX_LEN,
-      raw_conversion=False,
-      convert_unknown_words=True,
+      fixed_len=ct.MODELS.TAG_MAX_LEN
     )
     self.tagger_model(warmup_input)
 
@@ -80,12 +79,9 @@ class GetQAWorker(FlaskWorker):
     if len(query.split(' ')) > ct.MODELS.QA_MAX_INPUT:
       raise ValueError("Query: '{}' exceedes max number of allowed words of {}".format(
         query, ct.MODELS.QA_MAX_INPUT))
-    embeds = self.encoder.encode(
+    embeds = self.encoder.encode_convert_unknown_words(
       query,
-      direct_embeddings=True, 
-      fixed_len=ct.MODELS.TAG_MAX_LEN, 
-      raw_conversion=False,
-      convert_unknown_words=True,
+      fixed_len=ct.MODELS.TAG_MAX_LEN
     )
     self.current_query_embeds = embeds # not needed in tagger
 
