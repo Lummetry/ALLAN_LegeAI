@@ -6,7 +6,6 @@ from tagger.brain.emb_aproximator import SimpleEmbeddingApproximatorWrapper
 import constants as ct
 import numpy as np
 from sklearn.cluster import AgglomerativeClustering
-from nltk.corpus import stopwords
 import spacy
 
 _CONFIG = {
@@ -45,11 +44,11 @@ class GetSumWorker(FlaskWorker):
           generated_embeds_filename=fn_gen_emb,
         )
         
-        # Load stopwords
-        # stopword_path = 'C:\\Proiecte\\LegeAI\\Date\\stopwords-ro.txt'
-        # stopword_file = open(stopword_path, "r", encoding='utf-8')
-        # self.stopword_list = stopword_file.read().split("\n")
-        # print(self.stopword_list)
+        # Load Romanian spaCy dataset
+        self.nlp_model = spacy.load('ro_core_news_md')        
+                  
+        # Set the distance function
+        self.dist_func = self.encoder.encoder._setup_dist_func(func_name='cos')
     
         self._create_notification('LOAD', 'Loaded EmbeddingApproximator')
         return
@@ -76,40 +75,44 @@ class GetSumWorker(FlaskWorker):
           raise ValueError("Document: '{}' is below the minimum of {} words".format(
             doc, ct.MODELS.TAG_MIN_INPUT))
           
-        # Replace Romanian special characters
-        doc = self._decode_doc(doc)
-            
-        # Set the distance function
-        self.dist_func = self.encoder.encoder._setup_dist_func(func_name='cos')
-          
-        # Get the list of words
-        words = self.encoder.encoder._get_words(doc)
         
-        # Remove stopwords
-        words = [w for w in words if w not in stopwords.words('romanian')]
-        doc = ' '.join(words)
+        nlp_doc = self.nlp_model(doc)
+        # Keep only nouns and verb lemmas
+        lemmas = []
+        for token in nlp_doc:
+            if token.pos_ in ['NOUN', 'VERB']:
+                
+                # Replace Romanian special characters
+                lemma = self._decode_doc(token.lemma_)
+                
+                lemmas.append(lemma)
         
         # Get the embeddings for the words
         embeds = self.encoder.encode_convert_unknown_words(
-            doc,
+            [lemmas],
             fixed_len=0
         )[0]             
         
         n_hits = int(inputs.get('TOP_N', 1))
     
-        return embeds, words, n_hits
+        return embeds, lemmas, n_hits
 
     def _predict(self, prep_inputs):
         
         embeds, words, n_hits = prep_inputs
         
-        cluster = AgglomerativeClustering(n_clusters=5, #distance_threshold=0.6, 
+        cluster = AgglomerativeClustering(n_clusters=None, distance_threshold=0.6, 
                                           affinity='cosine', linkage='average')  
         cluster.fit_predict(embeds)
         
-        print(cluster.labels_)
+        # print(cluster.labels_)
         
-        for c in range(cluster.n_clusters_):
+        # Get top clusters by size
+        cluster_labels, cluster_sizes = np.unique(cluster.labels_, return_counts=True)
+        top_clusters = np.unique(cluster_labels[np.argsort(-cluster_sizes)[:n_hits]])
+        
+        selected_words = []
+        for c in top_clusters:
             cluster_sum = np.zeros(len(embeds[0]))
             n = 0
             
@@ -118,26 +121,26 @@ class GetSumWorker(FlaskWorker):
                     cluster_sum += e
                     n += 1
             
+            # print('Cluster {} - {} elements.'.format(c, n))
+            
             cluster_sum = cluster_sum / n
             # print(self.encoder.encoder.decode([[embeds[0]]], tokens_as_embeddings=True))
             
             # idx = self.encoder.encoder._get_closest_idx(cluster_sum, top=5)
             # for ix in idx:
             #     print(self.encoder.encoder.dic_index2word.get(ix))
-            
+                        
             word_embed_distances = self.encoder.encoder.dist(target=cluster_sum, source=embeds)
             id_min = np.argmin(word_embed_distances)
-            print(words[id_min])
+            selected_words.append(words[id_min])
             
               
-        return n_hits
+        return selected_words
 
     def _post_process(self, pred):
         
-        n_hits = pred
-        
         res = {}
-        res['results'] = n_hits
+        res['results'] = pred
         
         return res
 
@@ -149,8 +152,9 @@ if __name__ == '__main__':
   eng = GetSumWorker(log=l, default_config=_CONFIG, verbosity_level=1)
   
   test = {
-       # 'DOCUMENT': 'Aceasta situatie ridica semne de intrebare privind consolidarea bugetara, potrivit constructiei bugetare initiale. Desi proiectul de buget tintește un deficit cash de din PIB, apreciaza ca nu sunt suficiente masuri credibile de ajustare bugetara care sa conduca la atingerea acestei tinte, se arata in document.',
-      'DOCUMENT' : """Extinderea sistemului Uniunii Europene de taxare a emisiilor de CO2 pentru ca acesta să fie aplicat din anul 2026 încălzirii clădirilor şi transporturilor rutiere de mărfuri provoacă diviziuni între statele UE, împărţite în două blocuri de această chestiune inclusă de Comisia Europeană în pachetul de măsuri pentru atingerea obiectivelor climatice ale UE. 
+        # 'DOCUMENT': 'Aceasta situatie ridica semne de intrebare privind consolidarea bugetara, potrivit constructiei bugetare initiale. Desi proiectul de buget tintește un deficit cash de din PIB, apreciaza ca nu sunt suficiente masuri credibile de ajustare bugetara care sa conduca la atingerea acestei tinte, se arata in document.',
+      
+        'DOCUMENT' : """Extinderea sistemului Uniunii Europene de taxare a emisiilor de CO2 pentru ca acesta să fie aplicat din anul 2026 încălzirii clădirilor şi transporturilor rutiere de mărfuri provoacă diviziuni între statele UE, împărţite în două blocuri de această chestiune inclusă de Comisia Europeană în pachetul de măsuri pentru atingerea obiectivelor climatice ale UE. 
 Astfel, o parte din ţările membre consideră că aceasta ar fi o măsură eficientă de diminuare a emisiilor de carbon generate de activitatea economică, iar cealaltă parte se teme de o creştere a costurilor pentru populaţie care ar produce un impact social de genul „vestelor galbene” în Franţa, transmite luni agenţia EFE.
 În al doilea grup de ţări se regăsesc state est-europene, dar şi altele precum Grecia sau Spania, ele însumând circa o treime din populaţia UE. La Consiliul UE pentru mediu, desfăşurat luni la Bruxelles, aceste ţări s-au arătat sceptice sau ostile iniţiativei care ar conduce la o creştere costurilor pentru încălzire şi transporturi, una dintre măsurile din planul Comisiei Europene ce are ca obiectiv reducerea cu cel puţin 55% a emisiilor de CO2 ale UE până în anul 2030, faţă de nivelurile anului 1990.
 „Trebuie să analizăm mai mult impactul” acestei măsuri, a declarat ministrul spaniol al tranziţiei ecologice, Teresa Ribera. Aceasta consideră important ca cetăţenii să perceapă „oportunităţile” tranziţiei ecologice, un lucru „complicat” în actuala conjunctură a preţurilor la energie, care cresc facturile atât pentru populaţie, cât şi pentru industrie. 
@@ -165,7 +169,8 @@ interzicerea din anul 2035 a comercializării autoturismelor noi diesel şi pe b
 utilizarea sporită a surselor regenerabile de energie (cu obiectivul ca 40 % din energia UE să fie produsă din surse regenerabile până în 2030) concomitent cu reducerea consumului de energie;
 alinierea politicilor fiscale la obiectivele Pactului Verde European sau realizarea de campanii de împădurire.
 Comisia Europeană a subliniat că acest plan va implica o tranziţie profundă, cu mari schimbări structurale în foarte puţin timp şi va conduce la transformarea economiei şi a societăţii UE în vederea atingerii obiectivelor ambiţioase în materie de climă.""",
-      'TOP_N': 5
+      
+        'TOP_N': 5
       }
   
   res = eng.execute(inputs=test, counter=1)
