@@ -94,53 +94,84 @@ class GetSumWorker(FlaskWorker):
         )[0]             
         
         n_hits = int(inputs.get('TOP_N', 1))
+        
+        lemmas = np.array(lemmas)
+        
+        multi_cluster = inputs.get('MULTI_CLUSTER')
     
-        return embeds, lemmas, n_hits
+        return embeds, lemmas, n_hits, multi_cluster
 
     def _predict(self, prep_inputs):
         
-        embeds, words, n_hits = prep_inputs
+        embeds, words, n_hits, multi_cluster = prep_inputs
         
+        # Agglomerative clustering
         cluster = AgglomerativeClustering(n_clusters=None, distance_threshold=0.6, 
                                           affinity='cosine', linkage='average')  
-        cluster.fit_predict(embeds)
-        
+        cluster.fit_predict(embeds)        
         # print(cluster.labels_)
         
         # Get top clusters by size
         cluster_labels, cluster_sizes = np.unique(cluster.labels_, return_counts=True)
-        top_clusters = np.unique(cluster_labels[np.argsort(-cluster_sizes)[:n_hits]])
         
+        if multi_cluster:
+            min_cluster_size = np.mean(cluster_sizes[cluster_sizes > 1])
+        else:
+            min_cluster_size = np.min(cluster_sizes[cluster_sizes > 1])
+            
+        cluster_labels = cluster_labels[cluster_sizes >= min_cluster_size]
+        cluster_sizes = cluster_sizes[cluster_sizes >= min_cluster_size]        
+        
+        top_clusters = cluster_labels[np.argsort(-cluster_sizes)]
+        
+        # Analyze each of the top clusters
         selected_words = []
         for c in top_clusters:
-            cluster_sum = np.zeros(len(embeds[0]))
-            n = 0
             
-            for i, e in enumerate(embeds):
-                if cluster.labels_[i] == c:
-                    cluster_sum += e
-                    n += 1
+            # Select members of cluster
+            idxs = np.nonzero(cluster.labels_ == c)
+            cluster_words = words[idxs]
+            cluster_embeds = embeds[idxs]
             
-            # print('Cluster {} - {} elements.'.format(c, n))
+            n = len(cluster_embeds)
+            cluster_center = np.sum(cluster_embeds, axis=0) / n
             
-            cluster_sum = cluster_sum / n
-            # print(self.encoder.encoder.decode([[embeds[0]]], tokens_as_embeddings=True))
+            print('Cluster {}, {} elements:'.format(c, n))
             
-            # idx = self.encoder.encoder._get_closest_idx(cluster_sum, top=5)
+            # Get closest words from the entire vocabulary
+            # print(self.encoder.encoder.decode([[embeds[0]]], tokens_as_embeddings=True))            
+            # idx = self.encoder.encoder._get_closest_idx(cluster_center, top=5)
+            # print('Other words')
             # for ix in idx:
             #     print(self.encoder.encoder.dic_index2word.get(ix))
-                        
-            word_embed_distances = self.encoder.encoder.dist(target=cluster_sum, source=embeds)
-            id_min = np.argmin(word_embed_distances)
-            selected_words.append(words[id_min])
+            
+            # Get distances between the center of the cluster and all its members            
+            word_embed_distances = self.dist_func(cluster_embeds, cluster_center)
+            
+            # Select unique words
+            unique_distances, unique_idxs = np.unique(word_embed_distances, return_index=True)
+            if multi_cluster:
+                n_selected = int(n / min_cluster_size)
+            else:
+                n_selected = 1
+            for ui in unique_idxs[:n_selected]:
+                print(cluster_words[ui], end=' ')
+                selected_words.append(cluster_words[ui])
+            print('\n')
             
               
-        return selected_words
+        return selected_words, n_hits
 
     def _post_process(self, pred):
         
+        words, n_hits = pred
+        
         res = {}
-        res['results'] = pred
+        
+        if n_hits > 0:
+            res['results'] = words[:n_hits]
+        else:
+            res['results'] = words
         
         return res
 
@@ -169,8 +200,10 @@ interzicerea din anul 2035 a comercializării autoturismelor noi diesel şi pe b
 utilizarea sporită a surselor regenerabile de energie (cu obiectivul ca 40 % din energia UE să fie produsă din surse regenerabile până în 2030) concomitent cu reducerea consumului de energie;
 alinierea politicilor fiscale la obiectivele Pactului Verde European sau realizarea de campanii de împădurire.
 Comisia Europeană a subliniat că acest plan va implica o tranziţie profundă, cu mari schimbări structurale în foarte puţin timp şi va conduce la transformarea economiei şi a societăţii UE în vederea atingerii obiectivelor ambiţioase în materie de climă.""",
-      
-        'TOP_N': 5
+    
+        'TOP_N': 6,
+        
+        'MULTI_CLUSTER': False,
       }
   
   res = eng.execute(inputs=test, counter=1)
