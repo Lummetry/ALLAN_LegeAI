@@ -15,7 +15,8 @@ _CONFIG = {
   'GENERATED_EMBEDS': 'embgen_full_embeds.npy',
   'WORD_EMBEDS': 'lai_embeddings_191K.pkl',
   'IDX2WORD': 'lai_ro_i2w_191K.pkl',
-  'MODEL' : '20211124_082955_e128_v191K_final'
+  'MODEL' : '20211124_082955_e128_v191K_final',
+  'SPACY_MODEL' : 'ro_core_news_md'
  }
 
 class GetSumWorker(FlaskWorker):
@@ -51,9 +52,13 @@ class GetSumWorker(FlaskWorker):
         model_fn = self.log.get_models_file(self.config_worker['MODEL'])
         self.model = Word2Vec.load(model_fn)
         self._create_notification('LOAD', 'Loaded model {}'.format(model_fn))
-        
+                
         # Load Romanian spaCy dataset
-        self.nlp_model = spacy.load('ro_core_news_md')        
+        try:
+            self.nlp_model = spacy.load(self.config_worker['SPACY_MODEL'])
+        except OSError:
+            spacy.cli.download(self.config_worker['SPACY_MODEL'])
+            self.nlp_model = spacy.load(self.config_worker['SPACY_MODEL'])         
                   
         # Set the distance function
         self.dist_func = self.encoder.encoder._setup_dist_func(func_name='cos')
