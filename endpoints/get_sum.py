@@ -92,7 +92,8 @@ class GetSumWorker(FlaskWorker):
         # Keep only nouns and verb lemmas
         lemmas = []
         for token in nlp_doc:
-            if token.pos_ in ['NOUN', 'VERB']:
+            # Only accept nouns and verbs and lemmas with more the 2 letters
+            if token.pos_ in ['NOUN', 'VERB'] and len(token.lemma_) > 2:
                 
                 # Replace Romanian special characters
                 lemma = self._decode_doc(token.lemma_).lower()
@@ -105,11 +106,11 @@ class GetSumWorker(FlaskWorker):
             fixed_len=0
         )[0]             
         
-        n_hits = int(inputs.get('TOP_N', 1))
+        n_hits = int(inputs.get('TOP_N', 0))
         
         lemmas = np.array(lemmas)
         
-        multi_cluster = inputs.get('MULTI_CLUSTER')
+        multi_cluster = inputs.get('MULTI_CLUSTER', 'true')
     
         return embeds, lemmas, n_hits, multi_cluster
 
@@ -119,14 +120,12 @@ class GetSumWorker(FlaskWorker):
         
         # Term frequency
         unique_words, word_frequency = np.unique(words, return_counts=True)
-        print(sum(word_frequency))
         freuqency_dict = dict(zip(unique_words, word_frequency))
         
         # Agglomerative clustering
         cluster = AgglomerativeClustering(n_clusters=None, distance_threshold=0.6, 
                                           affinity='cosine', linkage='average')  
-        cluster.fit_predict(embeds)        
-        # print(cluster.labels_)
+        cluster.fit_predict(embeds)  
         
         # Get top clusters by size
         cluster_labels, cluster_sizes = np.unique(cluster.labels_, return_counts=True)
@@ -146,14 +145,14 @@ class GetSumWorker(FlaskWorker):
         for c in top_clusters:
             
             # Select members of cluster
-            idxs = np.nonzero(cluster.labels_ == c)
+            idxs = np.nonzero(cluster.labels_ == c)[0] 
             cluster_words = words[idxs]
             cluster_embeds = embeds[idxs]
             
             n = len(cluster_embeds)
             cluster_center = np.sum(cluster_embeds, axis=0) / n
             
-            print('Cluster {}, {} elements:'.format(c, n))
+            # print('Cluster {}, {} elements:'.format(c, n))
             
             # Get closest words from the entire vocabulary
             # print(self.encoder.encoder.decode([[embeds[0]]], tokens_as_embeddings=True))            
@@ -167,13 +166,33 @@ class GetSumWorker(FlaskWorker):
             
             # Select unique words
             unique_distances, unique_idxs = np.unique(word_embed_distances, return_index=True)
+            
+            
+            # Eliminate words that are contained in others
+            distinct_words = []
+            for i in range(len(unique_idxs) - 1, -1, -1):
+                # print(unique_idxs[i])
+                w1 = cluster_words[unique_idxs[i]]
+
+                contained = False                
+                for j in range(i - 1, -1, -1):
+                    # print('\t', unique_idxs[j])
+                    w2 = cluster_words[unique_idxs[j]]
+                    if w1 in w2 or w2 in w1:
+                        contained = True
+                        break
+                    
+                if not contained:
+                    distinct_words.append(w1)                    
+            distinct_words.reverse()    
+            
+            
             if multi_cluster:
                 n_selected = int(n / min_cluster_size)
             else:
                 n_selected = 1
                 
-            for ui in unique_idxs[:n_selected]:
-                word = cluster_words[ui]
+            for word in distinct_words[:n_selected]:
                 
                 # Get count of word from Word2Vec model
                 vocab_count = self.model.wv.get_vecattr(word, "count")
@@ -182,9 +201,9 @@ class GetSumWorker(FlaskWorker):
                 idf = np.log(self.model.corpus_count / vocab_count)
                 tfidf = tf * idf
                 
-                print('{} tf={} idf={} tfidf={}'.format(word, tf, idf, tfidf))
+                # print('{} tf={} idf={} tfidf={}'.format(word, tf, idf, tfidf))
                 selected_words.append(word)
-            print('\n')
+            # print('\n')
             
               
         return selected_words, n_hits
@@ -303,9 +322,9 @@ scad din impozitul pe profit, potrivit legislației în vigoare”.""",
 # (7) Un nerezident nu se consideră că are un sediu permanent în România numai dacă acesta controlează sau este controlat de un rezident ori de o persoană ce desfăşoară o activitate în România prin intermediul unui sediu permanent sau altfel.
 # (8) În înţelesul prezentului cod, sediul permanent al unei persoane fizice se consideră a fi baza fixă.""",
     
-        'TOP_N': 0,
+        # 'TOP_N': 0,
         
-        'MULTI_CLUSTER': True,
+        # 'MULTI_CLUSTER': True,
       }
   
   res = eng.execute(inputs=test, counter=1)
