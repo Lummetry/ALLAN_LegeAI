@@ -111,7 +111,25 @@ class GetQAWorker(FlaskWorker):
     
 if __name__ == '__main__':
   from libraries import Logger
-  l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
-  eng = GetQAWorker(log=l, default_config=_CONFIG, verbosity_level=1)
-  eng._load_model()
+  log = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
+  w = GetQAWorker(log=log, default_config=_CONFIG, verbosity_level=1)
+
+  inputs_to_test = [
+    {
+      'QUERY' : 'Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti?',
+      'TOP_N' : 5
+    },
+
+    {
+      'QUERY' : 'Cat la suta din salariul brut merge la pensii pentru un programator?',
+      'TOP_N' : 7
+    }
+  ]
+
+  for i,_input in enumerate(inputs_to_test):
+    result = w.execute(inputs=_input, counter=i)
+    log.P("Input: {}\nResult:{}".format(_input, result), color='m')
+
+
+
   
