@@ -16,7 +16,8 @@ _CONFIG = {
   'WORD_EMBEDS': 'lai_embeddings_191K.pkl',
   'IDX2WORD': 'lai_ro_i2w_191K.pkl',
   'MODEL' : '20211124_082955_e128_v191K_final',
-  'SPACY_MODEL' : 'ro_core_news_md'
+  'SPACY_MODEL' : 'ro_core_news_md',
+  'DEBUG' : True
  }
 
 class GetSumWorker(FlaskWorker):
@@ -71,15 +72,75 @@ class GetSumWorker(FlaskWorker):
         Replace Romanian special characters in a document.
 
         '''
-        original_chars = ['Î', 'î', 'ă', 'Ă', 'â' 'Ș', 'ș', 'Ț', 'ț', 'ş', 'ţ', '„', '”']
-        replace_chars = ['I', 'i', 'a', 'A', 'a' 'S', 's', 'T', 't', 's', 't', '"', '"']
+        original_chars = ['Î', 'î', 'ă', 'Ă', 'â', 'â', 'Ș', 'ș', 'Ț', 'ț', 'ş', 'ţ', '„', '”']
+        replace_chars = ['I', 'i', 'a', 'A', 'a', 'a', 'S', 's', 'T', 't', 's', 't', '"', '"']
         
         for i in range(len(original_chars)):
             doc = doc.replace(original_chars[i], replace_chars[i])
             
         return doc
-
-
+    
+    
+    def _select_cluster_words(self,
+                             cluster_words, word_embed_distances,
+                             tfs=None, idfs=None,
+                             n_selected=None,
+                             debug=False
+                            ):
+        ''' Select words from cluster:
+            - sort words by their score
+            - eliminate more distant words which are included in others
+            - select the closest words
+        '''
+            
+        # Sort words    
+        if tfs is None:
+            word_scores = word_embed_distances
+            zip_list = zip(cluster_words, word_scores)
+            reverse = False
+            
+        else:
+            # If TF and IDF were provided for the words
+            word_scores = [t * i * (1/d) for (t, i, d) in zip(tfs, idfs, word_embed_distances)]
+            zip_list = zip(cluster_words, word_scores, tfs, idfs, word_embed_distances)
+            reverse = True
+        
+        zip_list = sorted(zip_list, key=lambda tup: tup[1], reverse=reverse)
+        
+        
+        # Eliminate words which are contained in others
+        selected_zip_list = []
+        for i, pair1 in enumerate(reversed(zip_list)):
+            word1 = pair1[0]
+            
+            contained = False
+            for pair2 in reversed(zip_list[:-(i+1)]):
+                word2 = pair2[0]
+                
+                if word1.startswith(word2) or word2.startswith(word1):
+                    # One of the words is contained in the other
+                    contained = True
+                    break
+                    
+            if not contained:
+                selected_zip_list.append(pair1)
+        selected_zip_list.reverse()
+        
+        # Select the closest words
+        if n_selected:
+            selected_zip_list = selected_zip_list[:n_selected]
+            
+            if debug:
+                for t in selected_zip_list:
+                    print(t)
+        
+        cluster_words = [t[0] for t in selected_zip_list]
+        word_scores = [t[1] for t in selected_zip_list]
+        
+        return cluster_words, word_scores
+    
+    
+    
     def _pre_process(self, inputs):
                 
         doc = inputs['DOCUMENT']
@@ -92,6 +153,7 @@ class GetSumWorker(FlaskWorker):
         # Keep only nouns and verb lemmas
         lemmas = []
         for token in nlp_doc:
+            
             # Only accept nouns and verbs and lemmas with more the 2 letters
             if token.pos_ in ['NOUN', 'VERB'] and len(token.lemma_) > 2:
                 
@@ -120,7 +182,7 @@ class GetSumWorker(FlaskWorker):
         
         # Term frequency
         unique_words, word_frequency = np.unique(words, return_counts=True)
-        freuqency_dict = dict(zip(unique_words, word_frequency))
+        frequency_dict = dict(zip(unique_words, word_frequency))
         
         # Agglomerative clustering
         cluster = AgglomerativeClustering(n_clusters=None, distance_threshold=0.6, 
@@ -140,6 +202,8 @@ class GetSumWorker(FlaskWorker):
         
         top_clusters = cluster_labels[np.argsort(-cluster_sizes)]
         
+        debug = self.config_worker['DEBUG']
+        
         # Analyze each of the top clusters
         selected_words = []
         for c in top_clusters:
@@ -152,58 +216,42 @@ class GetSumWorker(FlaskWorker):
             n = len(cluster_embeds)
             cluster_center = np.sum(cluster_embeds, axis=0) / n
             
-            # print('Cluster {}, {} elements:'.format(c, n))
-            
-            # Get closest words from the entire vocabulary
-            # print(self.encoder.encoder.decode([[embeds[0]]], tokens_as_embeddings=True))            
-            # idx = self.encoder.encoder._get_closest_idx(cluster_center, top=5)
-            # print('Other words')
-            # for ix in idx:
-            #     print(self.encoder.encoder.dic_index2word.get(ix))
+            if debug:
+                print('Cluster {}, {} elements:'.format(c, n))
             
             # Get distances between the center of the cluster and all its members            
             word_embed_distances = self.dist_func(cluster_embeds, cluster_center)
-            
-            # Select unique words
-            unique_distances, unique_idxs = np.unique(word_embed_distances, return_index=True)
-            
-            
-            # Eliminate words that are contained in others
-            distinct_words = []
-            for i in range(len(unique_idxs) - 1, -1, -1):
-                # print(unique_idxs[i])
-                w1 = cluster_words[unique_idxs[i]]
-
-                contained = False                
-                for j in range(i - 1, -1, -1):
-                    # print('\t', unique_idxs[j])
-                    w2 = cluster_words[unique_idxs[j]]
-                    if w1 in w2 or w2 in w1:
-                        contained = True
-                        break
-                    
-                if not contained:
-                    distinct_words.append(w1)                    
-            distinct_words.reverse()    
-            
-            
+                        
             if multi_cluster:
                 n_selected = int(n / min_cluster_size)
             else:
                 n_selected = 1
                 
-            for word in distinct_words[:n_selected]:
+            # Calculate TF and IDF
+            tfs = []
+            idfs = []
+            for word in cluster_words:
+                tf = np.log(1 + frequency_dict[word])
                 
-                # Get count of word from Word2Vec model
-                vocab_count = self.model.wv.get_vecattr(word, "count")
-                tf = freuqency_dict[word]
-                tf = np.log(1 + tf)
-                idf = np.log(self.model.corpus_count / vocab_count)
-                tfidf = tf * idf
+                try:
+                    idf = np.log(1 + (self.model.corpus_count / self.model.wv.get_vecattr(word, "count")))
+                except:
+                    idf = 1
                 
-                # print('{} tf={} idf={} tfidf={}'.format(word, tf, idf, tfidf))
-                selected_words.append(word)
-            # print('\n')
+                tfs.append(tf)
+                idfs.append(idf)
+            tfs = None
+            idfs = None
+            
+            # Select words from the cluster
+            cluster_selected_words, cluster_selected_scores = self._select_cluster_words(cluster_words,
+                                                                                        word_embed_distances,
+                                                                                        tfs=tfs, idfs=idfs,
+                                                                                        n_selected=n_selected,
+                                                                                        debug=debug
+                                                                                        )                
+            
+            selected_words.extend(cluster_selected_words)
             
               
         return selected_words, n_hits
