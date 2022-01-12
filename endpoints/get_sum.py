@@ -16,8 +16,7 @@ _CONFIG = {
   'WORD_EMBEDS': 'lai_embeddings_191K.pkl',
   'IDX2WORD': 'lai_ro_i2w_191K.pkl',
   'MODEL' : '20211124_082955_e128_v191K_final',
-  'SPACY_MODEL' : 'ro_core_news_md',
-  'DEBUG' : True
+  'SPACY_MODEL' : 'ro_core_news_md'
  }
 
 class GetSumWorker(FlaskWorker):
@@ -173,6 +172,8 @@ class GetSumWorker(FlaskWorker):
         lemmas = np.array(lemmas)
         
         multi_cluster = inputs.get('MULTI_CLUSTER', 'true')
+        
+        self.debug = bool(inputs.get('DEBUG', False))
     
         return embeds, lemmas, n_hits, multi_cluster
 
@@ -202,8 +203,6 @@ class GetSumWorker(FlaskWorker):
         
         top_clusters = cluster_labels[np.argsort(-cluster_sizes)]
         
-        debug = self.config_worker['DEBUG']
-        
         # Analyze each of the top clusters
         selected_words = []
         for c in top_clusters:
@@ -216,7 +215,7 @@ class GetSumWorker(FlaskWorker):
             n = len(cluster_embeds)
             cluster_center = np.sum(cluster_embeds, axis=0) / n
             
-            if debug:
+            if self.debug:
                 print('Cluster {}, {} elements:'.format(c, n))
             
             # Get distances between the center of the cluster and all its members            
@@ -240,15 +239,13 @@ class GetSumWorker(FlaskWorker):
                 
                 tfs.append(tf)
                 idfs.append(idf)
-            tfs = None
-            idfs = None
             
             # Select words from the cluster
             cluster_selected_words, cluster_selected_scores = self._select_cluster_words(cluster_words,
                                                                                         word_embed_distances,
                                                                                         tfs=tfs, idfs=idfs,
                                                                                         n_selected=n_selected,
-                                                                                        debug=debug
+                                                                                        debug=self.debug
                                                                                         )                
             
             selected_words.extend(cluster_selected_words)
@@ -373,6 +370,8 @@ scad din impozitul pe profit, potrivit legislației în vigoare”.""",
         # 'TOP_N': 0,
         
         # 'MULTI_CLUSTER': True,
+        
+        'DEBUG': True
       }
   
   res = eng.execute(inputs=test, counter=1)
