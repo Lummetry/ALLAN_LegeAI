@@ -10,19 +10,25 @@ import re
 
 _CONFIG = {
   'SPACY_MODEL' : 'ro_core_news_md',
-  'DEBUG' : True,
-  'PRINT_RESULT': True
  }
 
 
 CNP_REG1 = re.compile(r'[0-9]{13}')
 CNP_REG2 = re.compile(r'[1-8][0-9]{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[1-2][0-9]|3[0-1])[0-9]{6}')
-
 CNP_NO_CHECK = 1
 CNP_BASIC_CHECK = 2
 CNP_FULL_CHECK = 3
 
 MATCHED_NERS = {'PERSON', 'LOC'}
+
+PERSON_UPPERCASE = 1
+PERSON_PROPN = 2
+PERSON_TWO_WORDS = 3
+
+MIN_LOC_LENGTH = 10
+ADDRESS_HAS_NUMBER = 0
+ADDRESS_MIN_TOKENS = 3
+
 
 class GetConfWorker(FlaskWorker):
     """
@@ -97,23 +103,77 @@ class GetConfWorker(FlaskWorker):
             
             if check_strength < CNP_FULL_CHECK or (check_strength == CNP_FULL_CHECK and self.check_cnp(match)):
                 res[self.find_match(match, text, res)] = 'CNP'
+                if self.debug:
+                    print(match)
                 
         return res
     
     def match_ner(self, nlp, text,
-                  ners=MATCHED_NERS
+                  ners=MATCHED_NERS,
+                  person_checks=[],
+                  address_checks=[]
                  ):
         """ Return the position of spaCy named entities in a text. """
         matches = {}    
         
+        if type(person_checks) == int:
+            person_checks = [person_checks]
+        
         doc = nlp(text)
         
         for ent in doc.ents:
-            if ent.label_ in ners:
-                # matches[ent.start_char] = ent.label_
-                matches[ent.start_char] = ent.text
+            
+            if ent.label_ == 'PERSON':
+                is_match = True
                 
-        return matches   
+                start_char = ent.start_char
+                end_char = ent.end_char
+                
+                if PERSON_UPPERCASE in person_checks and not ent.text.istitle():
+                    # Check if all words start with an uppercase letter
+                    is_match = False
+                    
+                if is_match and PERSON_TWO_WORDS in person_checks and len(ent) <= 1:
+                    is_match = False
+                    
+                if is_match and PERSON_PROPN in person_checks:
+                    is_match = False
+                    
+                    # Check if all words are proper nouns
+                    for token in doc[ent.start : ent.end]:
+                        if is_match == False:
+                            if token.pos_ == 'PROPN':
+                                start_char = token.idx
+                                is_match = True
+                        else:
+                            if token.pos_ != 'PROPN':
+                                end_char = token.idx + len(token.text)
+                                break
+                    
+                
+                if is_match:
+                    matches[start_char] = ent.label_
+                    if self.debug:
+                        print(text[start_char:end_char])
+                
+            elif ent.label_ == 'LOC':
+                
+                if len(ent.text) > MIN_LOC_LENGTH and (ent.end - ent.start) > ADDRESS_MIN_TOKENS:
+                    is_match = True
+                    
+                    if ADDRESS_HAS_NUMBER in address_checks:
+                        is_match = False
+                        for token in doc[ent.start : ent.end]:
+                            if token.is_digit:
+                                is_match = True
+                                break
+                    
+                    if is_match:
+                        matches[ent.start_char] = ent.label_
+                        if self.debug:
+                            print(ent)
+                
+        return matches 
     
     def _pre_process(self, inputs):
                 
@@ -137,7 +197,7 @@ class GetConfWorker(FlaskWorker):
         matches.update(self.match_cnp(doc))
         
         # Match NERs
-        # matches.update(self.match_ner(self.nlp_model, doc))    
+        matches.update(self.match_ner(self.nlp_model, doc))    
               
         return matches
 
@@ -159,14 +219,17 @@ if __name__ == '__main__':
   eng = GetConfWorker(log=l, default_config=_CONFIG, verbosity_level=1)
   
   test = {
-        # 'DOCUMENT': """Un contribuabil al cărui cod numeric personal este 2548016600768 va completa caseta "Cod fiscal" astfel:""",
+      'DEBUG' : True,
+      'PRINT_RESULT': True,
       
-        'DOCUMENT': """Se desemnează domnul Cocea Radu, avocat, domiciliat în municipiul Bucureşti, Bd. Laminorului nr. 84, sectorul 1, legitimat cu C.I. seria RD nr. 040958, eliberată la data de 16 septembrie 1998 de Secţia 5 Poliţie Bucureşti, CNP 1561119034963, în calitate de administrator special.""", 
+      # 'DOCUMENT': """Un contribuabil al cărui cod numeric personal este 2548016600768 va completa caseta "Cod fiscal" astfel:""",
+      
+      'DOCUMENT': """Se desemnează domnul Cocea Radu, avocat, domiciliat în municipiul Bucureşti, Bd. Laminorului nr. 84, sectorul 1, legitimat cu C.I. seria RD nr. 040958, eliberată la data de 16 septembrie 1998 de Secţia 5 Poliţie Bucureşti, CNP 1561119034963, în calitate de administrator special.""", 
         
-        # 'DOCUMENT': """Cod numeric personal: 1505952103022. Doi copii minori înregistraţi în documentul de identitate.""",
+      # 'DOCUMENT': """Cod numeric personal: 1505952103022. Doi copii minori înregistraţi în documentul de identitate.""",
         
-        # 'DOCUMENT': """Bătrîn Cantemhir-Marian, porcine, Str. Cardos Iacob nr. 34, Arad, judeţul Arad, 1850810020101. 
-        # Almăjanu Steliana, porcine, Comuna Peretu, judeţul Teleorman, 2580925341708.""",
+      # 'DOCUMENT': """Bătrîn Cantemhir-Marian, porcine, Str. Cardos Iacob nr. 34, Arad, judeţul Arad, 1850810020101. 
+      # Almăjanu Steliana, porcine, Comuna Peretu, judeţul Teleorman, 2580925341708.""",
         
       }
   
