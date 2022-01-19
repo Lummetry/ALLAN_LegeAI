@@ -24,12 +24,12 @@
             "HOST" : "127.0.0.1"
         },
 		
-		"get_sum" : {
+	"get_sum" : {
             "NR_WORKERS" : 2,
             "HOST" : "127.0.0.1"
-        }
+        },
 		
-		"get_conf" : {
+	"get_conf" : {
             "NR_WORKERS" : 2,
             "HOST" : "127.0.0.1"
         }
