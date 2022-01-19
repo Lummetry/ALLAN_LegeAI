@@ -6,6 +6,7 @@ import constants as ct
 import numpy as np
 import spacy
 import re
+import phonenumbers
 
 
 _CONFIG = {
@@ -13,21 +14,47 @@ _CONFIG = {
  }
 
 
+# CNP 
 CNP_REG1 = re.compile(r'[0-9]{13}')
 CNP_REG2 = re.compile(r'[1-8][0-9]{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[1-2][0-9]|3[0-1])[0-9]{6}')
 CNP_NO_CHECK = 1
 CNP_BASIC_CHECK = 2
 CNP_FULL_CHECK = 3
 
+# NER
 MATCHED_NERS = {'PERSON', 'LOC'}
 
+# NAME
 PERSON_UPPERCASE = 1
 PERSON_PROPN = 2
 PERSON_TWO_WORDS = 3
 
+# ADDRESS
 MIN_LOC_LENGTH = 10
 ADDRESS_HAS_NUMBER = 0
 ADDRESS_MIN_TOKENS = 3
+
+# EMAIL
+EMAIL_REG = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
+
+# TELEPHONE
+REG_START = r'(?:(?<!\d\w)|(?<=^))'
+REG_END = r'(?:(?=$)|(?!\d\w))'
+PHONE_REGS = {
+    # 0722215678
+    r'\d{4}[ .-]?\d{3}[ .-]?\d{3}',
+    # +40789198780   
+    r'\(?\+\d{2}\)?[ .-]?\d{3}[ .-]?\d{3}[ .-]?\d{3}',    
+    # 6668945
+    r'\d{3}[ .-]?\d{2}[ .-]?\d{2}',    
+    # 0216668945
+    r'\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{2}[ .-]?\d{2}'    
+}
+PHONE_REGS = [REG_START + r + REG_END for r in PHONE_REGS]
+ALL_PHONE_REGS = '|'.join(PHONE_REGS)
+PHONE_REG_CHECK = 0
+PHONE_VALIDATION = 1
+PHONE_REG_VALID = 2
 
 
 class GetConfWorker(FlaskWorker):
@@ -52,6 +79,10 @@ class GetConfWorker(FlaskWorker):
             
             
         return
+    
+    #######
+    # AUX #
+    #######
     
     def find_match(self, match, text, res):
         """ Find the position of a match """
@@ -175,6 +206,60 @@ class GetConfWorker(FlaskWorker):
                 
         return matches 
     
+    def match_email(self, text):
+        """ Return the position of all the matches for email in a text. """
+        
+        matches = re.findall(EMAIL_REG, text)
+        
+        res = {}
+        for match in matches:                
+            res[self.find_match(match, text, res)] = 'EMAIL'
+            if self.debug:
+                print(match)
+                
+        return res
+    
+    def match_phone(self, text,
+                    check_strength=PHONE_REG_CHECK
+                   ):
+        """ Return the position of all the matches for a phone number in a text. """
+        
+        res = {}
+        
+        if check_strength == PHONE_REG_CHECK or check_strength == PHONE_REG_VALID:
+            matches = re.findall(ALL_PHONE_REGS, text)
+    
+            for match in matches:
+                
+                if check_strength == PHONE_REG_VALID:
+                    checkMatch = phonenumbers.PhoneNumberMatcher(match, "RO")
+                    if checkMatch.has_next():                    
+                        res[self.find_match(match, text, res)] = 'PHONE'
+                        if self.debug:
+                            print(match)
+                        
+                else:
+                    res[self.find_match(match, text, res)] = 'PHONE'
+                    if self.debug:
+                        print(match)
+                
+        elif check_strength == PHONE_VALIDATION:
+            matches = phonenumbers.PhoneNumberMatcher(text, "RO")
+    
+            for match in matches:
+                res[self.find_match(match.raw_string, text, res)] = 'PHONE'
+                if self.debug:
+                    print(match)
+            
+        return res
+    
+    #######
+    # AUX #
+    #######
+    
+    
+    
+    
     def _pre_process(self, inputs):
                 
         doc = inputs['DOCUMENT']
@@ -195,9 +280,15 @@ class GetConfWorker(FlaskWorker):
         
         # Match CNPS
         matches.update(self.match_cnp(doc))
+    
+        # Match email
+        matches.update(self.match_email(doc))
         
-        # Match NERs
-        matches.update(self.match_ner(self.nlp_model, doc))    
+        # Match address and name
+        matches.update(self.match_ner(self.nlp_model, doc, person_checks=[PERSON_PROPN, PERSON_UPPERCASE, PERSON_TWO_WORDS]))  
+
+        # Match phone
+        matches.update(self.match_phone(doc, check_strength=PHONE_REG_VALID))
               
         return matches
 
@@ -224,7 +315,7 @@ if __name__ == '__main__':
       
       # 'DOCUMENT': """Un contribuabil al cărui cod numeric personal este 2548016600768 va completa caseta "Cod fiscal" astfel:""",
       
-      'DOCUMENT': """Se desemnează domnul Cocea Radu, avocat, domiciliat în municipiul Bucureşti, Bd. Laminorului nr. 84, sectorul 1, legitimat cu C.I. seria RD nr. 040958, eliberată la data de 16 septembrie 1998 de Secţia 5 Poliţie Bucureşti, CNP 1561119034963, în calitate de administrator special.""", 
+      'DOCUMENT': """Se desemnează domnul Cocea Radu, avocat, cocea@gmail.com, 0216667896 domiciliat în municipiul Bucureşti, Bd. Laminorului nr. 84, sectorul 1, legitimat cu C.I. seria RD nr. 040958, eliberată la data de 16 septembrie 1998 de Secţia 5 Poliţie Bucureşti, CNP 1561119034963, în calitate de administrator special.""", 
         
       # 'DOCUMENT': """Cod numeric personal: 1505952103022. Doi copii minori înregistraţi în documentul de identitate.""",
         
