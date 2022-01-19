@@ -87,13 +87,15 @@ class GetConfWorker(FlaskWorker):
     def find_match(self, match, text, res):
         """ Find the position of a match """
         
-        pos = text.find(match)
+        start = text.find(match)
         
         # If the same match already exists, look for the next one
-        while pos in res:
-            pos = text.find(match, pos + 1)
+        while start in res:
+            start = text.find(match, start + 1)
+            
+        end = start + len(match)
                             
-        return pos
+        return start, end
     
     def check_cnp(self, cnp):
         """ Check for a well formed CNP """
@@ -133,7 +135,8 @@ class GetConfWorker(FlaskWorker):
         for match in matches:
             
             if check_strength < CNP_FULL_CHECK or (check_strength == CNP_FULL_CHECK and self.check_cnp(match)):
-                res[self.find_match(match, text, res)] = 'CNP'
+                start, end = self.find_match(match, text, res)
+                res[start] = [start, end, 'CNP']
                 if self.debug:
                     print(match)
                 
@@ -183,7 +186,7 @@ class GetConfWorker(FlaskWorker):
                     
                 
                 if is_match:
-                    matches[start_char] = ent.label_
+                    matches[start_char] = [start_char, end_char, "NUME"]
                     if self.debug:
                         print(text[start_char:end_char])
                 
@@ -200,7 +203,7 @@ class GetConfWorker(FlaskWorker):
                                 break
                     
                     if is_match:
-                        matches[ent.start_char] = ent.label_
+                        matches[ent.start_char] = [ent.start_char, ent.end_char, "ADRESA"]
                         if self.debug:
                             print(ent)
                 
@@ -212,8 +215,9 @@ class GetConfWorker(FlaskWorker):
         matches = re.findall(EMAIL_REG, text)
         
         res = {}
-        for match in matches:                
-            res[self.find_match(match, text, res)] = 'EMAIL'
+        for match in matches:  
+            start, end = self.find_match(match, text, res)
+            res[start] = [start, end, 'EMAIL']
             if self.debug:
                 print(match)
                 
@@ -230,16 +234,16 @@ class GetConfWorker(FlaskWorker):
             matches = re.findall(ALL_PHONE_REGS, text)
     
             for match in matches:
+                valid_match = True
                 
                 if check_strength == PHONE_REG_VALID:
                     checkMatch = phonenumbers.PhoneNumberMatcher(match, "RO")
-                    if checkMatch.has_next():                    
-                        res[self.find_match(match, text, res)] = 'PHONE'
-                        if self.debug:
-                            print(match)
+                    if not checkMatch.has_next():  
+                        valid_match = False
                         
-                else:
-                    res[self.find_match(match, text, res)] = 'PHONE'
+                if valid_match:        
+                    start, end = self.find_match(match, text, res)
+                    res[start] = [start, end, 'PHONE']
                     if self.debug:
                         print(match)
                 
@@ -247,7 +251,8 @@ class GetConfWorker(FlaskWorker):
             matches = phonenumbers.PhoneNumberMatcher(text, "RO")
     
             for match in matches:
-                res[self.find_match(match.raw_string, text, res)] = 'PHONE'
+                start, end = self.find_match(match, text, res)
+                res[start] = [start, end, 'PHONE']
                 if self.debug:
                     print(match)
             
@@ -295,7 +300,7 @@ class GetConfWorker(FlaskWorker):
     def _post_process(self, pred):
         
         matches = pred
-        idxs = list(matches.keys())
+        idxs = list(matches.values())
         
         res = {}
         res['results'] = idxs
