@@ -290,20 +290,28 @@ class GetConfWorker(FlaskWorker):
         matches.update(self.match_email(doc))
         
         # Match address and name
-        matches.update(self.match_ner(self.nlp_model, doc, person_checks=[PERSON_PROPN, PERSON_UPPERCASE, PERSON_TWO_WORDS]))  
+        matches.update(self.match_ner(self.nlp_model, doc, person_checks=[PERSON_PROPN, PERSON_TWO_WORDS]))  
 
         # Match phone
         matches.update(self.match_phone(doc, check_strength=PHONE_REG_VALID))
               
-        return matches
+        return doc, matches
 
     def _post_process(self, pred):
         
-        matches = pred
-        idxs = list(matches.values())
+        doc, matches = pred
+        
+        match_tuples = list(matches.values())
+        match_starts = list(sorted(matches.keys(), reverse=True))
+        
+        hidden_doc = doc
+        for key in match_starts:
+            [start, end, label] = matches[key]
+            hidden_doc = hidden_doc[:start] + '***' + hidden_doc[end:]
         
         res = {}
-        res['results'] = idxs
+        res['positions'] = match_tuples
+        res['output'] = hidden_doc
         
         return res
 
