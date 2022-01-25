@@ -142,9 +142,21 @@ class GetConfWorker(FlaskWorker):
                 
         return res
     
+    def next_name_code(self, code):
+        """ Get the next code for a new name. """
+        
+        last_letter = code[-1]
+        
+        if last_letter == 'Z':
+            next_code = 'A' * (len(code) + 1)
+        else:
+            next_code = code[:-1] + chr(ord(last_letter) + 1)
+            
+        return next_code
+    
     def match_ner(self, nlp, text,
                   ners=MATCHED_NERS,
-                  person_checks=[],
+                  person_checks=[]
                   address_checks=[]
                  ):
         """ Return the position of spaCy named entities in a text. """
@@ -154,6 +166,9 @@ class GetConfWorker(FlaskWorker):
             person_checks = [person_checks]
         
         doc = nlp(text)
+        
+        person_dict = {}
+        person_code = 'A'
         
         for ent in doc.ents:
             
@@ -187,8 +202,17 @@ class GetConfWorker(FlaskWorker):
                 
                 if is_match:
                     matches[start_char] = [start_char, end_char, "NUME"]
+                    
+                    person = text[start_char:end_char]
                     if self.debug:
-                        print(text[start_char:end_char])
+                        print(person)
+                        
+                    if person_dict and not person in person_dict:
+                        # Add the name to the dictionary
+                        person_dict[person] = person_code
+                        # Get the next code for names
+                        person_code = self.next_name_code(person_code)
+                        
                 
             elif ent.label_ == 'LOC':
                 
@@ -207,7 +231,7 @@ class GetConfWorker(FlaskWorker):
                         if self.debug:
                             print(ent)
                 
-        return matches 
+        return matches, person_dict
     
     def match_email(self, text):
         """ Return the position of all the matches for email in a text. """
@@ -290,7 +314,9 @@ class GetConfWorker(FlaskWorker):
         matches.update(self.match_email(doc))
         
         # Match address and name
-        matches.update(self.match_ner(self.nlp_model, doc, person_checks=[PERSON_PROPN, PERSON_TWO_WORDS]))  
+        matches, person_dict = self.match_ner(self.nlp_model, doc, person_checks=[PERSON_PROPN, PERSON_TWO_WORDS])
+        matches.update(matches)  
+        print(person_dict)
 
         # Match phone
         matches.update(self.match_phone(doc, check_strength=PHONE_REG_VALID))
