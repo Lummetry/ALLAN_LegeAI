@@ -168,7 +168,51 @@ class GetConfWorker(FlaskWorker):
                 return code
             
         return None
+    
+
+    def check_token_condition(self, token, condition):
+        """ Check if a token respects a condition """
+        
+        if ((condition == 'capital' and token.text[0].isupper())
+            or (condition == 'propn' and token.pos_ == 'PROPN')):
+            return True
+        
+        return False
+    
+    
+    def check_name_condition(self, ent, doc, start_char, end_char,
+                             condition
+                            ):
+        """ Only keep a sequence of words starting with a capital letter """
+        
+        is_match = False
+                    
+        i = ent.start
+        while doc[i].idx < start_char:
+            i += 1
+        
+        start = start_char
+        end = end_char
+                
+        while doc[i].idx < end_char:
+            token = doc[i]
+                        
+            if is_match == False:
+                # Check one of the conditions
+                if self.check_token_condition(token, condition):
+                    start = token.idx
+                    end = token.idx + len(token.text)
+                    is_match = True
+            else:
+                # Check one of the conditions
+                if not self.check_token_condition(token, condition):
+                    break
+                else:          
+                    end = token.idx + len(token.text)
+                        
+            i += 1
             
+        return is_match, start, end        
     
     def match_ner(self, nlp, text,
                   ners=MATCHED_NERS,
@@ -182,7 +226,6 @@ class GetConfWorker(FlaskWorker):
             person_checks = [person_checks]
         
         doc = nlp(text)
-        print(doc.ents)
         
         person_dict = {}
         current_code = 'A'
@@ -194,27 +237,24 @@ class GetConfWorker(FlaskWorker):
                 
                 start_char = ent.start_char
                 end_char = ent.end_char
-                
-                if PERSON_UPPERCASE in person_checks and not ent.text.istitle():
-                    # Check if all words start with an uppercase letter
-                    is_match = False
+                    
+                if is_match and PERSON_PROPN in person_checks:
+                    is_match, start_char, end_char = self.check_name_condition(ent, doc, 
+                                                                               start_char, end_char,
+                                                                               condition='propn')
+                    
+                if is_match and PERSON_UPPERCASE in person_checks:
+                    is_match, start_char, end_char = self.check_name_condition(ent, doc, 
+                                                                               start_char, end_char,
+                                                                               condition='capital')
                     
                 if is_match and PERSON_TWO_WORDS in person_checks and len(ent) <= 1:
                     is_match = False
                     
-                if is_match and PERSON_PROPN in person_checks:
-                    is_match = False
-                    
-                    # Check if all words are proper nouns
-                    for token in doc[ent.start : ent.end]:
-                        if is_match == False:
-                            if token.pos_ == 'PROPN':
-                                start_char = token.idx
-                                is_match = True
-                        else:
-                            if token.pos_ != 'PROPN':
-                                end_char = token.idx + len(token.text)
-                                break
+                
+                if is_match:
+                    print(text[start_char:end_char])
+                    matches[start_char] = ent.label_
                             
                 # Ignore leading and trailing punctuation
                 while text[start_char] in punctuation:
@@ -339,7 +379,7 @@ class GetConfWorker(FlaskWorker):
         matches.update(self.match_email(doc))
         
         # Match address and name
-        ner_matches, person_dict = self.match_ner(self.nlp_model, doc, person_checks=[PERSON_PROPN, PERSON_TWO_WORDS])
+        ner_matches, person_dict = self.match_ner(self.nlp_model, doc, person_checks=[PERSON_PROPN, PERSON_UPPERCASE, PERSON_TWO_WORDS])
         matches.update(ner_matches)  
         print(person_dict)
 
@@ -351,7 +391,6 @@ class GetConfWorker(FlaskWorker):
     def _post_process(self, pred):
         
         doc, matches, person_dict = pred
-        print(matches)
         
         # Order matches 
         match_tuples = list(matches.values())
@@ -366,11 +405,21 @@ class GetConfWorker(FlaskWorker):
         
         # Replace names with their codes
         for (name, code) in person_dict.items():
-            hidden_doc = hidden_doc.replace(name, code)
-        
+            
+            # Search for all occurances of name
+            while True:
+                # Ignore the case of the letters
+                name_match = re.search(name.lower(), hidden_doc.lower())
+                
+                if name_match:
+                    start, end = name_match.span()
+                    hidden_doc = hidden_doc[:start] + code + hidden_doc[end:]
+                else:
+                    break
+            
         res = {}
         res['positions'] = match_tuples
-        res['output'] = hidden_doc
+        # res['output'] = hidden_doc
         
         # if self.debug:
         #     print(hidden_doc)
@@ -398,24 +447,17 @@ if __name__ == '__main__':
       # Almăjanu Steliana, porcine, Comuna Peretu, judeţul Teleorman, 2580925341708.""",
       
       'DOCUMENT' : """
-      S-au luat în examinare apelurile declarate de Parchetul de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia naţională Anticorupţie şi de inculpatul Popa Vasile Constantin împotriva sentinţei penale nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală.
-Dezbaterile au fost consemnate în încheierea de şedinţă din data de 09 ianuarie 2020,  ce face parte integrantă din prezenta decizie şi având nevoie de timp pentru a delibera, în baza art. 391 din Codul de procedură penală a amânat pronunţarea pentru azi 22 ianuarie 2020, când în aceeaşi compunere a pronunţat următoarea decizie:
-ÎNALA CURTE
-	Asupra apelurilor penale de faţă;
-În baza lucrărilor din dosar, constată următoarele:
-Prin sentinţa penală nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală, pronunţată în dosarul nr.490/35/2014, în baza art. 386 din Codul de procedură penală a respins cererea de schimbare a încadrării juridice a faptei de sustragere sau distrugere de înscrisuri, prev. de art. 242 al. 1 şi 3 din Codul penal, cu aplic. art. 5 din Codul penal, în cea de sustragere sau distrugere de probe ori de înscrisuri, prev. de art. 275 al. 1 şi 2 din Codul penal, formulată de inculpatul POPA VASILE CONSTANTIN.
-	În baza art. 386 din Codul de procedură penală a fost admisă cererea de schimbare a încadrării juridice a faptelor formulată de D.N.A. – Serviciul Teritorial Timişoara, sens în care:
-- s-a dispus schimbarea încadrării juridice a infracţiunii de luare de mită, prev. de art. 6 din Legea nr. 78/2000 rap. la art. 289 din Codul penal, rap. la art. 7 alin.1 lit. b din Legea nr. 78/2000, cu aplic. art. 5 din Codul penal, în infracţiunea de luare de mită în formă continuată, prev. de art. 6 din Legea nr. 78/2000 rap. la art. 289 al. 1 din Codul penal, rap. la art. 7 alin.1 lit. b din Legea nr. 78/2000, cu aplic. art. 35 al. 1 din Codul penal şi art. 5 din Codul penal (5 acte materiale), cu privire la inculpatul POPA VASILE CONSTANTIN; 
-- s-a dispus schimbarea încadrării juridice a infracţiunii de trafic de influenţă prev. de art. 6 din Legea nr. 78/2000  rap. la art. 291 din Codul penal., rap. la art. 7 alin.1, lit. b din Legea nr. 78/2000, cu aplic. art. 5 din Codul penal, în infracţiunea de trafic de influenţă prev. de art. 6 din Legea nr. 78/2000  rap. la art. 291 al. 1 din Codul penal, rap. la art. 7 alin.1, lit. b din Legea nr. 78/2000, cu aplic. art. 5 din Codul penal, cu privire la inculpatul POPA VASILE CONSTANTIN; 
-- s-a dispus schimbarea încadrării juridice a infracţiunii de sustragere sau distrugere de înscrisuri, prev. de art. 242 alin. 1 şi 3 din Codul penal, cu aplic. art. 5 din Codul penal, în infracţiunea de sustragere sau distrugere de înscrisuri prev. de art. 259 al. 1 şi 2 din Codul penal, cu aplic. art. 5 din Codul penal (3 infracţiuni), cu privire la inculpatul POPA VASILE CONSTANTIN; 
-- s-a dispus schimbarea încadrării juridice a infracţiunii de instigare la efectuarea unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 47 din Codul penal rap. la art. 156 din Legea nr. 95/2006 republicată, în infracţiunea de instigare la efectuarea unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 47 din Codul penal rap. la art. 155 din Legea nr. 95/2006 republicată, cu privire la inculpatul POPA VASILE CONSTANTIN; 
-- s-a dispus schimbarea încadrării juridice a infracţiunii de cumpărare de influenţă, prev. de art. 6 din Legea nr. 78/2000 rap. la art. 292 Codul penal, cu aplic. art. 5 din Codul penal, în infracţiunea de cumpărare de influenţă, prev. de art. 6 din Legea nr. 78/2000 rap. la art. 292 al. 1 din Codul penal, cu aplic. art. 5 din Codul penal, cu privire la inculpatul DAVID FLORIAN ALIN; 
-- s-a dispus schimbarea încadrării juridice a infracţiunii de efectuarea unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 156 din Legea nr. 95/2006 republicată, în infracţiunea de efectuarea unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 155 din Legea nr. 95/2006 republicată, cu privire la inculpatul MIHALACHE GABRIEL CONSTANTIN.
-	I. În baza art. 396 al. 1 şi 5 din Codul de procedură penală rap. la art. 16 al. 1 lit. b din Codul de procedură penală a fost achitat inculpatul POPA VASILE CONTASNTIN, sub aspectul săvârşirii infracţiunii de luare de mită în formă continuată, prev. de art. 6 din Legea nr. 78/2000 rap. la art. 289 al. 1 din Codul penal, rap. la art. 7 alin.1 lit. b din Legea nr. 78/2000, cu aplic. art. 35 al. 1 Codul penal şi art. 5 din Codul penal (5 acte materiale).
-În baza art. 396 al. 1 şi 5 din Codul de procedură penală rap. la art. 16 al. 1 lit. a din Codul de procedură penală a fost achitat inculpatul POPA VASILE CONSTANTIN, pentru săvârşirea infracţiunii de abuz în serviciu, prev. de art. 132 din Legea nr. 78/2000 modificată, cu referire la art. 297 alin. 1 din Codul 
+III. În baza art. 396 al. 1 şi 5 din Codul de procedură penală rap. la art. 16 al. 1 lit. b din Codul de procedură penală a fost achitat inculpatul MIHALACHE GABRIEL-CONSTANTIN, fiul lui Marin şi Marioara - Aurora, născut la 18.05.1952 în Brad, jud. Hunedoara, domiciliat în Oradea, strada Episcop Ioan Suciu nr.4, bloc ZP2, apt.10, CNP 1520518054675, pentru săvârşirea infracţiunii de efectuarea unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 155 din Legea nr. 95/2006 republicată.
+	În baza art. 397 al. 1 din Codul de procedură penală s-a luat act că persoanele vătămate Lozincă Maria, Ministerul Public – Parchetul de pe lângă Înalta Curte de Casaţie şi Justiţie şi Parchetul de pe lângă Tribunalul Bihor nu 
+s-au constituit părţi civile în cauză.
+	În baza art. 274 al. 1 din Codul de procedură penală a fost obligat inculpatul Popa Vasile Constantin la plata sumei de 20.000 lei cu titlu de cheltuieli judiciare faţă de stat.
+	În baza art. 275 al. 3 din Codul de procedură penală cheltuielile judiciare ocazionate cu soluţionarea cauzei faţă de inculpaţii David Florian Alin şi Mihalache Gabriel Constantin, au rămas în sarcina statului.
+	În baza art. 275 al. 6 din Codul de procedură penală s-a dispus plata din fondurile Ministerului Justiţiei către Baroul Timiş a sumei de câte 350 lei, reprezentând onorariu parţial avocat din oficiu către avocaţii Schiriac Lăcrămioara şi Miloş Raluca, respectiv 100 lei, reprezentând onorariu parţial avocat din oficiu către avocatul Murgu Călin.
+	În baza art. 120 al. 2 lit. a teza 2 din Codul de procedură penală a fost respinsă cererea de acordare a cheltuielilor de transport pentru termenul din 2 noiembrie 2016, formulată de martora Bodin Alina Adriana.
+	În baza art. 120 al. 2 lit. a teza 2 din Codul de procedură penală a fost admisă în parte cererea formulată de martorul Popa Vasile cu privire la acordarea cheltuielilor legate de deplasarea la instanţă. 
+S-a dispus plata din fondurile Ministerului Justiţiei a sumei de 480 lei, reprezentând contravaloarea serviciilor de cazare privind pe martorul Popa Vasile, pentru termenele de judecată din 31 octombrie 2017 şi 7 noiembrie 2017 şi respinge în rest cererea formulată.
+Pentru a pronunţa această sentinţă, prima instanţă a reţinut că prin rechizitoriul nr. 421/P/2013 din 17.12.2014 al Parchetului de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia Naţională Anticorupţie, înregistrat la Curtea de Apel Oradea sub nr. dosar 490/35/2014 la data de 19.12.2014, s-a dispus trimiterea în judecată a inculpaţilor POPA VASILE CONSTANTIN, pentru săvârşirea infracţiunii de luare de mită, prev. de art. 6 din L. 78/2000 rap. la art. 289 din Codul penal  rap. la art. 7 al. 1 lit. b din L. 78/2000; infracţiunii de şantaj, prev. de art. 207 al. 1 din Codul penal, cu aplic. art. 13 ind. 1 din L. 78/2000; 3 infracţiuni de abuz în serviciu, prev. de art. 13 ind. 2 din L. 78/2000 cu referire la art. 297 al. 1 din Codul penal; 3 infracţiuni de distrugere de înscrisuri prev. de art. 242 al. 1 şi 3 din Codul penal; 3 infracţiuni de favorizare a făptuitorului, prev. de art. 269 al. 1 din Codul penal; infracţiunii de instigare la efectuarea unor prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 47 din Codul penal rap. la art. 156 din Legea nr. 95/2006 şi a infracţiunii de trafic de influenţă prev. de art. 6 din Legea nr. 78/2000 rap. la art. 291 din Codul penal rap. la art. 7 al. 1 lit. b din Legea nr. 78/2000; MIHALACHE GABRIEL CONSTANTIN, pentru săvârşirea infracţiunii de efectuare a unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 156 din Legea nr. 95/2006 republicată şi DAVID FLORIAN ALIN, pentru săvârşirea infracţiunii de cumpărare de influenţă, prev. de art. 6 din Legea nr. 78/2000 rap. la art. 292 din Codul penal, cu aplicarea art. 5 din Codul penal. 
 
-
-penal, cu aplic. art. 5 din Codul penal în legătură cu dosarul penal nr. 7157/P/2008 al Parchetului de pe lângă Judecătoria Oradea.
 """
         
       }
