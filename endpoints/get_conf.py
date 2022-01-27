@@ -238,31 +238,41 @@ class GetConfWorker(FlaskWorker):
                 start_char = ent.start_char
                 end_char = ent.end_char
                     
+                # Check POS
                 if is_match and PERSON_PROPN in person_checks:
                     is_match, start_char, end_char = self.check_name_condition(ent, doc, 
                                                                                start_char, end_char,
                                                                                condition='propn')
                     
+                # Check capital letters
                 if is_match and PERSON_UPPERCASE in person_checks:
                     is_match, start_char, end_char = self.check_name_condition(ent, doc, 
                                                                                start_char, end_char,
                                                                                condition='capital')
                     
-                if is_match and PERSON_TWO_WORDS in person_checks and len(ent) <= 1:
-                    is_match = False
+                # Add capitalized words to the right
+                if end_char == ent.end_char:
+                    idx = ent[-1].i + 1
                     
+                    while idx < len(doc) and doc[idx].text[0].isupper():
+                        end_char = doc[idx].idx + len(doc[idx])
+                        idx += 1
+                    
+                # Check number of words
+                if is_match and PERSON_TWO_WORDS in person_checks:
+                    ent_text = text[start_char:end_char]
+                    words = re.split("[" + punctuation + " ]+", ent_text)
+                    if len(words) < 2:
+                        is_match = False
                 
                 if is_match:
-                    print(text[start_char:end_char])
-                    matches[start_char] = ent.label_
                             
-                # Ignore leading and trailing punctuation
-                while text[start_char] in punctuation:
-                    start_char += 1
-                while text[end_char - 1] in punctuation:
-                    end_char -= 1
-                
-                if is_match:
+                    # Ignore leading and trailing punctuation
+                    while text[start_char] in punctuation:
+                        start_char += 1
+                    while text[end_char - 1] in punctuation:
+                        end_char -= 1
+                    
                     matches[start_char] = [start_char, end_char, "NUME"]
                     
                     person = text[start_char:end_char]
@@ -362,7 +372,6 @@ class GetConfWorker(FlaskWorker):
             doc, ct.MODELS.TAG_MIN_INPUT))
           
         self.debug = bool(inputs.get('DEBUG', False))
-        self.print_text = bool(inputs.get('PRINT_TEXT', False))
     
         return doc
 
@@ -381,7 +390,8 @@ class GetConfWorker(FlaskWorker):
         # Match address and name
         ner_matches, person_dict = self.match_ner(self.nlp_model, doc, person_checks=[PERSON_PROPN, PERSON_UPPERCASE, PERSON_TWO_WORDS])
         matches.update(ner_matches)  
-        print(person_dict)
+        if self.debug:
+            print(person_dict)
 
         # Match phone
         matches.update(self.match_phone(doc, check_strength=PHONE_REG_VALID))
@@ -419,10 +429,10 @@ class GetConfWorker(FlaskWorker):
             
         res = {}
         res['positions'] = match_tuples
-        # res['output'] = hidden_doc
+        res['output'] = hidden_doc
         
-        # if self.debug:
-        #     print(hidden_doc)
+        if self.debug:
+            print(hidden_doc)
         
         return res
 
@@ -434,8 +444,7 @@ if __name__ == '__main__':
   eng = GetConfWorker(log=l, default_config=_CONFIG, verbosity_level=1)
   
   test = {
-      'DEBUG' : True,
-      'PRINT_RESULT': True,
+      'DEBUG' : False,
       
            # 'DOCUMENT': """Un contribuabil al cărui cod numeric personal este 1520518054675 va completa caseta "Cod fiscal" astfel:""",
       
