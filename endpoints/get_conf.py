@@ -58,6 +58,18 @@ PHONE_REG_CHECK = 0
 PHONE_VALIDATION = 1
 PHONE_REG_VALID = 2
 
+# SERIE NUMAR CI
+SERIE_NUMAR_REGS = {
+    r'serie [A-Z]{2}.{0,5}num[aă]r \d{6}',
+    r'serie [A-Z]{2}\d{6}',
+    r'num[aă]r [A-Z]{2}\d{6}'
+}
+REG_END = r'(?:(?=$)|(?!\d|\w))'
+SERIE_NUMAR_REGS = [r + REG_END for r in SERIE_NUMAR_REGS]
+ALL_SERIE_NUMAR_REGS = '|'.join(SERIE_NUMAR_REGS)
+SERIE_NUMAR_NO_CHECK = 0
+SERIE_CHECK = 1
+
 
 class GetConfWorker(FlaskWorker):
     """
@@ -142,6 +154,22 @@ class GetConfWorker(FlaskWorker):
                 if self.debug:
                     print(match)
                 
+        return res
+    
+    def match_serie_numar(self, text,
+                          check_strength=SERIE_NUMAR_NO_CHECK):
+        """ Return the position of all the matches for Serie and Numar CI in a text. """
+    
+        matches = re.findall(ALL_SERIE_NUMAR_REGS, text)
+        res = {}
+        for match in matches:
+            
+            if check_strength == SERIE_NUMAR_NO_CHECK:
+                start, end = self.find_match(match, text, res)
+                res[start] = [start, end, 'SERIENUMAR']
+                if self.debug:
+                    print(match)
+        
         return res
     
     def next_name_code(self, code):
@@ -383,6 +411,9 @@ class GetConfWorker(FlaskWorker):
         
         # Match CNPS
         matches.update(self.match_cnp(doc))
+        
+        # Match Serie Numar CI
+        matches.update(self.match_serie_numar(doc))
     
         # Match email
         matches.update(self.match_email(doc))
@@ -459,7 +490,7 @@ if __name__ == '__main__':
 III. În baza art. 396 al. 1 şi 5 din Codul de procedură penală rap. la art. 16 al. 1 lit. b din Codul de procedură penală a fost achitat inculpatul MIHALACHE GABRIEL-CONSTANTIN, fiul lui Marin şi Marioara - Aurora, născut la 18.05.1952 în Brad, jud. Hunedoara, domiciliat în Oradea, strada Episcop Ioan Suciu nr.4, bloc ZP2, apt.10, CNP 1520518054675, pentru săvârşirea infracţiunii de efectuarea unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 155 din Legea nr. 95/2006 republicată.
 	În baza art. 397 al. 1 din Codul de procedură penală s-a luat act că persoanele vătămate Lozincă Maria, Ministerul Public – Parchetul de pe lângă Înalta Curte de Casaţie şi Justiţie şi Parchetul de pe lângă Tribunalul Bihor nu 
 s-au constituit părţi civile în cauză.
-	În baza art. 274 al. 1 din Codul de procedură penală a fost obligat inculpatul Popa Vasile Constantin la plata sumei de 20.000 lei cu titlu de cheltuieli judiciare faţă de stat.
+	În baza art. 274 al. 1 din Codul de procedură penală a fost obligat inculpatul Popa Vasile Constantin cu serie RK897456 la plata sumei de 20.000 lei cu titlu de cheltuieli judiciare faţă de stat.
 	În baza art. 275 al. 3 din Codul de procedură penală cheltuielile judiciare ocazionate cu soluţionarea cauzei faţă de inculpaţii David Florian Alin şi Mihalache Gabriel Constantin, au rămas în sarcina statului.
 	În baza art. 275 al. 6 din Codul de procedură penală s-a dispus plata din fondurile Ministerului Justiţiei către Baroul Timiş a sumei de câte 350 lei, reprezentând onorariu parţial avocat din oficiu către avocaţii Schiriac Lăcrămioara şi Miloş Raluca, respectiv 100 lei, reprezentând onorariu parţial avocat din oficiu către avocatul Murgu Călin.
 	În baza art. 120 al. 2 lit. a teza 2 din Codul de procedură penală a fost respinsă cererea de acordare a cheltuielilor de transport pentru termenul din 2 noiembrie 2016, formulată de martora Bodin Alina Adriana.
