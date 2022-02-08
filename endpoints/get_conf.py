@@ -544,7 +544,7 @@ class GetConfWorker(FlaskWorker):
         for key in match_starts:
             [start, end, label] = matches[key]
             if label != 'NUME':
-                hidden_doc = hidden_doc[:start] + '***' + hidden_doc[end:]
+                hidden_doc = hidden_doc[:start] + 'X' + hidden_doc[end:]
         
         # Replace names with their codes
         for (name, code) in person_dict.items():
