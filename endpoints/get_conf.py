@@ -75,6 +75,20 @@ SERII = ["AX", "TR", "AR", "ZR", "XC", "ZC", "MM", "XM", "XB", "XT", "BV", "ZV",
          "SZ", "SV", "XV", "TM", "TZ", "DD", "GZ", "ZS", "MS", "TC", "VS", "SX"]
 SERIE_CHECK = 1
 
+# IBAN
+IBAN_REGS = {
+    # RO49AAAA1B31007593840000
+    r'RO\d{2}\w{4}[A-Z0-9]{16}',
+    
+    # RO49 AAAA 1B31 0075 9384 0000
+    r'RO\d{2} \w{4}(?: [A-Z0-9]{4}){4}',
+    
+    # RO 49 AAAA 1B31 0075 9384 0000
+    r'RO \d{2} \w{4}(?: [A-Z0-9]{4}){4}'
+}
+IBAN_REGS = [REG_START + r + REG_END for r in IBAN_REGS]
+ALL_IBAN_REGS = '|'.join(IBAN_REGS)
+
 
 class GetConfWorker(FlaskWorker):
     """
@@ -441,12 +455,28 @@ class GetConfWorker(FlaskWorker):
                     
                     if add_match:
                         res[start] = [start, start + len(normalized_inst), 'INSTITUTION']
+                        if self.debug:
+                            print(normalized_inst)
                 
                 start += len(normalized_inst)
                 
             i += 1
                 
         return res
+    
+    def match_iban(self, text):
+        """ Return the position of all the matches for IBANs in a text. """
+       
+        matches = re.findall(ALL_IBAN_REGS, text)
+            
+        res = {}
+        for match in matches:
+                
+            start, end = self.find_match(match, text, res)
+            res[start] = [start, end, 'CNP']
+               
+            if self.debug: 
+                print(match)
         
     #######
     # AUX #
@@ -495,6 +525,9 @@ class GetConfWorker(FlaskWorker):
         
         # Match institutions
         matches.update(self.match_institution(doc, insts=self.institution_list, removeDots=True))
+        
+        # Match IBAN
+        matches.update(self.match_iban(doc))
               
         return doc, matches, person_dict
 
