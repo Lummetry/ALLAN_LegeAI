@@ -400,15 +400,24 @@ class GetConfWorker(FlaskWorker):
             
         return res
     
-    def match_institution(self, text, insts):
+    def match_institution(self, text, insts,
+                          removeDots=True                     
+                         ):
         """ Return the position of all the matches for institutions in a text. """
         
         normalized_text = unidecode.unidecode(text.lower())
         
         res = {}
         
-        for inst in insts:
+        i = 0 
+        while i < len(insts):
+            
+            inst = insts[i]
             normalized_inst = unidecode.unidecode(inst.lower())
+            
+            # If the name contains dots, also include the name without dots
+            if removeDots and '.' in normalized_inst:
+                insts.append(normalized_inst.replace('.', ''))
             
             start = 0
             while True:
@@ -434,6 +443,8 @@ class GetConfWorker(FlaskWorker):
                         res[start] = [start, start + len(normalized_inst), 'INSTITUTION']
                 
                 start += len(normalized_inst)
+                
+            i += 1
                 
         return res
         
@@ -483,7 +494,7 @@ class GetConfWorker(FlaskWorker):
         matches.update(self.match_phone(doc, check_strength=PHONE_REG_VALID))
         
         # Match institutions
-        matches.update(self.match_institution(doc, insts=self.institution_list))
+        matches.update(self.match_institution(doc, insts=self.institution_list, removeDots=True))
               
         return doc, matches, person_dict
 
