@@ -36,7 +36,8 @@ MAX_LEV_DIST = 3
 # ADDRESS
 MIN_LOC_LENGTH = 10
 ADDRESS_HAS_NUMBER = 0
-ADDRESS_MIN_TOKENS = 3
+ADDRESS_MIN_TOKENS = 1
+ADDRESS_MERGE_DIST = 3
 
 # EMAIL
 EMAIL_REG = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
@@ -76,18 +77,8 @@ SERII = ["AX", "TR", "AR", "ZR", "XC", "ZC", "MM", "XM", "XB", "XT", "BV", "ZV",
 SERIE_CHECK = 1
 
 # IBAN
-IBAN_REGS = {
-    # RO49AAAA1B31007593840000
-    r'RO\d{2}\w{4}[A-Z0-9]{16}',
-    
-    # RO49 AAAA 1B31 0075 9384 0000
-    r'RO\d{2} \w{4}(?: [A-Z0-9]{4}){4}',
-    
-    # RO 49 AAAA 1B31 0075 9384 0000
-    r'RO \d{2} \w{4}(?: [A-Z0-9]{4}){4}'
-}
-IBAN_REGS = [REG_START + r + REG_END for r in IBAN_REGS]
-ALL_IBAN_REGS = '|'.join(IBAN_REGS)
+IBAN_REG = r'RO[ ]?\d{2}[ ]?\w{4}(?:[ ]?[A-Z0-9]{4}){4}'
+IBAN_REG = REG_START + IBAN_REG + REG_END
 
 
 class GetConfWorker(FlaskWorker):
@@ -359,7 +350,23 @@ class GetConfWorker(FlaskWorker):
                                 break
                     
                     if is_match:
-                        matches[ent.start_char] = [ent.start_char, ent.end_char, "ADRESA"]
+                        
+                        # Check if it could be merged with nearby address
+                        merged = False
+                        
+                        for (start, m) in matches.items():
+                            match_type = m[2]
+                            end = m[1]
+                            
+                            if match_type == 'ADRESA' and ent.start_char - end < ADDRESS_MERGE_DIST:
+                                # If the match is close enough
+                                matches[start] = [start, ent.end_char, "ADRESA"]
+                                merged = True
+                                break
+                                
+                        if not merged:
+                            matches[ent.start_char] = [ent.start_char, ent.end_char, "ADRESA"]
+                            
                         if self.debug:
                             print(ent)
                 
@@ -467,7 +474,7 @@ class GetConfWorker(FlaskWorker):
     def match_iban(self, text):
         """ Return the position of all the matches for IBANs in a text. """
        
-        matches = re.findall(ALL_IBAN_REGS, text)
+        matches = re.findall(IBAN_REG, text)
             
         res = {}
         for match in matches:
@@ -477,6 +484,8 @@ class GetConfWorker(FlaskWorker):
                
             if self.debug: 
                 print(match)
+        
+        return res
         
     #######
     # AUX #
@@ -588,20 +597,20 @@ if __name__ == '__main__':
       # 'DOCUMENT': """Bătrîn Cantemhir-Marian, porcine, Str. Cardos Iacob nr. 34, Arad, judeţul Arad, 1850810020101. 
       # Almăjanu Steliana, porcine, Comuna Peretu, judeţul Teleorman, 2580925341708.""",
       
-      'DOCUMENT' : """
-III. În baza art. 396 al. 1 şi 5 din Codul de procedură penală rap. la art. 16 al. 1 lit. b din Codul de procedură penală a fost achitat inculpatul MIHALACHE GABRIEL-CONSTANTIN, fiul lui Marin şi Marioara - Aurora, născut la 18.05.1952 în Brad, jud. Hunedoara, domiciliat în Oradea, strada Episcop Ioan Suciu nr.4, bloc ZP2, apt.10, CNP 1520518054675, pentru săvârşirea infracţiunii de efectuarea unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 155 din Legea nr. 95/2006 republicată.
- 	În baza art. 397 al. 1 din Codul de procedură penală s-a luat act că persoanele vătămate Lozincă Maria, Ministerul Public – Parchetul de pe lângă Înalta Curte de Casaţie şi Justiţie şi Parchetul de pe lângă Tribunalul Bihor nu 
-s-au constituit părţi civile în cauză.
- 	În baza art. 274 al. 1 din Codul de procedură penală a fost obligat inculpatul Popa Vasile Constantin cu serie RK897456 la plata sumei de 20.000 lei cu titlu de cheltuieli judiciare faţă de stat.
- 	În baza art. 275 al. 3 din Codul de procedură penală cheltuielile judiciare ocazionate cu soluţionarea cauzei faţă de inculpaţii David Florian Alin şi Mihalache Gabriel Constantin, au rămas în sarcina statului.
- 	În baza art. 275 al. 6 din Codul de procedură penală s-a dispus plata din fondurile Ministerului Justiţiei către Baroul Timiş a sumei de câte 350 lei, reprezentând onorariu parţial avocat din oficiu către avocaţii Schiriac Lăcrămioara şi Miloş Raluca, respectiv 100 lei, reprezentând onorariu parţial avocat din oficiu către avocatul Murgu Călin.
- 	În baza art. 120 al. 2 lit. a teza 2 din Codul de procedură penală a fost respinsă cererea de acordare a cheltuielilor de transport pentru termenul din 2 noiembrie 2016, formulată de martora Bodin Alina Adriana.
- 	În baza art. 120 al. 2 lit. a teza 2 din Codul de procedură penală a fost admisă în parte cererea formulată de martorul Popa Vasile cu privire la acordarea cheltuielilor legate de deplasarea la instanţă. 
-S-a dispus plata din fondurile Ministerului Justiţiei a sumei de 480 lei, reprezentând contravaloarea serviciilor de cazare privind pe martorul Popa Vasile, pentru termenele de judecată din 31 octombrie 2017 şi 7 noiembrie 2017 şi respinge în rest cererea formulată.
-Pentru a pronunţa această sentinţă, prima instanţă a reţinut că prin rechizitoriul nr. 421/P/2013 din 17.12.2014 al Parchetului de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia Naţională Anticorupţie, înregistrat la Curtea de Apel Oradea sub nr. dosar 490/35/2014 la data de 19.12.2014, s-a dispus trimiterea în judecată a inculpaţilor POPA VASILE CONSTANTIN, pentru săvârşirea infracţiunii de luare de mită, prev. de art. 6 din L. 78/2000 rap. la art. 289 din Codul penal  rap. la art. 7 al. 1 lit. b din L. 78/2000; infracţiunii de şantaj, prev. de art. 207 al. 1 din Codul penal, cu aplic. art. 13 ind. 1 din L. 78/2000; 3 infracţiuni de abuz în serviciu, prev. de art. 13 ind. 2 din L. 78/2000 cu referire la art. 297 al. 1 din Codul penal; 3 infracţiuni de distrugere de înscrisuri prev. de art. 242 al. 1 şi 3 din Codul penal; 3 infracţiuni de favorizare a făptuitorului, prev. de art. 269 al. 1 din Codul penal; infracţiunii de instigare la efectuarea unor prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 47 din Codul penal rap. la art. 156 din Legea nr. 95/2006 şi a infracţiunii de trafic de influenţă prev. de art. 6 din Legea nr. 78/2000 rap. la art. 291 din Codul penal rap. la art. 7 al. 1 lit. b din Legea nr. 78/2000; MIHALACHE GABRIEL CONSTANTIN, pentru săvârşirea infracţiunii de efectuare a unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 156 din Legea nr. 95/2006 republicată şi DAVID FLORIAN ALIN, pentru săvârşirea infracţiunii de cumpărare de influenţă, prev. de art. 6 din Legea nr. 78/2000 rap. la art. 292 din Codul penal, cu aplicarea art. 5 din Codul penal. 
+#       'DOCUMENT' : """
+# III. În baza art. 396 al. 1 şi 5 din Codul de procedură penală rap. la art. 16 al. 1 lit. b din Codul de procedură penală a fost achitat inculpatul MIHALACHE GABRIEL-CONSTANTIN, fiul lui Marin şi Marioara - Aurora, născut la 18.05.1952 în Brad, jud. Hunedoara, domiciliat în Oradea, strada Episcop Ioan Suciu nr.4, bloc ZP2, apt.10, CNP 1520518054675, pentru săvârşirea infracţiunii de efectuarea unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 155 din Legea nr. 95/2006 republicată.
+#  	În baza art. 397 al. 1 din Codul de procedură penală s-a luat act că persoanele vătămate Lozincă Maria, Ministerul Public – Parchetul de pe lângă Înalta Curte de Casaţie şi Justiţie şi Parchetul de pe lângă Tribunalul Bihor nu 
+# s-au constituit părţi civile în cauză.
+#  	În baza art. 274 al. 1 din Codul de procedură penală a fost obligat inculpatul Popa Vasile Constantin cu serie RK897456 la plata sumei de 20.000 lei cu titlu de cheltuieli judiciare faţă de stat.
+#  	În baza art. 275 al. 3 din Codul de procedură penală cheltuielile judiciare ocazionate cu soluţionarea cauzei faţă de inculpaţii David Florian Alin şi Mihalache Gabriel Constantin, au rămas în sarcina statului.
+#  	În baza art. 275 al. 6 din Codul de procedură penală s-a dispus plata din fondurile Ministerului Justiţiei către Baroul Timiş a sumei de câte 350 lei, reprezentând onorariu parţial avocat din oficiu către avocaţii Schiriac Lăcrămioara şi Miloş Raluca, respectiv 100 lei, reprezentând onorariu parţial avocat din oficiu către avocatul Murgu Călin.
+#  	În baza art. 120 al. 2 lit. a teza 2 din Codul de procedură penală a fost respinsă cererea de acordare a cheltuielilor de transport pentru termenul din 2 noiembrie 2016, formulată de martora Bodin Alina Adriana.
+#  	În baza art. 120 al. 2 lit. a teza 2 din Codul de procedură penală a fost admisă în parte cererea formulată de martorul Popa Vasile cu privire la acordarea cheltuielilor legate de deplasarea la instanţă. 
+# S-a dispus plata din fondurile Ministerului Justiţiei a sumei de 480 lei, reprezentând contravaloarea serviciilor de cazare privind pe martorul Popa Vasile, pentru termenele de judecată din 31 octombrie 2017 şi 7 noiembrie 2017 şi respinge în rest cererea formulată.
+# Pentru a pronunţa această sentinţă, prima instanţă a reţinut că prin rechizitoriul nr. 421/P/2013 din 17.12.2014 al Parchetului de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia Naţională Anticorupţie, înregistrat la Curtea de Apel Oradea sub nr. dosar 490/35/2014 la data de 19.12.2014, s-a dispus trimiterea în judecată a inculpaţilor POPA VASILE CONSTANTIN, pentru săvârşirea infracţiunii de luare de mită, prev. de art. 6 din L. 78/2000 rap. la art. 289 din Codul penal  rap. la art. 7 al. 1 lit. b din L. 78/2000; infracţiunii de şantaj, prev. de art. 207 al. 1 din Codul penal, cu aplic. art. 13 ind. 1 din L. 78/2000; 3 infracţiuni de abuz în serviciu, prev. de art. 13 ind. 2 din L. 78/2000 cu referire la art. 297 al. 1 din Codul penal; 3 infracţiuni de distrugere de înscrisuri prev. de art. 242 al. 1 şi 3 din Codul penal; 3 infracţiuni de favorizare a făptuitorului, prev. de art. 269 al. 1 din Codul penal; infracţiunii de instigare la efectuarea unor prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 47 din Codul penal rap. la art. 156 din Legea nr. 95/2006 şi a infracţiunii de trafic de influenţă prev. de art. 6 din Legea nr. 78/2000 rap. la art. 291 din Codul penal rap. la art. 7 al. 1 lit. b din Legea nr. 78/2000; MIHALACHE GABRIEL CONSTANTIN, pentru săvârşirea infracţiunii de efectuare a unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 156 din Legea nr. 95/2006 republicată şi DAVID FLORIAN ALIN, pentru săvârşirea infracţiunii de cumpărare de influenţă, prev. de art. 6 din Legea nr. 78/2000 rap. la art. 292 din Codul penal, cu aplicarea art. 5 din Codul penal. 
 
-"""
-    # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Voluntari, str. Drumul Potcoavei nr 120, bl B, sc B, et 1, ap 5B, avand CI cu CNP 1760126413223, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 nu detine averi ilicite""",
+# """
+    'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Voluntari, str. Drumul Potcoavei nr 120, bl B, sc B, et 1, ap 5B, avand CI cu CNP 1760126413223, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 nu detine averi ilicite""",
     
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126413223 serie RK, numar 897567 nu detine averi ilicite"""
         
