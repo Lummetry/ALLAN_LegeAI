@@ -421,7 +421,7 @@ class GetConfWorker(FlaskWorker):
             
         return res
     
-    def match_institution(self, text, insts,
+    def match_institution(self, text, insts, matches,
                           removeDots=True                     
                          ):
         """ Return the position of all the matches for institutions in a text. """
@@ -448,20 +448,37 @@ class GetConfWorker(FlaskWorker):
                     break
                 else:
                     add_match = True
+                    end = start + len(normalized_inst)
                     
-                    # Check for overlapping matches
-                    for (s, t) in res.items():
-                        e = t[1]
-                        if start >= s and start < e:
-                            add_match = False
-                            if len(normalized_inst) > e - s:
-                                # Choose the larger name
-                                res.pop(s)
-                                add_match = True
-                            break
+                    # Check if the match is delimitated
+                    if text[start -1].isalpha() or text[end].isalpha():
+                        add_match = False
                     
                     if add_match:
-                        res[start] = [start, start + len(normalized_inst), 'INSTITUTION']
+                        # Check for overlapping matches
+                        for (s, t) in res.items():
+                            e = t[1]
+                            if start >= s and start < e:
+                                add_match = False
+                                if len(normalized_inst) > e - s:
+                                    # Choose the larger name
+                                    res.pop(s)
+                                    add_match = True
+                                break
+                    
+                    if add_match:
+                    
+                        # Check if it was part of any previous match
+                        contained = False
+                        
+                        for (prev_start, prev_match) in matches.items():
+                            prev_end = prev_match[1]
+                            if (prev_start <= start and start < prev_end) or (prev_start < end and end <= prev_end):
+                                contained = True
+                                break
+                        
+                        if not contained:
+                            res[start] = [start, end, 'INSTITUTION']
                         if self.debug:
                             print(normalized_inst)
                 
@@ -532,11 +549,12 @@ class GetConfWorker(FlaskWorker):
         # Match phone
         matches.update(self.match_phone(doc, check_strength=PHONE_REG_VALID))
         
-        # Match institutions
-        matches.update(self.match_institution(doc, insts=self.institution_list, removeDots=True))
-        
         # Match IBAN
         matches.update(self.match_iban(doc))
+        
+        # Match institutions
+        matches.update(self.match_institution(doc, insts=self.institution_list, 
+                                              matches, removeDots=True))
               
         return doc, matches, person_dict
 
