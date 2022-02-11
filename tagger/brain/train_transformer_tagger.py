@@ -15,13 +15,15 @@ from tensorflow import keras
 import sys
 import random
 import os
+import time
 
-MAX_LENGTH = 128
-BATCH_SIZE = 8
-EPOCHS = 10
+MAX_LENGTH = 16
+BATCH_SIZE = 128
+EPOCHS = 3
 
 DATA_PATH = "_cache/_data/20220209_211238"
 
+USE_GENERATOR = True
 
 def build_model(bert_model, number_of_labels):
 
@@ -29,7 +31,7 @@ def build_model(bert_model, number_of_labels):
     attention_mask = layers.Input(shape=(MAX_LENGTH,), dtype='int32', name="attention_mask")
     token_type_ids = layers.Input(shape=(MAX_LENGTH,), dtype='int32', name="token_type_ids")
 
-
+    bert_model.trainable = False
     bert_layer = bert_model([input_ids, attention_mask, token_type_ids])[0]
     # get cls output
     bert_output = layers.Lambda(lambda seq: seq[:, 0, :])(bert_layer)
@@ -46,23 +48,29 @@ def build_model(bert_model, number_of_labels):
     return model
 
 
-def build_dataset(documents, labels, number_of_labels, tokenizer):
+def build_dataset(documents, labels, labels_dict, tokenizer):
     
+    print("START")
     # build appropiate labels
     processed_labels = []
     for label in labels:
-        onehot_labels = [0 for _ in range(number_of_labels)]
+        onehot_labels = [0 for _ in range(len(labels_dict))]
         for l in label:
             onehot_labels[labels_dict[l]] = 1
         processed_labels.append(onehot_labels)
-
+    print("DONE LABELS")
     inputs = tokenizer(documents, padding="max_length", truncation=True, max_length=MAX_LENGTH, is_split_into_words=True)
-    inputs["input_ids"] = np.array(inputs["input_ids"])
-    inputs["attention_mask"] = np.array(inputs["attention_mask"])
-    inputs["token_type_ids"] = np.array(inputs["token_type_ids"])
+    print("DONE TOKENIZER")
 
-    tf_dataset = tf.data.Dataset.from_tensor_slices(((inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"]), processed_labels))
+    def generator():
+        for x in range(len(labels)):
+            yield (inputs["input_ids"][x], inputs["attention_mask"][x], inputs["token_type_ids"][x]), processed_labels[x]
 
+    if USE_GENERATOR == False:
+        tf_dataset = tf.data.Dataset.from_tensor_slices(((inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"]), processed_labels))
+    else:
+        # build generator
+        tf_dataset = tf.data.Dataset.from_generator(generator, output_types=((tf.int32, tf.int32, tf.int32), tf.int32),  output_shapes=(((MAX_LENGTH), (MAX_LENGTH), (MAX_LENGTH)), (len(labels_dict))))
     return tf_dataset
 
 
@@ -121,6 +129,7 @@ def load_data():
 
 if __name__ == "__main__":
 
+    st = time.time()
     train_documents, train_labels, dev_documents, dev_labels, test_documents, test_labels, labels_dict = load_data()
     
     bert_model = TFBertModel.from_pretrained("readerbench/jurBERT-base")
@@ -128,9 +137,13 @@ if __name__ == "__main__":
 
     model = build_model(bert_model, len(labels_dict))
 
-    train_dataset = build_dataset(train_documents, train_labels, len(labels_dict), tokenizer).batch(BATCH_SIZE)
-    dev_dataset = build_dataset(dev_documents, dev_labels, len(labels_dict), tokenizer).batch(BATCH_SIZE)
-    test_dataset = build_dataset(test_documents, test_labels, len(labels_dict), tokenizer).batch(BATCH_SIZE)
+    train_dataset = build_dataset(train_documents, train_labels, labels_dict, tokenizer).batch(BATCH_SIZE)
+    dev_dataset = build_dataset(dev_documents, dev_labels, labels_dict, tokenizer).batch(BATCH_SIZE)
+    test_dataset = build_dataset(test_documents, test_labels, labels_dict, tokenizer).batch(BATCH_SIZE)
 
-    model.fit(train_dataset, epochs=2, validation_data=dev_dataset)
-    model.evaluate(train_dataset)
+    model.fit(train_dataset, epochs=EPOCHS, validation_data=dev_dataset)
+    # model.evaluate(train_dataset)
+    model.evaluate(dev_dataset)
+    model.evaluate(test_dataset)
+
+    print(time.time()-st)
