@@ -38,6 +38,7 @@ MIN_LOC_LENGTH = 10
 ADDRESS_HAS_NUMBER = 0
 ADDRESS_MIN_TOKENS = 1
 ADDRESS_MERGE_DIST = 3
+ADDRESS_INCLUDE_GPE = 4
 
 # EMAIL
 EMAIL_REG = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
@@ -337,15 +338,63 @@ class GetConfWorker(FlaskWorker):
                 
         return matches, person_dict        
     
-    def match_address(self, nlp, text,
-                      address_checks=[]
-                      ):
-        """ Return the position of addresses in a text. """
+    def remove_punct_tokens(self, doc):
+        ''' 
+        Remove the punctuation tokens from a Doc.
+        Returns the new text along with the positions of the new tokens in the original text.
+        '''
+        
+        # Remove the punctuation
+        token_pos_dict = {}
+        new_text = []
+    
+        new_index = 0
+        for d in doc:
+            # Only keep non-punctuation tokens
+            if not d.is_punct:
+                new_text.append(d.text)
+                # Keep track of the position of the token in the original text
+                token_pos_dict[new_index] = (d.idx, d.idx + len(d))
+                new_index += 1
+        
+        # Get the new text
+        new_text = ' '.join(new_text)
+        
+        return new_text, token_pos_dict
+    
+    def get_entity_original_pos(self, e, token_pos_dict):
+        ''' Get the start and end positions of an entity in the original text. '''
+        
+        (start, _) = token_pos_dict[e.start]
+        (_, end) = token_pos_dict[e.end - 1]
+        
+        return start, end
+    
+    def match_address(self, nlp, text, 
+                      address_checks=[ADDRESS_INCLUDE_GPE]
+                     ):
+        """ Return the position of address entities in a text. """
         matches = {}    
         
         doc = nlp(text)
+    
+        # Get the new text, with punctuation removed
+        new_text, token_pos_dict = self.remove_punct_tokens(doc)
         
-        for ent in doc.ents:
+        # Build a new spaCy Doc
+        doc_rp = nlp(new_text)
+        
+        # Add all GPE entities
+        if ADDRESS_INCLUDE_GPE in address_checks:
+            for ent in doc_rp.ents:
+    
+                if ent.label_ == 'GPE':
+                    orig_start, orig_end = self.get_entity_original_pos(ent, token_pos_dict)
+                    matches[orig_start] = [orig_start, orig_end, "ADRESA"]
+                    print(ent)
+        
+        # Check all LOC entities
+        for ent in doc_rp.ents:
                 
             if ent.label_ == 'LOC':
                 
@@ -360,22 +409,24 @@ class GetConfWorker(FlaskWorker):
                                 break
                     
                     if is_match:
+                        orig_start, orig_end = self.get_entity_original_pos(ent, token_pos_dict)
                         
                         # Check if it could be merged with nearby address
                         merged = False
                         
-                        for (start, m) in matches.items():
+                        for (s, m) in matches.items():
                             match_type = m[2]
-                            end = m[1]
+                            e = m[1]
                             
-                            if match_type == 'ADRESA' and ent.start_char - end < ADDRESS_MERGE_DIST:
+                            if match_type == 'ADRESA' and (abs(orig_start - e) < ADDRESS_MERGE_DIST 
+                                                           or abs(orig_end - s) < ADDRESS_MERGE_DIST):
                                 # If the match is close enough
-                                matches[start] = [start, ent.end_char, "ADRESA"]
+                                matches[min(s, orig_start)] = [min(s, orig_start), max(e, orig_end), "ADRESA"]
                                 merged = True
                                 break
-                                
+    
                         if not merged:
-                            matches[ent.start_char] = [ent.start_char, ent.end_char, "ADRESA"]
+                            matches[orig_start] = [orig_start, orig_end, "ADRESA"]
                             
                         if self.debug:
                             print(ent)
@@ -556,7 +607,7 @@ class GetConfWorker(FlaskWorker):
             print(person_dict)
             
         # Match addresses
-        matches.update(self.match_address(self.nlp_model, doc, address_checks=[]))
+        matches.update(self.match_address(self.nlp_model, doc, address_checks=[ADDRESS_INCLUDE_GPE]))
 
         # Match phone
         matches.update(self.match_phone(doc, check_strength=PHONE_REG_VALID))
@@ -640,9 +691,9 @@ if __name__ == '__main__':
 # Pentru a pronunţa această sentinţă, prima instanţă a reţinut că prin rechizitoriul nr. 421/P/2013 din 17.12.2014 al Parchetului de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia Naţională Anticorupţie, înregistrat la Curtea de Apel Oradea sub nr. dosar 490/35/2014 la data de 19.12.2014, s-a dispus trimiterea în judecată a inculpaţilor POPA VASILE CONSTANTIN, pentru săvârşirea infracţiunii de luare de mită, prev. de art. 6 din L. 78/2000 rap. la art. 289 din Codul penal  rap. la art. 7 al. 1 lit. b din L. 78/2000; infracţiunii de şantaj, prev. de art. 207 al. 1 din Codul penal, cu aplic. art. 13 ind. 1 din L. 78/2000; 3 infracţiuni de abuz în serviciu, prev. de art. 13 ind. 2 din L. 78/2000 cu referire la art. 297 al. 1 din Codul penal; 3 infracţiuni de distrugere de înscrisuri prev. de art. 242 al. 1 şi 3 din Codul penal; 3 infracţiuni de favorizare a făptuitorului, prev. de art. 269 al. 1 din Codul penal; infracţiunii de instigare la efectuarea unor prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 47 din Codul penal rap. la art. 156 din Legea nr. 95/2006 şi a infracţiunii de trafic de influenţă prev. de art. 6 din Legea nr. 78/2000 rap. la art. 291 din Codul penal rap. la art. 7 al. 1 lit. b din Legea nr. 78/2000; MIHALACHE GABRIEL CONSTANTIN, pentru săvârşirea infracţiunii de efectuare a unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 156 din Legea nr. 95/2006 republicată şi DAVID FLORIAN ALIN, pentru săvârşirea infracţiunii de cumpărare de influenţă, prev. de art. 6 din Legea nr. 78/2000 rap. la art. 292 din Codul penal, cu aplicarea art. 5 din Codul penal. 
 
 # """
-    'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Voluntari, str. Drumul Potcoavei nr 120, bl B, sc B, et 1, ap 5B, avand CI cu CNP 1760126413223, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 nu detine averi ilicite""",
+    # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Voluntari, str. Drumul Potcoavei nr 120, bl B, sc B, et 1, ap 5B, avand CI cu CNP 1760126413223, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 nu detine averi ilicite""",
     
-    # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126413223 serie RK, numar 897567 nu detine averi ilicite"""
+    'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126413223 serie RK, numar 897567 nu detine averi ilicite"""
         
       }
   
