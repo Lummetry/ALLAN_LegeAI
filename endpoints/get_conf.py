@@ -39,6 +39,7 @@ ADDRESS_HAS_NUMBER = 0
 ADDRESS_MIN_TOKENS = 1
 ADDRESS_MERGE_DIST = 3
 ADDRESS_INCLUDE_GPE = 4
+ADDRESS_REMOVE_PUNCT = 5
 
 # EMAIL
 EMAIL_REG = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
@@ -370,14 +371,80 @@ class GetConfWorker(FlaskWorker):
         
         return start, end
     
+    def check_loc_entities(self, doc, matches, address_checks,
+                           token_pos_dict=None):
+        ''' Check the LOC entities in a Doc. '''
+        
+        for ent in doc.ents:
+               
+            if ent.label_ == 'LOC':
+                if len(ent.text) > MIN_LOC_LENGTH and (ent.end - ent.start) > ADDRESS_MIN_TOKENS:
+                    is_match = True
+    
+                    if ADDRESS_HAS_NUMBER in address_checks:
+                        is_match = False
+                        for token in doc[ent.start : ent.end]:
+                            if token.is_digit:
+                                is_match = True
+                                break
+    
+                    if is_match:
+                        if token_pos_dict:
+                            # If a position dictionary for the Tokens was given, make the changes
+                            orig_start, orig_end = self.get_entity_original_pos(ent, token_pos_dict)
+                        else:
+                            orig_start, orig_end = ent.start_char, ent.end_char
+    
+                        # Check if it could be merged with nearby address
+                        merged = False
+    
+                        for (s, m) in matches.items():
+                            match_type = m[2]
+                            e = m[1]
+                            
+                            if match_type == 'ADRESA' and (max(s, orig_start) - min(e, orig_end)) < ADDRESS_MERGE_DIST:
+                                # If the matches are overlapping or are close enough
+                                matches[min(s, orig_start)] = [min(s, orig_start), max(e, orig_end), "ADRESA"]
+                                merged = True
+                                break
+    
+                        if not merged:
+                            matches[orig_start] = [orig_start, orig_end, "ADRESA"]
+                        print(ent)
+                        
+        return matches
+    
     def match_address(self, nlp, text, 
-                      address_checks=[ADDRESS_INCLUDE_GPE]
+                      address_checks=[ADDRESS_INCLUDE_GPE, ADDRESS_REMOVE_PUNCT]
                      ):
         """ Return the position of address entities in a text. """
         matches = {}    
         
         doc = nlp(text)
+        
+        # Add all GPE entities
+        if ADDRESS_INCLUDE_GPE in address_checks:
+            for ent in doc.ents:
+                if ent.label_ == 'GPE':
+                    matches[ent.start_char] = [ent.start_char, ent.end_char, "ADRESA"]
+                    if self.debug:
+                        print(ent)
     
+        # Check all LOC entities from initial Doc
+        matches = self.check_loc_entities(doc, matches, address_checks)  
+        
+        # Remove punctuation and check LOC entities again
+        if ADDRESS_REMOVE_PUNCT in address_checks:
+            
+            # Get the new text, with punctuation removed
+            new_text, token_pos_dict = remove_punct_tokens(doc)
+    
+            # Build a new spaCy Doc
+            doc_rp = nlp(new_text)
+            
+            matches = check_loc_entities(doc_rp, matches, address_checks,
+                                         token_pos_dict=token_pos_dict)   
+        
         # Get the new text, with punctuation removed
         new_text, token_pos_dict = self.remove_punct_tokens(doc)
         
@@ -391,7 +458,9 @@ class GetConfWorker(FlaskWorker):
                 if ent.label_ == 'GPE':
                     orig_start, orig_end = self.get_entity_original_pos(ent, token_pos_dict)
                     matches[orig_start] = [orig_start, orig_end, "ADRESA"]
-                    print(ent)
+                    
+                    if self.debug:
+                        print(ent)
         
         # Check all LOC entities
         for ent in doc_rp.ents:
