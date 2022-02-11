@@ -17,8 +17,8 @@ import random
 import os
 import time
 
-MAX_LENGTH = 16
-BATCH_SIZE = 128
+MAX_LENGTH = 64
+BATCH_SIZE = 16
 EPOCHS = 3
 
 DATA_PATH = "_cache/_data/20220209_211238"
@@ -30,7 +30,7 @@ def build_model(bert_model, number_of_labels):
     input_ids      = layers.Input(shape=(MAX_LENGTH,), dtype='int64', name="input_ids")
     attention_mask = layers.Input(shape=(MAX_LENGTH,), dtype='int32', name="attention_mask")
 
-    bert_model.trainable = False
+    # bert_model.trainable = False
     bert_layer = bert_model([input_ids, attention_mask])[0]
     # get cls output
     bert_output = layers.Lambda(lambda seq: seq[:, 0, :])(bert_layer)
@@ -124,6 +124,7 @@ def load_data(tokenizer):
         documents = pickle.load(open(DATA_PATH + "_x_data.pkl", "rb"))
         inputs = tokenizer(documents, padding="max_length", truncation=True, max_length=MAX_LENGTH, is_split_into_words=True)
         pickle.dump([inputs["input_ids"], inputs["attention_mask"]], open(DATA_PATH+"_x_data_inputs_len{0}.pkl".format(MAX_LENGTH), "wb"))
+        inputs = [inputs["input_ids"], inputs["attention_mask"]]
     else:
         inputs = pickle.load(open(DATA_PATH + "_x_data_inputs_len{0}.pkl".format(MAX_LENGTH), "rb"))
         
