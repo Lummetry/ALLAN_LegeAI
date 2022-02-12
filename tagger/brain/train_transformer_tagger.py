@@ -16,14 +16,29 @@ import sys
 import random
 import os
 import time
+from sklearn.metrics import classification_report
 
 MAX_LENGTH = 64
 BATCH_SIZE = 16
-EPOCHS = 3
+EPOCHS = 4
 
 DATA_PATH = "_cache/_data/20220209_211238"
 
-USE_GENERATOR = True
+USE_GENERATOR = False
+
+def multiclass_rec(y, y_hat, top_k=None):
+    m = tf.keras.metrics.Recall(top_k=top_k)
+    m.update_state(y, y_hat)
+    res = m.result().numpy()
+    return res
+
+
+def multiclass_prec(y, y_hat, top_k=None):
+    m = tf.keras.metrics.Precision(top_k=top_k)
+    m.update_state(y, y_hat)
+    res = m.result().numpy()
+    return res
+
 
 def build_model(bert_model, number_of_labels):
 
@@ -42,7 +57,7 @@ def build_model(bert_model, number_of_labels):
 
     model.summary()
 
-    model.compile(tf.keras.optimizers.Adam(lr=1e-5), loss='binary_crossentropy', metrics=[tf.keras.metrics.AUC()])
+    model.compile(tf.keras.optimizers.Adam(lr=1e-5), loss='binary_crossentropy', metrics=[])
 
     return model
 
@@ -136,6 +151,30 @@ def load_data(tokenizer):
 
     return train_documents, train_labels, dev_documents, dev_labels, test_documents, test_labels, labels_dict
 
+class MetricsCallback(keras.callbacks.Callback):
+    def __init__(self, data):
+        self.data = data
+        self.y_true = []
+        for x in self.data:
+            self.y_true.extend(x[1])
+        self.y_true = np.array(self.y_true)
+        
+    def on_epoch_end(self, epoch, logs=None):
+
+        y_pred = self.model.predict(self.data)
+        print(flush=True)
+        ks = [1,3,5,None]
+        for k in ks:
+            rec = multiclass_rec(self.y_true, y_pred, top_k = k)
+            prc = multiclass_prec(self.y_true, y_pred, top_k = k)
+                        
+            if k == None:
+                k = len(y_pred[0])
+            
+            print("Recall:", rec, "Precision:", prc, "@{0}".format(k))
+
+
+
 
 if __name__ == "__main__":
 
@@ -145,13 +184,15 @@ if __name__ == "__main__":
 
     train_inputs, train_labels, dev_inputs, dev_labels, test_inputs, test_labels, labels_dict = load_data(tokenizer)
 
-    train_dataset = build_dataset(train_inputs, train_labels, labels_dict, tokenizer).batch(BATCH_SIZE)
+    train_dataset = build_dataset(train_inputs, train_labels, labels_dict, tokenizer).shuffle(10000).batch(BATCH_SIZE)
     dev_dataset = build_dataset(dev_inputs, dev_labels, labels_dict, tokenizer).batch(BATCH_SIZE)
     test_dataset = build_dataset(test_inputs, test_labels, labels_dict, tokenizer).batch(BATCH_SIZE)
 
+    dev_callback = MetricsCallback(dev_dataset)
+
     model = build_model(bert_model, len(labels_dict))
 
-    model.fit(train_dataset, epochs=EPOCHS, validation_data=dev_dataset)
+    model.fit(train_dataset, epochs=EPOCHS, callbacks=[dev_callback])
     model.evaluate(dev_dataset)
     model.evaluate(test_dataset)
 
