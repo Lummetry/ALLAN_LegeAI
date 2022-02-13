@@ -18,13 +18,13 @@ import os
 import time
 from sklearn.metrics import classification_report
 
-MAX_LENGTH = 64
-BATCH_SIZE = 16
-EPOCHS = 4
+MAX_LENGTH = 128
+BATCH_SIZE = 8
+EPOCHS = 5
 
 DATA_PATH = "_cache/_data/20220209_211238"
 
-USE_GENERATOR = False
+USE_GENERATOR = True
 
 def multiclass_rec(y, y_hat, top_k=None):
     m = tf.keras.metrics.Recall(top_k=top_k)
@@ -164,14 +164,30 @@ class MetricsCallback(keras.callbacks.Callback):
         y_pred = self.model.predict(self.data)
         print(flush=True)
         ks = [1,3,5,None]
+
+        sorted_zip = [sorted(zip(y_pred[i], self.y_true[i]), reverse=True) for i in range(len(y_pred))]
+        sorted_y_pred = np.array([list(map(lambda x: x[0], z)) for z in sorted_zip])
+        sorted_y_true = np.array([list(map(lambda x: x[1], z)) for z in sorted_zip])
+
         for k in ks:
             rec = multiclass_rec(self.y_true, y_pred, top_k = k)
-            prc = multiclass_prec(self.y_true, y_pred, top_k = k)
-                        
+            prec = multiclass_prec(self.y_true, y_pred, top_k = k)
+
+            correct = 0
+            total = 0 
+
             if k == None:
                 k = len(y_pred[0])
-            
-            print("Recall:", rec, "Precision:", prc, "@{0}".format(k))
+
+            for i in range(len(y_pred)):
+                binary_preds = (sorted_y_pred[i][:k] > 0.5).astype(np.uint8)
+                correct += (binary_preds==sorted_y_true[i][:k]).sum()
+                total += k
+
+            f1 = 2 * prec * rec / (prec + rec)
+            acc = 1.0 * correct / total
+            print("Recall: {0:.4f} Precision: {1:.4f} F1: {2:.4f} Acc: {3:.4f} @{4}".format(rec, prec, f1, acc, k))
+
 
 
 
@@ -193,7 +209,4 @@ if __name__ == "__main__":
     model = build_model(bert_model, len(labels_dict))
 
     model.fit(train_dataset, epochs=EPOCHS, callbacks=[dev_callback])
-    model.evaluate(dev_dataset)
-    model.evaluate(test_dataset)
-
     print(time.time()-st)
