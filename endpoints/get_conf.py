@@ -4,6 +4,7 @@ from libraries.model_server_v2 import FlaskWorker
 
 import constants as ct
 import spacy
+from spacy.matcher import DependencyMatcher
 import re
 import phonenumbers
 from string import punctuation
@@ -264,7 +265,7 @@ class GetConfWorker(FlaskWorker):
             
         return is_match, start, end    
     
-    def match_name(self, nlp, text,
+    def match_name(self, nlp, doc, text,
                    person_checks=[]
                    ):
         """ Return the position of namess in a text. """
@@ -272,8 +273,6 @@ class GetConfWorker(FlaskWorker):
         
         if type(person_checks) == int:
             person_checks = [person_checks]
-        
-        doc = nlp(text)
         
         person_dict = {}
         current_code = 'A'
@@ -410,17 +409,17 @@ class GetConfWorker(FlaskWorker):
     
                         if not merged:
                             matches[orig_start] = [orig_start, orig_end, "ADRESA"]
-                        print(ent)
+                        
+                        if self.debug:
+                            print(ent)
                         
         return matches
     
-    def match_address(self, nlp, text, 
+    def match_address(self, nlp, doc, text, 
                       address_checks=[ADDRESS_INCLUDE_GPE, ADDRESS_REMOVE_PUNCT]
                      ):
         """ Return the position of address entities in a text. """
         matches = {}    
-        
-        doc = nlp(text)
         
         # Add all GPE entities
         if ADDRESS_INCLUDE_GPE in address_checks:
@@ -437,68 +436,13 @@ class GetConfWorker(FlaskWorker):
         if ADDRESS_REMOVE_PUNCT in address_checks:
             
             # Get the new text, with punctuation removed
-            new_text, token_pos_dict = remove_punct_tokens(doc)
+            new_text, token_pos_dict = self.remove_punct_tokens(doc)
     
             # Build a new spaCy Doc
             doc_rp = nlp(new_text)
             
-            matches = check_loc_entities(doc_rp, matches, address_checks,
-                                         token_pos_dict=token_pos_dict)   
-        
-        # Get the new text, with punctuation removed
-        new_text, token_pos_dict = self.remove_punct_tokens(doc)
-        
-        # Build a new spaCy Doc
-        doc_rp = nlp(new_text)
-        
-        # Add all GPE entities
-        if ADDRESS_INCLUDE_GPE in address_checks:
-            for ent in doc_rp.ents:
-    
-                if ent.label_ == 'GPE':
-                    orig_start, orig_end = self.get_entity_original_pos(ent, token_pos_dict)
-                    matches[orig_start] = [orig_start, orig_end, "ADRESA"]
-                    
-                    if self.debug:
-                        print(ent)
-        
-        # Check all LOC entities
-        for ent in doc_rp.ents:
-                
-            if ent.label_ == 'LOC':
-                
-                if len(ent.text) > MIN_LOC_LENGTH and (ent.end - ent.start) > ADDRESS_MIN_TOKENS:
-                    is_match = True
-                    
-                    if ADDRESS_HAS_NUMBER in address_checks:
-                        is_match = False
-                        for token in doc[ent.start : ent.end]:
-                            if token.is_digit:
-                                is_match = True
-                                break
-                    
-                    if is_match:
-                        orig_start, orig_end = self.get_entity_original_pos(ent, token_pos_dict)
-                        
-                        # Check if it could be merged with nearby address
-                        merged = False
-                        
-                        for (s, m) in matches.items():
-                            match_type = m[2]
-                            e = m[1]
-                            
-                            if match_type == 'ADRESA' and (abs(orig_start - e) < ADDRESS_MERGE_DIST 
-                                                           or abs(orig_end - s) < ADDRESS_MERGE_DIST):
-                                # If the match is close enough
-                                matches[min(s, orig_start)] = [min(s, orig_start), max(e, orig_end), "ADRESA"]
-                                merged = True
-                                break
-    
-                        if not merged:
-                            matches[orig_start] = [orig_start, orig_end, "ADRESA"]
-                            
-                        if self.debug:
-                            print(ent)
+            matches = self.check_loc_entities(doc_rp, matches, address_checks,
+                                              token_pos_dict=token_pos_dict)
                 
         return matches
     
@@ -633,6 +577,123 @@ class GetConfWorker(FlaskWorker):
                 print(match)
         
         return res
+    
+    def birthdate_matcher(self):
+        ''' Get the spaCy Dependency Matcher for birthdate'''
+        
+        matcher = DependencyMatcher(self.nlp_model.vocab)
+        
+        nascut_syn = ["nascut", "nascuta", "nascuti", "nascute", "naste",
+                      "născut", "născută", "născuți", "născute", "naște"]
+    
+        nastere_syn = ["nasterii", "nașterii"]
+    
+        date_shape = ["dd.dd.dddd", "dd/dd/dddd", "dd-dd-dddd",
+                      "dd.dd.dd", "dd/dd/dd", "dd-dd-dd",
+                      "dddd.dd.dd", "dddd/dd/dd", "dddd-dd-dd",
+                     ]
+    
+        birthdate_pattern1 = [
+    
+            # nascuta la data 20.05.1989
+            [{"RIGHT_ID" : "anch_nascut", "RIGHT_ATTRS" : {"ORTH" : {"IN" : nascut_syn}}},
+             {"LEFT_ID" : "anch_nascut", "REL_OP" : ">", "RIGHT_ID" : "anch_data", "RIGHT_ATTRS" : {"LEMMA" : "dată"}},
+             {"LEFT_ID" : "anch_data", "REL_OP" : ">", "RIGHT_ID" : "data", "RIGHT_ATTRS" : {"DEP" : {"IN" : ["nummod", "nmod"]},
+                                                                                             "SHAPE" : {"IN" : date_shape}}}
+            ],
+    
+            # data nasterii 20.05.1989
+            [{"RIGHT_ID" : "anch_data", "RIGHT_ATTRS" : {"LEMMA" : "dată"}},
+             {"LEFT_ID" : "anch_data", "REL_OP" : ">", "RIGHT_ID" : "anch_nastere", "RIGHT_ATTRS" : {"ORTH" : {"IN" : nastere_syn}}},
+             {"LEFT_ID" : "anch_nastere", "REL_OP" : ">", "RIGHT_ID" : "data", "RIGHT_ATTRS" : {"DEP" : {"IN" : ["nummod", "nmod"]},
+                                                                                                "SHAPE" : {"IN" : date_shape}}}
+            ],
+        ]
+        matcher.add("birthdate1", birthdate_pattern1)
+    
+        birthdate_pattern2 = [
+    
+            # nascuta la data 20 iunie 1989
+            [{"RIGHT_ID" : "anch_nascut", "RIGHT_ATTRS" : {"ORTH" : {"IN" : nascut_syn}}},
+             {"LEFT_ID" : "anch_nascut", "REL_OP" : ">", "RIGHT_ID" : "anch_data", "RIGHT_ATTRS" : {"LEMMA" : "dată"}},
+             {"LEFT_ID" : "anch_data", "REL_OP" : ">", "RIGHT_ID" : "luna", "RIGHT_ATTRS" : {"DEP" : "nmod"}},
+             {"LEFT_ID" : "luna", "REL_OP" : ";", "RIGHT_ID" : "zi", "RIGHT_ATTRS" : {"DEP" : "nummod"}},
+             {"LEFT_ID" : "luna", "REL_OP" : ".", "RIGHT_ID" : "an", "RIGHT_ATTRS" : {"DEP" : "nummod"}}
+            ],
+    
+            # data nasterii 20 mai 1989
+            [{"RIGHT_ID" : "anch_data", "RIGHT_ATTRS" : {"LEMMA" : "dată"}},
+             {"LEFT_ID" : "anch_data", "REL_OP" : ">", "RIGHT_ID" : "anch_nastere", "RIGHT_ATTRS" : {"ORTH" : {"IN" : nastere_syn}}},
+             {"LEFT_ID" : "anch_nastere", "REL_OP" : ">", "RIGHT_ID" : "luna", "RIGHT_ATTRS" : {"DEP" : "nmod"}},
+             {"LEFT_ID" : "luna", "REL_OP" : ";", "RIGHT_ID" : "zi", "RIGHT_ATTRS" : {"DEP" : "nummod"}},
+             {"LEFT_ID" : "luna", "REL_OP" : ".", "RIGHT_ID" : "an", "RIGHT_ATTRS" : {"DEP" : "nummod"}}
+            ],
+        ]
+        matcher.add("birthdate2", birthdate_pattern2)
+    
+        birthdate_pattern3 = [
+    
+            # nascuta la 20.05.1989
+            [{"RIGHT_ID" : "anch_nascut", "RIGHT_ATTRS" : {"ORTH" : {"IN" : nascut_syn}}},
+             {"LEFT_ID" : "anch_nascut", "REL_OP" : ">", "RIGHT_ID" : "data", "RIGHT_ATTRS" : {"DEP" : {"IN" : ["nummod", "nmod"]},
+                                                                                             "SHAPE" : {"IN" : date_shape}}}
+            ],
+        ]
+        matcher.add("birthdate3", birthdate_pattern3)  
+
+        birthdate_pattern4 = [
+    
+            # nascuta pe 20 mai 1989
+            [{"RIGHT_ID" : "anch_nascut", "RIGHT_ATTRS" : {"ORTH" : {"IN" : nascut_syn}}},
+             {"LEFT_ID" : "anch_nascut", "REL_OP" : ">", "RIGHT_ID" : "luna", "RIGHT_ATTRS" : {"DEP" : {"IN" : ["nummod", "nmod", "obl"]}}},
+             {"LEFT_ID" : "luna", "REL_OP" : ";", "RIGHT_ID" : "zi", "RIGHT_ATTRS" : {"DEP" : "nummod"}},
+             {"LEFT_ID" : "luna", "REL_OP" : ".", "RIGHT_ID" : "an", "RIGHT_ATTRS" : {"DEP" : "nummod"}}
+            ],
+        ]
+        matcher.add("birthdate4", birthdate_pattern4)   
+        
+        return matcher
+    
+    def get_birthdate_interval(self, doc, match):
+        
+        match_name = doc.vocab.strings[match[0]]
+        match_tokens = match[1]
+        
+        if match_name == 'birthdate1':
+            start = doc[match_tokens[2]].idx
+            end = start + len(doc[match_tokens[2]].text) 
+            
+        elif match_name == 'birthdate2':
+            start = doc[match_tokens[3]].idx
+            end = doc[match_tokens[4]].idx + len(doc[match_tokens[4]].text)
+            
+        elif match_name == 'birthdate3':
+            start = doc[match_tokens[1]].idx
+            end = start + len(doc[match_tokens[1]].text) 
+        
+        elif match_name == 'birthdate4':
+            print(match_tokens)
+            start = doc[match_tokens[2]].idx
+            end = doc[match_tokens[3]].idx + len(doc[match_tokens[3]].text)
+            
+        return start, end
+    
+    def match_birthdate(self, doc, text):
+        """ Return the position of all the matches for birthdate in a text. """
+        
+        res = {}
+        
+        matcher = self.birthdate_matcher()
+        spacy_matches = matcher(doc)
+        
+        for match in spacy_matches:        
+            start, end = self.get_birthdate_interval(doc, match)
+            res[start] = [start, end, 'NASTERE']
+            
+            if self.debug: 
+                print(match)
+                
+        return res
         
     #######
     # AUX #
@@ -643,32 +704,35 @@ class GetConfWorker(FlaskWorker):
     
     def _pre_process(self, inputs):
                 
-        doc = inputs['DOCUMENT']
-        if len(doc) < ct.MODELS.TAG_MIN_INPUT:
+        text = inputs['DOCUMENT']
+        if len(text) < ct.MODELS.TAG_MIN_INPUT:
           raise ValueError("Document: '{}' is below the minimum of {} words".format(
-            doc, ct.MODELS.TAG_MIN_INPUT))
+            text, ct.MODELS.TAG_MIN_INPUT))
           
         self.debug = bool(inputs.get('DEBUG', False))
+        
+        # Apply spaCy analysis
+        doc = self.nlp_model(text)
     
-        return doc
+        return text, doc
 
     def _predict(self, prep_inputs):
         
-        doc = prep_inputs    
+        text, doc = prep_inputs    
         
         matches = {}
         
         # Match CNPS
-        matches.update(self.match_cnp(doc))
+        matches.update(self.match_cnp(text))
         
         # Match Serie Numar CI
-        matches.update(self.match_serie_numar(doc))
+        matches.update(self.match_serie_numar(text))
     
         # Match email
-        matches.update(self.match_email(doc))
+        matches.update(self.match_email(text))
         
         # Match names
-        name_matches, person_dict = self.match_name(self.nlp_model, doc, 
+        name_matches, person_dict = self.match_name(self.nlp_model, doc, text, 
                                                     person_checks=[PERSON_PROPN, PERSON_UPPERCASE, PERSON_TWO_WORDS])
         
         matches.update(name_matches)  
@@ -676,19 +740,23 @@ class GetConfWorker(FlaskWorker):
             print(person_dict)
             
         # Match addresses
-        matches.update(self.match_address(self.nlp_model, doc, address_checks=[ADDRESS_INCLUDE_GPE]))
+        matches.update(self.match_address(self.nlp_model, doc, text, 
+                                          address_checks=[ADDRESS_INCLUDE_GPE, ADDRESS_REMOVE_PUNCT]))
 
         # Match phone
-        matches.update(self.match_phone(doc, check_strength=PHONE_REG_VALID))
+        matches.update(self.match_phone(text, check_strength=PHONE_REG_VALID))
         
         # Match IBAN
-        matches.update(self.match_iban(doc))
+        matches.update(self.match_iban(text))
         
         # Match institutions
-        matches.update(self.match_institution(doc, insts=self.institution_list, 
+        matches.update(self.match_institution(text, insts=self.institution_list, 
                                               matches=matches, removeDots=True))
+        
+        # Match birthdate
+        matches.update(self.match_birthdate(doc, text))
               
-        return doc, matches, person_dict
+        return text, matches, person_dict
 
     def _post_process(self, pred):
         
@@ -762,7 +830,7 @@ if __name__ == '__main__':
 # """
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Voluntari, str. Drumul Potcoavei nr 120, bl B, sc B, et 1, ap 5B, avand CI cu CNP 1760126413223, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 nu detine averi ilicite""",
     
-    'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126413223 serie RK, numar 897567 nu detine averi ilicite"""
+    'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 , nascut pe data 24-01-1982, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Bucuresti, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126413223 serie RK, numar 897567 nu detine averi ilicite"""
         
       }
   
