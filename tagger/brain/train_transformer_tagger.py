@@ -18,24 +18,47 @@ import os
 import argparse
 import json
 import pandas as pd
+import copy
 
 
 parser = argparse.ArgumentParser(description='Training and evaluation file for transformer-based document-level multilabel classifier')
 parser.add_argument('-args_path', help='path to config file')
-parser.add_argument('-data_path', help='path + files desciptor (i.e. _cache/_data/20220209_211238)', required=True)
-parser.add_argument('-bert_max_seq_len', type=int, help='Bert maximum sequence length', required=True)
-parser.add_argument('-batch_size', type=int, help='training batch size', required=True)
+parser.add_argument('-data_path', help='path + files desciptor (i.e. _cache/_data/20220209_211238)')
+parser.add_argument('-model_path', help='path where to save model (in train mode) or path from where to load the model (in eval mode)')
+parser.add_argument('-bert_backbone', help='path (local) of huggingface name of bert backbone')
+parser.add_argument('-bert_max_seq_len', type=int, help='Bert maximum sequence length', default=64)
+parser.add_argument('-batch_size', type=int, help='training batch size', default=4)
 parser.add_argument('-learning_rate', type=float, help='Learning rate use for training the model', default=1e-5)
 parser.add_argument('-epochs', type=int, help='number of training epochs', default=5)
 parser.add_argument('-bert_frozen', default=False, action='store_true', help='flag to mark if the bert backbone if trainable or not')
 parser.add_argument('-use_generator', default=False, action='store_true', help='flag to mark the usage of generators rather than loading all data in tf.data.Dataset')
 parser.add_argument('-k', nargs='+', help='List of k\'s to use for evaluating metrics @k', default=[1, 3, 5])
+parser.add_argument('-run_type', default="train", help='train or eval run')
 args = parser.parse_args()
 
 if args.args_path != None:
     with open(args.args_path, 'r') as f:
         args.__dict__ = json.load(f)
 
+if args.run_type == "train":
+
+    if os.path.isdir(args.model_path):
+        print("{0} already exists!".format(args.model_path))
+        sys.exit()
+    else:
+        os.makedirs(args.model_path)
+
+    with open(args.model_path +"/train_config.json", 'w') as f:
+        json.dump(args.__dict__, f, indent = 2)
+
+    eval_args = copy.deepcopy(args.__dict__)
+    del eval_args['epochs']
+    del eval_args['args_path']
+    eval_args['run_type'] = "eval"
+    eval_args['model_path'] = eval_args['model_path'] + "/weights/"
+
+    with open(args.model_path +"/eval_config.json", 'w') as f:
+        json.dump(eval_args, f, indent = 2)
 
 def multiclass_rec(y, y_hat, top_k=None):
     m = tf.keras.metrics.Recall(top_k=top_k)
@@ -149,7 +172,6 @@ def load_data(tokenizer):
         inputs = [inputs["input_ids"], inputs["attention_mask"]]
     else:
         inputs = pickle.load(open(args.data_path + "_x_data_inputs_len{0}.pkl".format(args.bert_max_seq_len), "rb"))
-        
 
     labels = pickle.load(open(args.data_path + "_y_data.pkl", "rb"))
     labels_dict = pickle.load(open(args.data_path + "_labels_dict.pkl", "rb"))
@@ -179,7 +201,7 @@ class MetricsCallback(keras.callbacks.Callback):
         sorted_zip = [sorted(zip(y_pred[i], self.y_true[i]), reverse=True) for i in range(len(y_pred))]
         sorted_y_pred = np.array([list(map(lambda x: x[0], z)) for z in sorted_zip])
         sorted_y_true = np.array([list(map(lambda x: x[1], z)) for z in sorted_zip])
-
+        print(flush=True)
         for k in self.ks:
             rec = multiclass_rec(self.y_true, y_pred, top_k = k)
             prec = multiclass_prec(self.y_true, y_pred, top_k = k)
@@ -214,26 +236,45 @@ class MetricsCallback(keras.callbacks.Callback):
 
 if __name__ == "__main__":
 
-    bert_model = TFBertModel.from_pretrained("readerbench/jurBERT-base")
-    tokenizer = AutoTokenizer.from_pretrained("readerbench/jurBERT-base")
+    bert_model = TFBertModel.from_pretrained(args.bert_backbone)
+    tokenizer = AutoTokenizer.from_pretrained(args.bert_backbone)
 
     train_inputs, train_labels, dev_inputs, dev_labels, test_inputs, test_labels, labels_dict = load_data(tokenizer)
 
-    train_dataset = build_dataset(train_inputs, train_labels, labels_dict, tokenizer).shuffle(10000).batch(args.batch_size)
+
+    if args.run_type == 'train':
+        train_dataset = build_dataset(train_inputs, train_labels, labels_dict, tokenizer).shuffle(10000).batch(args.batch_size)
     dev_dataset = build_dataset(dev_inputs, dev_labels, labels_dict, tokenizer).batch(args.batch_size)
-    test_dataset = build_dataset(test_inputs, test_labels, labels_dict, tokenizer).batch(args.batch_size)
+    if args.run_type == 'eval':
+        test_dataset = build_dataset(test_inputs, test_labels, labels_dict, tokenizer).batch(args.batch_size)
+        test_callback = MetricsCallback(test_dataset)
 
-    dev_callback = MetricsCallback(dev_dataset)
-    checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath="logs/{epoch:02d}", save_weights_only = True)
-    
+    dev_callback = MetricsCallback(dev_dataset)    
     model = build_model(bert_model, len(labels_dict))
-    history = model.fit(train_dataset, epochs=args.epochs, callbacks=[dev_callback, checkpoint_callback])
 
-    hist_df = pd.DataFrame(history.history) 
-    hist_json_file = 'logs/history.json' 
-    with open(hist_json_file, mode='w') as f:
-        hist_df.to_json(f, indent=2)
+    if args.run_type == 'train':
+        checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath=args.model_path+"/weights/{epoch:02d}", save_weights_only = True)
+        
+        history = model.fit(train_dataset, epochs=args.epochs, callbacks=[dev_callback, checkpoint_callback])
 
-    # this is the evaluation
-    # r = dev_callback.on_epoch_end(0, {})
-    # print(r)
+        hist_df = pd.DataFrame(history.history) 
+        hist_json_file = '{0}/history.json'.format(args.model_path) 
+        with open(hist_json_file, mode='w') as f:
+            hist_df.to_json(f, indent=2)
+
+
+    elif args.run_type == 'eval':
+        model.load_weights(args.model_path)
+        
+        print("Dev results:", end="")
+        dev_callback.model = model
+        dev_results = dev_callback.on_epoch_end(0, {})
+        print(dev_results)
+        print()
+
+        print("Test results:",end="")
+        test_callback.model = model
+        test_results = test_callback.on_epoch_end(0, {})
+        print(test_results)
+        
+
