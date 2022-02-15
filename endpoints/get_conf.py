@@ -83,6 +83,16 @@ SERIE_CHECK = 1
 IBAN_REG = r'RO[ ]?\d{2}[ ]?\w{4}(?:[ ]?[A-Z0-9]{4}){4}'
 IBAN_REG = REG_START + IBAN_REG + REG_END
 
+# EU CASE
+EU_CASE_REGS = {
+    # C-XXX/XX
+    r'(?:C|T)-\d{2,3}\/\d{2}',
+    
+} 
+EU_CASE_REGS = [REG_START + r + REG_END for r in EU_CASE_REGS]
+ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
+MIN_CASE_DISTANCE = 20
+
 
 class GetConfWorker(FlaskWorker):
     """
@@ -694,6 +704,41 @@ class GetConfWorker(FlaskWorker):
                 print(match)
                 
         return res
+    
+    def match_eu_case(self, text):
+        """ Return the position of all the matches for EU cases in a text. """
+        
+        matches = re.findall(ALL_EU_CASE_REGS, text)
+        
+        res = []
+        for match in matches:   
+            res.append(self.find_match(match, text, res))
+            
+            if self.debug: 
+                print(match)
+                
+        return res
+    
+    def ignore_near_case_matches(self, matches, case_matches):
+        """ Remove matches close to an EU case match """
+        
+        new_matches = {}
+        for (m_start, m_end, m_type) in matches.values():
+            
+            near_match = False        
+            for (c_start, c_end) in case_matches:
+                
+                if max(c_start, m_start) - min(c_end, m_end) < MIN_CASE_DISTANCE:
+                    near_match = True
+                    break
+                    
+            if not near_match:
+                new_matches[m_start] = (m_start, m_end, m_type)
+                
+            elif self.debug: 
+                print('Removed', (m_start, m_end, m_type))
+                
+        return new_matches
         
     #######
     # AUX #
@@ -755,6 +800,11 @@ class GetConfWorker(FlaskWorker):
         
         # Match birthdate
         matches.update(self.match_birthdate(doc, text))
+        
+        # Match EU case and ignore nearby matches
+        cases = self.match_eu_case(text)
+        matches = self.ignore_near_case_matches(matches, cases)
+        
               
         return text, matches, person_dict
 
@@ -830,7 +880,9 @@ if __name__ == '__main__':
 # """
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Voluntari, str. Drumul Potcoavei nr 120, bl B, sc B, et 1, ap 5B, avand CI cu CNP 1760126413223, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 nu detine averi ilicite""",
     
-    'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 , nascut pe data 24-01-1982, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Bucuresti, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126413223 serie RK, numar 897567 nu detine averi ilicite"""
+    # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 , nascut pe data 24-01-1982, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Bucuresti, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126413223 serie RK, numar 897567 nu detine averi ilicite""",
+    
+    'DOCUMENT' : """obiectivul urmărit de această reglementare nu a fost atins şi, pe de altă parte, un element subiectiv care constă în intenţia de a obţine un avantaj rezultat din reglementarea Uniunii creând în mod artificial condiţiile necesare pentru obţinerea acestuia (Eichsfelder Schlachtbetrieb, C-515/03).""",
         
       }
   
