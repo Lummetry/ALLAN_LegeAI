@@ -297,7 +297,54 @@ The single communication point is the gateway which can be accessed via `HTTP RE
             "signature": "GetQAWorker:0"
         }
         ```
-
+        
+     * #### 2.5\. get_conf - system functionality
+        Given a natural language written document, performs confidentialization of sensible information
+        
+        **Input parameters:**
+        ```python
+        {
+            "SIGNATURE" : "get_conf",
+            "DOCUMENT" : <String: mandatory>, # document to be tested>
+        }
+        ```
+        
+        **Output:**
+        ```python
+        {
+            "call_id" : <Integer>, # counter - the number of requests processed so far
+            "signature" : <String>, # worker signature - which worker resolved the input,
+            "output" : <String> # the input document having confidentialized the sensible information,
+            "position" : <List[[Integer, Integer, String]]> # [[pos_start_1, pos_end_1, confidential_categ_1], [pos_start_2, pos_end_2, confidential_categ_2], ...]
+        }
+        ```
+        
+        **Example:**
+        ```python
+        POST http://195.60.78.150:5002/run
+        ----------------------------------
+        {
+            "SIGNATURE": "get_conf",
+            "DOCUMENT": "Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite."
+        }
+        
+        Response json
+        -------------
+        {
+            "call_id": 3,
+            "ouptut" : "Subsemnatul A, nascut la data X, domiciliat in X. 1 , declar pe propria raspundere ca sotia mea B, avand domiciliul flotant in Voluntari, X, avand CI cu CNP X nu detine averi ilicite."
+            "position": [
+               [300, 313, "CNP"],
+               [12, 31, "NUME"],
+               [171, 185, "NUME"],
+               [74, 123, "ADRESA"],
+               [226, 282, "ADRESA"],
+               [48, 58, "NASTERE"]
+            ],
+            "signature": "GetConfWorker:1"
+        }
+        ```
+        
 * ### 3\. Microservices configuration
 
 Each microservice can be configured in `config_gateway.txt`. The number of workers per each microservice is controlled with `NR_WORKERS`.
