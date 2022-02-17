@@ -66,9 +66,11 @@ PHONE_REG_VALID = 2
 
 # SERIE NUMAR CI
 SERIE_NUMAR_REGS = {
-    r'serie [A-Z]{2}.{0,5}num[aă]r \d{6}',
-    r'serie [A-Z]{2}\d{6}',
-    r'num[aă]r [A-Z]{2}\d{6}'
+    r'seri(?:e|a) [A-Z]{2}.{0,5}num[aă]r \d{6}',
+    r'seri(?:e|a) [A-Z]{2}.{0,5}nr(?:.)? \d{6}',
+    r'seri(?:e|a) [A-Z]{2}\d{6}',
+    r'num[aă]r [A-Z]{2}\d{6}',
+    r'nr(?:.)? [A-Z]{2}\d{6}'     
 }
 REG_END = r'(?:(?=$)|(?!\d|\w))'
 SERIE_NUMAR_REGS = [r + REG_END for r in SERIE_NUMAR_REGS]
@@ -905,12 +907,12 @@ if __name__ == '__main__':
       
            # 'DOCUMENT': """Un contribuabil al cărui cod numeric personal este 1520518054675 va completa caseta "Cod fiscal" astfel:""",
       
-      # 'DOCUMENT': """Se desemnează domnul Cocea Radu, avocat, cocea@gmail.com, 0216667896 domiciliat în municipiul Bucureşti, Bd. Laminorului nr. 84, sectorul 1, legitimat cu C.I. seria RD nr. 040958, eliberată la data de 16 septembrie 1998 de Secţia 5 Poliţie Bucureşti, CNP 1561119034963, în calitate de administrator special. Se desemneaza si doamna Alice Munteanu cu telefon 0216654343, domiciliata in Bd. Timisoara nr. 107 """, 
+       'DOCUMENT': """Se desemnează domnul Cocea Radu, avocat, cocea@gmail.com, 0216667896 domiciliat în municipiul Bucureşti, Bd. Laminorului nr. 84, sectorul 1, legitimat cu C.I. seria RD nr. 040958, eliberată la data de 16 septembrie 1998 de Secţia 5 Poliţie Bucureşti, CNP 1561119034963, în calitate de administrator special. Se desemneaza si doamna Alice Munteanu cu telefon 0216654343, domiciliata in Bd. Timisoara nr. 107 """, 
         
       # 'DOCUMENT': """Cod numeric personal: 1505952103022. Doi copii minori înregistraţi în documentul de identitate.""",
         
-      # 'DOCUMENT': """Bătrîn Cantemhir-Marian, porcine, Str. Cardos Iacob nr. 34, Arad, judeţul Arad, 1850810020101. 
-      # Almăjanu Steliana, porcine, Comuna Peretu, judeţul Teleorman, 2580925341708.""",
+       # 'DOCUMENT': """Bătrîn Cantemhir-Marian, Str. Cardos Iacob nr. 34, Arad, judeţul Arad, 1850810020101. 
+       # Almăjanu Steliana, Comuna Peretu, judeţul Teleorman, 2580925341708.""",
       
 #       'DOCUMENT' : """
 # III. În baza art. 396 al. 1 şi 5 din Codul de procedură penală rap. la art. 16 al. 1 lit. b din Codul de procedură penală a fost achitat inculpatul MIHALACHE GABRIEL-CONSTANTIN, fiul lui Marin şi Marioara - Aurora, născut la 18.05.1952 în Brad, jud. Hunedoara, domiciliat în Oradea, strada Episcop Ioan Suciu nr.4, bloc ZP2, apt.10, CNP 1520518054675, pentru săvârşirea infracţiunii de efectuarea unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 155 din Legea nr. 95/2006 republicată.
@@ -931,15 +933,11 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 , nascut pe data 24-01-1982, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Bucuresti, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126413223 serie RK, numar 897567 nu detine averi ilicite""",
     
-    # 'DOCUMENT' : """obiectivul urmărit de această reglementare nu a fost atins şi, pe de altă parte, un element subiectiv care constă în intenţia de a obţine un avantaj rezultat din reglementarea Uniunii creând în mod artificial condiţiile necesare pentru obţinerea acestuia (Eichsfelder Schlachtbetrieb, C-515/03).""",
-        
-    # 'DOCUMENT' : """Subsemnatul Laurentiu Piciu, nascut in Ramnicu Valcea, jud. Valcea, Bd. Tineretului 3A, bl A13, angajat 
-    # al S.C. Knowledge Investment Group S.R.L. CUI 278973, cu adresa in Sector 3 Bucuresti Str. Frunzei 26 et 1, va rog a-mi aproba cererea 
-    # de concediu pentru perioada 16.02.2022 - 18.02.2022"""
+    # 'DOCUMENT' : """decizia recurată a fost dată cu încălcarea autorităţii de lucru interpretat, respectiv cu încălcarea dispozitivului hotărârii preliminare pronunţate de Curtea de Justiţie a Uniunii Europene în Cauza C-52/07 (hotărâre care are autoritate de lucru interpretat „erga omnes”)""",
     
-    'DOCUMENT' : """Subsemnatul Laurentiu Piciu, data nastere 23.07.1995, loc nastere in Rm. Valcea, jud. Valcea, Bd. Tineretului 3A, bl A13, angajat al 
-    S.C. Knowledge Investment Group S.R.L. CUI 278973, cu adresa in Sector 3 Bucuresti, Str. Frunzei 26 et 1, va rog a-mi aproba cererea de concediu pentru 
-    perioada 16.02.2022 - 18.02.2022"""
+    # 'DOCUMENT' : """Subsemnatul Laurentiu Piciu, data nastere 23.07.1995, loc nastere in Rm. Valcea, jud. Valcea, Bd. Tineretului 3A, bl A13, angajat al 
+    # S.C. Knowledge Investment Group S.R.L. CUI 278973, cu adresa in Sector 3 Bucuresti, Str. Frunzei 26 et 1, va rog a-mi aproba cererea de concediu pentru 
+    # perioada 16.02.2022 - 18.02.2022"""
     
       }
   
