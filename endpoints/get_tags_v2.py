@@ -38,7 +38,7 @@ _CONFIG = {
   'TAGGER_MODEL': '_cache/_models/0/weights/03',
   'LABEL2ID': '20220209_211238_labels_dict.pkl',
   'BERT_BACKBONE': 'readerbench/jurBERT-base',
-  'BERT_MAX_SEQ_LEN': 64,
+  'BERT_MAX_SEQ_LEN': 128,
   'EMBGEN_MODEL': '20211125_203842_embgen_model_sc_40_ep140.h5',
   'GENERATED_EMBEDS': 'embgen_full_embeds.npy',
   'WORD_EMBEDS': 'lai_embeddings_191K.pkl',
@@ -46,9 +46,9 @@ _CONFIG = {
 }
 
 
-class GetTagsWorker(FlaskWorker):
+class GetTagsV2Worker(FlaskWorker):
   def __init__(self, **kwargs):
-    super(GetTagsWorker, self).__init__(**kwargs)
+    super(GetTagsV2Worker, self).__init__(**kwargs)
     return
 
   def _load_model(self):
@@ -111,16 +111,15 @@ class GetTagsWorker(FlaskWorker):
 
     return res
 
-
-if __name__ == '__main__':
-  from libraries import Logger
-
-  l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=True)
-
-  a = GetTagsWorker(log=l, default_config=_CONFIG, verbosity_level=0)
-  a._load_model()
-  ins = a._pre_process({"DOCUMENT": "acesta este un document OARECARE"})
-  p = a._predict(ins)
-  r = a._post_process(p)
-
-  print(r)
+# if __name__ == '__main__':
+#   from libraries import Logger
+#
+#   l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=True)
+#
+#   a = GetTagsWorker(log=l, default_config=_CONFIG, verbosity_level=0)
+#   a._load_model()
+#   ins = a._pre_process({"DOCUMENT": "acesta este un document OARECARE"})
+#   p = a._predict(ins)
+#   r = a._post_process(p)
+#
+#   print(r)

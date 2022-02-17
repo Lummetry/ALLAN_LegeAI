@@ -1,12 +1,12 @@
 {
     "CONFIG_ENDPOINTS" : {
         "get_aprox" : {
-            "NR_WORKERS" : 3,
+            "NR_WORKERS" : 2,
             "HOST" : "127.0.0.1"
         },
 
         "get_sim" : {
-            "NR_WORKERS" : 3,
+            "NR_WORKERS" : 2,
             "HOST" : "127.0.0.1"
         },
 
@@ -23,13 +23,18 @@
             "NR_WORKERS" : 1,
             "HOST" : "127.0.0.1"
         },
+
+        "get_tags_v2" : {
+            "NR_WORKERS" : 1,
+            "HOST" : "127.0.0.1"
+        }
 		
-	"get_sum" : {
+        "get_sum" : {
             "NR_WORKERS" : 2,
             "HOST" : "127.0.0.1"
         },
-		
-	"get_conf" : {
+
+        "get_conf" : {
             "NR_WORKERS" : 2,
             "HOST" : "127.0.0.1"
         }
