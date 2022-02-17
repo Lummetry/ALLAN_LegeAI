@@ -27,7 +27,7 @@
         "get_tags_v2" : {
             "NR_WORKERS" : 1,
             "HOST" : "127.0.0.1"
-        }
+        },
 		
         "get_sum" : {
             "NR_WORKERS" : 2,
