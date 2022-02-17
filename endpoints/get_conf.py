@@ -83,6 +83,20 @@ SERIE_CHECK = 1
 IBAN_REG = r'RO[ ]?\d{2}[ ]?\w{4}(?:[ ]?[A-Z0-9]{4}){4}'
 IBAN_REG = REG_START + IBAN_REG + REG_END
 
+# CUI
+CUI_REGS = {
+    # CUI 278973
+    r'(?:CUI|CIF)(?: )?(?:RO)?\d{2,10}',
+    
+    # RO278973
+    r'RO\d{2,10}',    
+    
+    # J12/123456/2000
+    r'(?:J|F|C)(?: )?\d{1,2}\/\d{1,7}\/\d{4}',
+} 
+CUI_REGS = [REG_START + r + REG_END for r in CUI_REGS]
+ALL_CUI_REGS = '|'.join(CUI_REGS)
+
 # EU CASE
 EU_CASE_REGS = {
     # C-XXX/XX
@@ -720,6 +734,21 @@ class GetConfWorker(FlaskWorker):
                 
         return res
     
+    def match_cui(self, text):
+        """ Return the position of all the matches for CUIs and Js in a text. """
+        
+        matches = re.findall(ALL_CUI_REGS, text)
+        
+        res = {}
+        for match in matches: 
+            start, end = self.find_match(match, text, res)
+            res[start] = [start, end, 'CUI']
+            
+            if self.debug: 
+                print(match)
+                
+        return res
+    
     def match_eu_case(self, text):
         """ Return the position of all the matches for EU cases in a text. """
         
@@ -815,6 +844,9 @@ class GetConfWorker(FlaskWorker):
         
         # Match birthdate
         matches.update(self.match_birthdate(doc, text))
+        
+        # Match CUI
+        matches.update(self.match_cui(text))
         
         # Match EU case and ignore nearby matches
         cases = self.match_eu_case(text)
