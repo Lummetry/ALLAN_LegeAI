@@ -305,7 +305,7 @@ The single communication point is the gateway which can be accessed via `HTTP RE
         ```python
         {
             "SIGNATURE" : "get_conf",
-            "DOCUMENT" : <String: mandatory>, # document to be tested>
+            "DOCUMENT" : <String: mandatory>, # document to be confidentialized>
         }
         ```
         
