@@ -304,6 +304,7 @@ class GetConfWorker(FlaskWorker):
         current_code = 'A'
         
         for ent in doc.ents:
+            print(ent, ent.label_)
             
             if ent.label_ == 'PERSON':
                 is_match = True
@@ -905,9 +906,15 @@ if __name__ == '__main__':
   test = {
       'DEBUG' : True,
       
-           # 'DOCUMENT': """Un contribuabil al cărui cod numeric personal este 1520518054675 va completa caseta "Cod fiscal" astfel:""",
+#       'DOCUMENT': """S-au luat în examinare ADPP apelurile declarate de Parchetul de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia naţională Anticorupţie şi de inculpatul Popa Vasile Constantin împotriva sentinţei penale nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală.
+# Dezbaterile au fost consemnate în încheierea de şedinţă din data de 09 ianuarie 2020,  ce face parte integrantă din prezenta decizie şi având nevoie de timp pentru a delibera, în baza art. 391 din Codul de procedură penală a amânat pronunţarea pentru azi 22 ianuarie 2020, când în aceeaşi compunere a pronunţat următoarea decizie:
+# ÎNALA CURTE
+# 	Asupra apelurilor penale de faţă;
+# În baza lucrărilor din dosar, constată următoarele:
+# Prin sentinţa penală nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală, pronunţată în dosarul nr.490/35/2014, în baza art. 386 din Codul de procedură penală a respins cererea de schimbare a încadrării juridice a faptei de sustragere sau distrugere de înscrisuri, prev. de art. 242 al. 1 şi 3 din Codul penal, cu aplic. art. 5 din Codul penal, în cea de sustragere sau distrugere de probe ori de înscrisuri, prev. de art. 275 al. 1 şi 2 din Codul penal, formulată de inculpatul POPA VASILE CONSTANTIN
+# """,
       
-       'DOCUMENT': """Se desemnează domnul Cocea Radu, avocat, cocea@gmail.com, 0216667896 domiciliat în municipiul Bucureşti, Bd. Laminorului nr. 84, sectorul 1, legitimat cu C.I. seria RD nr. 040958, eliberată la data de 16 septembrie 1998 de Secţia 5 Poliţie Bucureşti, CNP 1561119034963, în calitate de administrator special. Se desemneaza si doamna Alice Munteanu cu telefon 0216654343, domiciliata in Bd. Timisoara nr. 107 """, 
+       # 'DOCUMENT': """Se desemnează domnul Cocea Radu, avocat, cocea@gmail.com, 0216667896 domiciliat în municipiul Bucureşti, Bd. Laminorului nr. 84, sectorul 1, legitimat cu C.I. seria RD nr. 040958, eliberată la data de 16 septembrie 1998 de Secţia 5 Poliţie Bucureşti, CNP 1561119034963, în calitate de administrator special. Se desemneaza si doamna Alice Munteanu cu telefon 0216654343, domiciliata in Bd. Timisoara nr. 107 """, 
         
       # 'DOCUMENT': """Cod numeric personal: 1505952103022. Doi copii minori înregistraţi în documentul de identitate.""",
         
@@ -938,6 +945,8 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """Subsemnatul Laurentiu Piciu, data nastere 23.07.1995, loc nastere in Rm. Valcea, jud. Valcea, Bd. Tineretului 3A, bl A13, angajat al 
     # S.C. Knowledge Investment Group S.R.L. CUI 278973, cu adresa in Sector 3 Bucuresti, Str. Frunzei 26 et 1, va rog a-mi aproba cererea de concediu pentru 
     # perioada 16.02.2022 - 18.02.2022"""
+    
+    'DOCUMENT' : """Majorează de la 100 lei lunar la câte 175 lei lunar contribuţia de întreţinere datorată de pârâtă reclamantului, în favoarea minorilor A... C... R... Cezărel nascut la data de 20.02.2001 şi A... D... D... născută la data de 07 iunie 2002, începând cu data"""
     
       }
   
