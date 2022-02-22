@@ -66,9 +66,11 @@ PHONE_REG_VALID = 2
 
 # SERIE NUMAR CI
 SERIE_NUMAR_REGS = {
-    r'serie [A-Z]{2}.{0,5}num[aă]r \d{6}',
-    r'serie [A-Z]{2}\d{6}',
-    r'num[aă]r [A-Z]{2}\d{6}'
+    r'seri(?:e|a) [A-Z]{2}.{0,5}num[aă]r \d{6}',
+    r'seri(?:e|a) [A-Z]{2}.{0,5}nr(?:.)? \d{6}',
+    r'seri(?:e|a) [A-Z]{2}\d{6}',
+    r'num[aă]r [A-Z]{2}\d{6}',
+    r'nr(?:.)? [A-Z]{2}\d{6}'     
 }
 REG_END = r'(?:(?=$)|(?!\d|\w))'
 SERIE_NUMAR_REGS = [r + REG_END for r in SERIE_NUMAR_REGS]
@@ -82,6 +84,20 @@ SERIE_CHECK = 1
 # IBAN
 IBAN_REG = r'RO[ ]?\d{2}[ ]?\w{4}(?:[ ]?[A-Z0-9]{4}){4}'
 IBAN_REG = REG_START + IBAN_REG + REG_END
+
+# CUI
+CUI_REGS = {
+    # CUI 278973
+    r'(?:CUI|CIF)(?: )?(?:RO)?\d{2,10}',
+    
+    # RO278973
+    r'RO\d{2,10}',    
+    
+    # J12/123456/2000
+    r'(?:J|F|C)(?: )?\d{1,2}\/\d{1,7}\/\d{4}',
+} 
+CUI_REGS = [REG_START + r + REG_END for r in CUI_REGS]
+ALL_CUI_REGS = '|'.join(CUI_REGS)
 
 # EU CASE
 EU_CASE_REGS = {
@@ -288,6 +304,7 @@ class GetConfWorker(FlaskWorker):
         current_code = 'A'
         
         for ent in doc.ents:
+            print(ent, ent.label_)
             
             if ent.label_ == 'PERSON':
                 is_match = True
@@ -596,7 +613,7 @@ class GetConfWorker(FlaskWorker):
         nascut_syn = ["nascut", "nascuta", "nascuti", "nascute", "naste",
                       "născut", "născută", "născuți", "născute", "naște"]
     
-        nastere_syn = ["nasterii", "nașterii"]
+        nastere_syn = ["nasterii", "nașterii", "nastere", "naștere"]
     
         date_shape = ["dd.dd.dddd", "dd/dd/dddd", "dd-dd-dddd",
                       "dd.dd.dd", "dd/dd/dd", "dd-dd-dd",
@@ -618,6 +635,13 @@ class GetConfWorker(FlaskWorker):
              {"LEFT_ID" : "anch_nastere", "REL_OP" : ">", "RIGHT_ID" : "data", "RIGHT_ATTRS" : {"DEP" : {"IN" : ["nummod", "nmod"]},
                                                                                                 "SHAPE" : {"IN" : date_shape}}}
             ],
+
+            # data nastere 20.05.1989
+            [{"RIGHT_ID" : "anch_data", "RIGHT_ATTRS" : {"LEMMA" : "dată"}},
+             {"LEFT_ID" : "anch_data", "REL_OP" : ">", "RIGHT_ID" : "anch_nastere", "RIGHT_ATTRS" : {"ORTH" : {"IN" : nastere_syn}}},
+             {"LEFT_ID" : "anch_data", "REL_OP" : ">", "RIGHT_ID" : "data", "RIGHT_ATTRS" : {"DEP" : {"IN" : ["nummod", "nmod", "obl"]},
+                                                                                                "SHAPE" : {"IN" : date_shape}}}
+            ],
         ]
         matcher.add("birthdate1", birthdate_pattern1)
     
@@ -635,6 +659,14 @@ class GetConfWorker(FlaskWorker):
             [{"RIGHT_ID" : "anch_data", "RIGHT_ATTRS" : {"LEMMA" : "dată"}},
              {"LEFT_ID" : "anch_data", "REL_OP" : ">", "RIGHT_ID" : "anch_nastere", "RIGHT_ATTRS" : {"ORTH" : {"IN" : nastere_syn}}},
              {"LEFT_ID" : "anch_nastere", "REL_OP" : ">", "RIGHT_ID" : "luna", "RIGHT_ATTRS" : {"DEP" : "nmod"}},
+             {"LEFT_ID" : "luna", "REL_OP" : ";", "RIGHT_ID" : "zi", "RIGHT_ATTRS" : {"DEP" : "nummod"}},
+             {"LEFT_ID" : "luna", "REL_OP" : ".", "RIGHT_ID" : "an", "RIGHT_ATTRS" : {"DEP" : "nummod"}}
+            ],
+
+            # data nasterii 20 mai 1989
+            [{"RIGHT_ID" : "anch_data", "RIGHT_ATTRS" : {"LEMMA" : "dată"}},
+             {"LEFT_ID" : "anch_data", "REL_OP" : ">", "RIGHT_ID" : "anch_nastere", "RIGHT_ATTRS" : {"ORTH" : {"IN" : nastere_syn}}},
+             {"LEFT_ID" : "anch_data", "REL_OP" : ">", "RIGHT_ID" : "luna", "RIGHT_ATTRS" : {"DEP" : "nmod"}},
              {"LEFT_ID" : "luna", "REL_OP" : ";", "RIGHT_ID" : "zi", "RIGHT_ATTRS" : {"DEP" : "nummod"}},
              {"LEFT_ID" : "luna", "REL_OP" : ".", "RIGHT_ID" : "an", "RIGHT_ATTRS" : {"DEP" : "nummod"}}
             ],
@@ -699,6 +731,21 @@ class GetConfWorker(FlaskWorker):
         for match in spacy_matches:        
             start, end = self.get_birthdate_interval(doc, match)
             res[start] = [start, end, 'NASTERE']
+            
+            if self.debug: 
+                print(match)
+                
+        return res
+    
+    def match_cui(self, text):
+        """ Return the position of all the matches for CUIs and Js in a text. """
+        
+        matches = re.findall(ALL_CUI_REGS, text)
+        
+        res = {}
+        for match in matches: 
+            start, end = self.find_match(match, text, res)
+            res[start] = [start, end, 'CUI']
             
             if self.debug: 
                 print(match)
@@ -801,6 +848,9 @@ class GetConfWorker(FlaskWorker):
         # Match birthdate
         matches.update(self.match_birthdate(doc, text))
         
+        # Match CUI
+        matches.update(self.match_cui(text))
+        
         # Match EU case and ignore nearby matches
         cases = self.match_eu_case(text)
         matches = self.ignore_near_case_matches(matches, cases)
@@ -856,14 +906,20 @@ if __name__ == '__main__':
   test = {
       'DEBUG' : True,
       
-           # 'DOCUMENT': """Un contribuabil al cărui cod numeric personal este 1520518054675 va completa caseta "Cod fiscal" astfel:""",
+#       'DOCUMENT': """S-au luat în examinare ADPP apelurile declarate de Parchetul de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia naţională Anticorupţie şi de inculpatul Popa Vasile Constantin împotriva sentinţei penale nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală.
+# Dezbaterile au fost consemnate în încheierea de şedinţă din data de 09 ianuarie 2020,  ce face parte integrantă din prezenta decizie şi având nevoie de timp pentru a delibera, în baza art. 391 din Codul de procedură penală a amânat pronunţarea pentru azi 22 ianuarie 2020, când în aceeaşi compunere a pronunţat următoarea decizie:
+# ÎNALA CURTE
+# 	Asupra apelurilor penale de faţă;
+# În baza lucrărilor din dosar, constată următoarele:
+# Prin sentinţa penală nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală, pronunţată în dosarul nr.490/35/2014, în baza art. 386 din Codul de procedură penală a respins cererea de schimbare a încadrării juridice a faptei de sustragere sau distrugere de înscrisuri, prev. de art. 242 al. 1 şi 3 din Codul penal, cu aplic. art. 5 din Codul penal, în cea de sustragere sau distrugere de probe ori de înscrisuri, prev. de art. 275 al. 1 şi 2 din Codul penal, formulată de inculpatul POPA VASILE CONSTANTIN
+# """,
       
-      # 'DOCUMENT': """Se desemnează domnul Cocea Radu, avocat, cocea@gmail.com, 0216667896 domiciliat în municipiul Bucureşti, Bd. Laminorului nr. 84, sectorul 1, legitimat cu C.I. seria RD nr. 040958, eliberată la data de 16 septembrie 1998 de Secţia 5 Poliţie Bucureşti, CNP 1561119034963, în calitate de administrator special. Se desemneaza si doamna Alice Munteanu cu telefon 0216654343, domiciliata in Bd. Timisoara nr. 107 """, 
+       # 'DOCUMENT': """Se desemnează domnul Cocea Radu, avocat, cocea@gmail.com, 0216667896 domiciliat în municipiul Bucureşti, Bd. Laminorului nr. 84, sectorul 1, legitimat cu C.I. seria RD nr. 040958, eliberată la data de 16 septembrie 1998 de Secţia 5 Poliţie Bucureşti, CNP 1561119034963, în calitate de administrator special. Se desemneaza si doamna Alice Munteanu cu telefon 0216654343, domiciliata in Bd. Timisoara nr. 107 """, 
         
       # 'DOCUMENT': """Cod numeric personal: 1505952103022. Doi copii minori înregistraţi în documentul de identitate.""",
         
-      # 'DOCUMENT': """Bătrîn Cantemhir-Marian, porcine, Str. Cardos Iacob nr. 34, Arad, judeţul Arad, 1850810020101. 
-      # Almăjanu Steliana, porcine, Comuna Peretu, judeţul Teleorman, 2580925341708.""",
+       # 'DOCUMENT': """Bătrîn Cantemhir-Marian, Str. Cardos Iacob nr. 34, Arad, judeţul Arad, 1850810020101. 
+       # Almăjanu Steliana, Comuna Peretu, judeţul Teleorman, 2580925341708.""",
       
 #       'DOCUMENT' : """
 # III. În baza art. 396 al. 1 şi 5 din Codul de procedură penală rap. la art. 16 al. 1 lit. b din Codul de procedură penală a fost achitat inculpatul MIHALACHE GABRIEL-CONSTANTIN, fiul lui Marin şi Marioara - Aurora, născut la 18.05.1952 în Brad, jud. Hunedoara, domiciliat în Oradea, strada Episcop Ioan Suciu nr.4, bloc ZP2, apt.10, CNP 1520518054675, pentru săvârşirea infracţiunii de efectuarea unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 155 din Legea nr. 95/2006 republicată.
@@ -878,12 +934,20 @@ if __name__ == '__main__':
 # Pentru a pronunţa această sentinţă, prima instanţă a reţinut că prin rechizitoriul nr. 421/P/2013 din 17.12.2014 al Parchetului de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia Naţională Anticorupţie, înregistrat la Curtea de Apel Oradea sub nr. dosar 490/35/2014 la data de 19.12.2014, s-a dispus trimiterea în judecată a inculpaţilor POPA VASILE CONSTANTIN, pentru săvârşirea infracţiunii de luare de mită, prev. de art. 6 din L. 78/2000 rap. la art. 289 din Codul penal  rap. la art. 7 al. 1 lit. b din L. 78/2000; infracţiunii de şantaj, prev. de art. 207 al. 1 din Codul penal, cu aplic. art. 13 ind. 1 din L. 78/2000; 3 infracţiuni de abuz în serviciu, prev. de art. 13 ind. 2 din L. 78/2000 cu referire la art. 297 al. 1 din Codul penal; 3 infracţiuni de distrugere de înscrisuri prev. de art. 242 al. 1 şi 3 din Codul penal; 3 infracţiuni de favorizare a făptuitorului, prev. de art. 269 al. 1 din Codul penal; infracţiunii de instigare la efectuarea unor prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 47 din Codul penal rap. la art. 156 din Legea nr. 95/2006 şi a infracţiunii de trafic de influenţă prev. de art. 6 din Legea nr. 78/2000 rap. la art. 291 din Codul penal rap. la art. 7 al. 1 lit. b din Legea nr. 78/2000; MIHALACHE GABRIEL CONSTANTIN, pentru săvârşirea infracţiunii de efectuare a unei prelevări atunci când prin aceasta se compromite o autopsie medico-legală, prev. de art. 156 din Legea nr. 95/2006 republicată şi DAVID FLORIAN ALIN, pentru săvârşirea infracţiunii de cumpărare de influenţă, prev. de art. 6 din Legea nr. 78/2000 rap. la art. 292 din Codul penal, cu aplicarea art. 5 din Codul penal. 
 
 # """
-    # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Voluntari, str. Drumul Potcoavei nr 120, bl B, sc B, et 1, ap 5B, avand CI cu CNP 1760126413223, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 nu detine averi ilicite""",
+    # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Voluntari, str. Drumul Potcoavei nr 120, bl B, 
+    # sc B, et 1, ap 5B, avand CI cu CNP 1760126413223, declar pe propria raspundere ca sotia mea Andreea Damian, 
+    # avand domiciliul flotant in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 nu detine averi ilicite""",
     
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, domiciliat in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 , nascut pe data 24-01-1982, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Bucuresti, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126413223 serie RK, numar 897567 nu detine averi ilicite""",
     
-    'DOCUMENT' : """obiectivul urmărit de această reglementare nu a fost atins şi, pe de altă parte, un element subiectiv care constă în intenţia de a obţine un avantaj rezultat din reglementarea Uniunii creând în mod artificial condiţiile necesare pentru obţinerea acestuia (Eichsfelder Schlachtbetrieb, C-515/03).""",
-        
+    # 'DOCUMENT' : """decizia recurată a fost dată cu încălcarea autorităţii de lucru interpretat, respectiv cu încălcarea dispozitivului hotărârii preliminare pronunţate de Curtea de Justiţie a Uniunii Europene în Cauza C-52/07 (hotărâre care are autoritate de lucru interpretat „erga omnes”)""",
+    
+    # 'DOCUMENT' : """Subsemnatul Laurentiu Piciu, data nastere 23.07.1995, loc nastere in Rm. Valcea, jud. Valcea, Bd. Tineretului 3A, bl A13, angajat al 
+    # S.C. Knowledge Investment Group S.R.L. CUI 278973, cu adresa in Sector 3 Bucuresti, Str. Frunzei 26 et 1, va rog a-mi aproba cererea de concediu pentru 
+    # perioada 16.02.2022 - 18.02.2022"""
+    
+    'DOCUMENT' : """Majorează de la 100 lei lunar la câte 175 lei lunar contribuţia de întreţinere datorată de pârâtă reclamantului, în favoarea minorilor A... C... R... Cezărel nascut la data de 20.02.2001 şi A... D... D... născută la data de 07 iunie 2002, începând cu data"""
+    
       }
   
   res = eng.execute(inputs=test, counter=1)
