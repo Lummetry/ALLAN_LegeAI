@@ -13,7 +13,7 @@ import unidecode
 
 
 _CONFIG = {
-  'SPACY_MODEL' : 'ro_core_news_md',
+  'SPACY_MODEL' : 'ro_core_news_lg',
   'INSTITUTION_LIST' : 'C:\\Proiecte\\LegeAI\\ALLAN_LegeAI\\_cache\\_data\\nomenclator_institutii_publice.txt'
  }
 
@@ -304,7 +304,7 @@ class GetConfWorker(FlaskWorker):
         current_code = 'A'
         
         for ent in doc.ents:
-            print(ent, ent.label_)
+            # print(ent, ent.label_)
             
             if ent.label_ == 'PERSON':
                 is_match = True
@@ -522,72 +522,40 @@ class GetConfWorker(FlaskWorker):
             
         return res
     
-    def match_institution(self, text, insts, matches,
-                          removeDots=True                     
-                         ):
+    def match_institution(self, nlp, text, public_insts):
         """ Return the position of all the matches for institutions in a text. """
         
-        normalized_text = unidecode.unidecode(text.lower())
+        matches = {}    
         
-        res = {}
+        doc = nlp(text)
         
-        i = 0 
-        while i < len(insts):
+        # Collect all Organization matches
+        for ent in doc.ents:
             
-            inst = insts[i]
-            normalized_inst = unidecode.unidecode(inst.lower())
-            
-            # If the name contains dots, also include the name without dots
-            if removeDots and '.' in normalized_inst:
-                insts.append(normalized_inst.replace('.', ''))
-            
-            start = 0
-            while True:
-                start = normalized_text.find(normalized_inst, start)
+            if ent.label_ == 'ORGANIZATION':
                 
-                if start == -1: 
-                    break
-                else:
-                    add_match = True
-                    end = start + len(normalized_inst)
-                    
-                    # Check if the match is delimitated
-                    if text[start -1].isalpha() or text[end].isalpha():
-                        add_match = False
-                    
-                    if add_match:
-                        # Check for overlapping matches
-                        for (s, t) in res.items():
-                            e = t[1]
-                            if start >= s and start < e:
-                                add_match = False
-                                if len(normalized_inst) > e - s:
-                                    # Choose the larger name
-                                    res.pop(s)
-                                    add_match = True
-                                break
-                    
-                    if add_match:
-                    
-                        # Check if it was part of any previous match
-                        contained = False
-                        
-                        for (prev_start, prev_match) in matches.items():
-                            prev_end = prev_match[1]
-                            if (prev_start <= start and start < prev_end) or (prev_start < end and end <= prev_end):
-                                contained = True
-                                break
-                        
-                        if not contained:
-                            res[start] = [start, end, 'INSTITUTION']
-                        if self.debug:
-                            print(normalized_inst)
+                is_match = True
+    
+                start_char = ent.start_char
+                end_char = ent.end_char
                 
-                start += len(normalized_inst)
+                # Filter matches the represent public institutions
                 
-            i += 1
+                match_normalized = unidecode.unidecode(ent.text.lower())
+                match_stripped = ''.join(filter(str.isalnum, match_normalized))
                 
-        return res
+                for public_inst in public_insts:
+    
+                    if match_normalized == public_inst or match_stripped == public_inst:
+                        is_match = False
+                        break
+    
+                if is_match:
+                    matches[start_char] = [start_char, end_char, "INSTITUTIE"]
+                    if self.debug:
+                        print(ent.text)
+                
+        return matches
     
     def match_iban(self, text):
         """ Return the position of all the matches for IBANs in a text. """
@@ -714,7 +682,6 @@ class GetConfWorker(FlaskWorker):
             end = start + len(doc[match_tokens[1]].text) 
         
         elif match_name == 'birthdate4':
-            print(match_tokens)
             start = doc[match_tokens[2]].idx
             end = doc[match_tokens[3]].idx + len(doc[match_tokens[3]].text)
             
@@ -803,6 +770,16 @@ class GetConfWorker(FlaskWorker):
           
         self.debug = bool(inputs.get('DEBUG', False))
         
+        # TODO Remove
+        # Normalize institution names
+        self.new_institution_list = []
+        for inst in self.institution_list:
+            inst_normalized = unidecode.unidecode(inst.lower())
+            self.new_institution_list.append(inst_normalized)
+            
+            inst_stripped = ''.join(filter(str.isalnum, inst_normalized))
+            self.new_institution_list.append(inst_stripped)
+        
         # Apply spaCy analysis
         doc = self.nlp_model(text)
     
@@ -842,8 +819,7 @@ class GetConfWorker(FlaskWorker):
         matches.update(self.match_iban(text))
         
         # Match institutions
-        matches.update(self.match_institution(text, insts=self.institution_list, 
-                                              matches=matches, removeDots=True))
+        matches.update(self.match_institution(self.nlp_model, text, public_insts=self.new_institution_list))
         
         # Match birthdate
         matches.update(self.match_birthdate(doc, text))
@@ -909,7 +885,7 @@ if __name__ == '__main__':
 #       'DOCUMENT': """S-au luat în examinare ADPP apelurile declarate de Parchetul de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia naţională Anticorupţie şi de inculpatul Popa Vasile Constantin împotriva sentinţei penale nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală.
 # Dezbaterile au fost consemnate în încheierea de şedinţă din data de 09 ianuarie 2020,  ce face parte integrantă din prezenta decizie şi având nevoie de timp pentru a delibera, în baza art. 391 din Codul de procedură penală a amânat pronunţarea pentru azi 22 ianuarie 2020, când în aceeaşi compunere a pronunţat următoarea decizie:
 # ÎNALA CURTE
-# 	Asupra apelurilor penale de faţă;
+#  	Asupra apelurilor penale de faţă;
 # În baza lucrărilor din dosar, constată următoarele:
 # Prin sentinţa penală nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală, pronunţată în dosarul nr.490/35/2014, în baza art. 386 din Codul de procedură penală a respins cererea de schimbare a încadrării juridice a faptei de sustragere sau distrugere de înscrisuri, prev. de art. 242 al. 1 şi 3 din Codul penal, cu aplic. art. 5 din Codul penal, în cea de sustragere sau distrugere de probe ori de înscrisuri, prev. de art. 275 al. 1 şi 2 din Codul penal, formulată de inculpatul POPA VASILE CONSTANTIN
 # """,
@@ -946,7 +922,32 @@ if __name__ == '__main__':
     # S.C. Knowledge Investment Group S.R.L. CUI 278973, cu adresa in Sector 3 Bucuresti, Str. Frunzei 26 et 1, va rog a-mi aproba cererea de concediu pentru 
     # perioada 16.02.2022 - 18.02.2022"""
     
-    'DOCUMENT' : """Majorează de la 100 lei lunar la câte 175 lei lunar contribuţia de întreţinere datorată de pârâtă reclamantului, în favoarea minorilor A... C... R... Cezărel nascut la data de 20.02.2001 şi A... D... D... născută la data de 07 iunie 2002, începând cu data"""
+    # 'DOCUMENT' : """Majorează de la 100 lei lunar la câte 175 lei lunar contribuţia de întreţinere datorată de pârâtă reclamantului, în favoarea minorilor A... C... R... Cezărel nascut la data de 20.02.2001 şi A... D... D... născută la data de 07 iunie 2002, începând cu data"""
+    
+    # DE LA CLIENT
+    
+    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    
+    # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
+    
+    # 'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
+    
+    'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
+    
+#     'DOCUMENT' : """intimatul Ionescu Lucian Florin (fiul lui Eugen şi Anicuţa, născut la data de 30.09.1984 în municipiul Bucureşti, domiciliat în municipiul Bucureşti, str. Petre Păun, nr. 3 bl. G9D, sc. 3, et. 8, ap. 126, sector 5, CNP 1840930420032, prin sentinţa penală nr. 169 din 29.10.2015 a Tribunalului Călăraşi, definitivă prin decizia penală nr. 1460/A din 07.10.2016 a Curţii de Apel Bucureşti - Secţia a II-a Penală sunt concurente cu cele pentru a căror săvârşire a fost condamnat acelaşi intimat prin sentinţa penală nr. 106/F din 09.06.2016 pronunţată de Ionescu Florin.
+# în mod corect şi motivat, Ionescu Lucian a fost declarat
+# în mod corect şi motivat, lonescu Lucian Florin  a fost declarat
+# """,
+
+    # 'DOCUMENT' : """-a dispus restituirea către partea civilă Barbu Georgiana a tabletelor marca Sony Vaio cu seria SVD112A1SM, cu încărcător aferent şi marca ASUS seria SN:CCOKBC314490""",
+    
+    # 'DOCUMENT' : """Comanda comerciala nr. 1320679561/27 august 2014 efectuată de reprezentantul SC Sady Com SRL de la societatea Borealis L.A.T., prin care prima societate a achiziţionat o cantitate de îngrăşăminte la preţul de 44.684,64 lei,""",
+    
+    # 'DOCUMENT' : """Contractul comercial nr. 23/14 februarie 2014 încheiat între SC Sady Com SRL şi SC Managro SRL, prin care prima societate a vândut celei de-a doua cantitatea de 66 tone azotat de amoniu la preţul de 93.720 RON, precum şi factum proforma emisă de reprezentantul SC Sady Com SRL pentru suma de 93.720 RON.""",
+    
+    # 'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
+    
+    # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
     
       }
   
