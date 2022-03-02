@@ -19,6 +19,11 @@
             "IDX2WORD" : "lai_ro_i2w_191K.pkl"            
         },
 
+        "get_qa_v2" : {
+            "NR_WORKERS" : 1,
+            "HOST" : "127.0.0.1"
+        },
+        
         "get_tags" : {
             "NR_WORKERS" : 1,
             "HOST" : "127.0.0.1"
