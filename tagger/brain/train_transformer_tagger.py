@@ -237,7 +237,7 @@ class MetricsCallback(keras.callbacks.Callback):
 if __name__ == "__main__":
 
     bert_model = TFBertModel.from_pretrained(args.bert_backbone)
-    tokenizer = AutoTokenizer.from_pretrained(args.bert_backbone)
+    tokenizer = AutoTokenizer.from_pretrained(args.bert_backbone, use_fast=False)
 
     train_inputs, train_labels, dev_inputs, dev_labels, test_inputs, test_labels, labels_dict = load_data(tokenizer)
 
@@ -277,4 +277,10 @@ if __name__ == "__main__":
         test_results = test_callback.on_epoch_end(0, {})
         print(test_results)
         
+        # save to hf format
+        path_parts = args.model_path.split("weights")        
+        save_path = os.path.join(path_parts[0], path_parts[1][1:])
+        bert_model.save_pretrained(save_path)
+        tokenizer.save_pretrained(save_path)
+
 
