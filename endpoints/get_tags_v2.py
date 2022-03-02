@@ -39,10 +39,6 @@ _CONFIG = {
   'LABEL2ID': '20220209_211238_labels_dict.pkl',
   'BERT_BACKBONE': 'readerbench/jurBERT-base',
   'BERT_MAX_SEQ_LEN': 512,
-  'EMBGEN_MODEL': '20211125_203842_embgen_model_sc_40_ep140.h5',
-  'GENERATED_EMBEDS': 'embgen_full_embeds.npy',
-  'WORD_EMBEDS': 'lai_embeddings_191K.pkl',
-  'IDX2WORD': 'lai_ro_i2w_191K.pkl'
 }
 
 
@@ -111,15 +107,15 @@ class GetTagsV2Worker(FlaskWorker):
 
     return res
 
-# if __name__ == '__main__':
-#   from libraries import Logger
-#
-#   l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=True)
-#
-#   a = GetTagsV2Worker(log=l, default_config=_CONFIG, verbosity_level=0)
-#   a._load_model()
-#   ins = a._pre_process({"DOCUMENT": "Art. 63. - (1) Aerodromurile civile certificate din România pentru care există obligaţia realizării hărţilor strategice de zgomot şi a planurilor de acţiune aferente, precum şi criteriile care stau la baza realizării acestora, sunt stabilite prin hotărâre a Guvernului, la iniţiativa autorităţii publice centrale pentru protecţia mediului. (2) Administratorii aerodromurilor civile certificate din România prevăzute la alin. (1) au obligaţia ca, atunci când elaborează programe de dezvoltare a infrastructurii de aerodrom, să utilizeze cartarea zgomotului în vederea previzionării impactului activităţilor viitoare asupra vecinătăţilor aerodromurilor. (3) Autorităţile administraţiei publice locale au obligaţia integrării în documentaţiile de urbanism şi de amenajare a teritoriului a hărţilor strategice de zgomot prevăzute la alin. (1), precum şi a programelor de dezvoltare specificate la alin. (2), împreună cu rezultatele cartării zgomotului. (4) Metodologia de cartare a zgomotului în vederea previzionării impactului activităţilor existente şi viitoare de pe un aerodrom asupra vecinătăţilor acestuia, se aprobă prin hotărâre a Guvernului, la iniţiativa autorităţii publice centrale pentru protecţia mediului."})
-#   p = a._predict(ins)
-#   r = a._post_process(p)
-#
-#   print(r)
+if __name__ == '__main__':
+  from libraries import Logger
+
+  l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=True)
+
+  a = GetTagsV2Worker(log=l, default_config=_CONFIG, verbosity_level=0)
+  a._load_model()
+  ins = a._pre_process({"DOCUMENT": "Art. 63. - (1) Aerodromurile civile certificate din România pentru care există obligaţia realizării hărţilor strategice de zgomot şi a planurilor de acţiune aferente, precum şi criteriile care stau la baza realizării acestora, sunt stabilite prin hotărâre a Guvernului, la iniţiativa autorităţii publice centrale pentru protecţia mediului. (2) Administratorii aerodromurilor civile certificate din România prevăzute la alin. (1) au obligaţia ca, atunci când elaborează programe de dezvoltare a infrastructurii de aerodrom, să utilizeze cartarea zgomotului în vederea previzionării impactului activităţilor viitoare asupra vecinătăţilor aerodromurilor. (3) Autorităţile administraţiei publice locale au obligaţia integrării în documentaţiile de urbanism şi de amenajare a teritoriului a hărţilor strategice de zgomot prevăzute la alin. (1), precum şi a programelor de dezvoltare specificate la alin. (2), împreună cu rezultatele cartării zgomotului. (4) Metodologia de cartare a zgomotului în vederea previzionării impactului activităţilor existente şi viitoare de pe un aerodrom asupra vecinătăţilor acestuia, se aprobă prin hotărâre a Guvernului, la iniţiativa autorităţii publice centrale pentru protecţia mediului."})
+  p = a._predict(ins)
+  r = a._post_process(p)
+
+  print(r)
