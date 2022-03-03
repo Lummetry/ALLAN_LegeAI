@@ -99,6 +99,10 @@ CUI_REGS = {
 CUI_REGS = [REG_START + r + REG_END for r in CUI_REGS]
 ALL_CUI_REGS = '|'.join(CUI_REGS)
 
+# BRAND
+BRAND_INCLUDE_FACILITY = 1
+BRAND_EXCLUDE_COMMON = 2
+
 # EU CASE
 EU_CASE_REGS = {
     # C-XXX/XX
@@ -790,6 +794,66 @@ class GetConfWorker(FlaskWorker):
                 
         return res
     
+    def check_common_words(self, matches, doc):
+        """ Split matches in sequence of words which do not contain common words. """
+        
+        new_matches = []
+        
+        for (start, end) in matches:
+    
+            current_match_start = -1
+            current_match_end = -1
+    
+            for i in range(start, end):
+                token = doc[i]
+    
+                if not token.is_alpha or token.text[0].isupper():
+                    if current_match_start == -1:
+                        current_match_start = i
+                    current_match_end = i + 1
+    
+                if (token.is_alpha and not token.text[0].isupper()) or i == end - 1:
+                    if current_match_start != -1:
+    
+                        new_matches.append((current_match_start,current_match_end))
+    
+                        current_match_end = -1
+                        current_match_start = -1
+                    
+        return new_matches
+    
+    def match_brand(self, nlp, text,
+                    brand_checks=[]
+                   ):
+        """ Return the position of all the matches for brands in a text. """
+        
+        if type(brand_checks) == int:
+            brand_checks = [brand_checks]
+        
+        doc = nlp(text)    
+        
+        # Form the list of candidate matches
+        candidate_matches = []
+        for ent in doc.ents:
+            if ent.label_ == 'PRODUCT' or (BRAND_INCLUDE_FACILITY in brand_checks and ent.label_ == 'FACILITY'):
+                candidate_matches.append((ent.start, ent.end))
+        
+        # Exclude common words
+        if BRAND_EXCLUDE_COMMON in brand_checks:
+            candidate_matches = self.check_common_words(candidate_matches, doc)     
+        
+        # Get final matches
+        final_matches = {}
+        for (start, end) in candidate_matches:
+            start_idx = doc[start].idx
+            end_idx = doc[end - 1].idx + len(doc[end - 1])
+            final_matches[start_idx] = [start_idx, end_idx, "BRAND"]
+            
+            if self.debug: 
+                print(doc[start:end])
+                
+        return final_matches
+    
     def match_eu_case(self, text):
         """ Return the position of all the matches for EU cases in a text. """
         
@@ -898,6 +962,9 @@ class GetConfWorker(FlaskWorker):
         # Match CUI
         matches.update(self.match_cui(text))
         
+        # Match Brand
+        matches.update(self.match_brand(self.nlp_model, text, brand_checks=[BRAND_EXCLUDE_COMMON, BRAND_INCLUDE_FACILITY]))
+        
         # Match EU case and ignore nearby matches
         cases = self.match_eu_case(text)
         matches = self.ignore_near_case_matches(matches, cases)
@@ -920,8 +987,9 @@ class GetConfWorker(FlaskWorker):
             if label != 'NUME':
                 hidden_doc = hidden_doc[:start] + 'X' + hidden_doc[end:]
         
-        # Replace names with their codes
-        for (name, code) in person_dict.items():
+        # Replace names with their codes, starting with longer names (which might include the shorter ones)
+        for name in sorted(person_dict, key=len, reverse=True):
+            code = person_dict[name]
             
             # Search for all occurances of name
             while True:
@@ -997,7 +1065,7 @@ if __name__ == '__main__':
     
     # DE LA CLIENT
     
-    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
     
@@ -1017,7 +1085,7 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
     
-    # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
+    'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
     
       }
   
