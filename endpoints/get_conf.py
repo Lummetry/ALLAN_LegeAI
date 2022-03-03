@@ -257,45 +257,38 @@ class GetConfWorker(FlaskWorker):
         return False
     
     
-    def check_name_condition(self, ent, doc, start_char, end_char,
-                             condition
-                            ):
-        """ Only keep a sequence of words starting with a capital letter """
+    def check_name_condition(self, matches, doc, condition):
+        """ Split matches in sequence of words which respect a condition. """
         
-        is_match = False
-                    
-        i = ent.start
-        while doc[i].idx < start_char:
-            i += 1
+        new_matches = []
         
-        start = start_char
-        end = end_char
-                
-        while i < len(doc) and doc[i].idx < end_char:
-            token = doc[i]
-                        
-            if is_match == False:
-                # Check one of the conditions
+        for (start, end) in matches:
+    
+            current_match_start = -1
+            current_match_end = -1
+    
+            for i in range(start, end):
+                token = doc[i]
+    
                 if self.check_token_condition(token, condition):
-                    start = token.idx
-                    end = token.idx + len(token.text)
-                    is_match = True
-            else:
-                # Check one of the conditions
-                if not self.check_token_condition(token, condition):
-                    break
-                else:          
-                    end = token.idx + len(token.text)
-                        
-            i += 1
-            
-        return is_match, start, end    
+                    if current_match_start == -1:
+                        current_match_start = i
+                    current_match_end = i + 1
+    
+                if not self.check_token_condition(token, condition) or i == end - 1:
+                    if current_match_start != -1:
+    
+                        new_matches.append((current_match_start,current_match_end))
+    
+                        current_match_end = -1
+                        current_match_start = -1
+                    
+        return new_matches  
     
     def match_name(self, nlp, doc, text,
                    person_checks=[]
-                   ):
-        """ Return the position of namess in a text. """
-        matches = {}    
+                  ):
+        """ Return the position of names in a text. """  
         
         if type(person_checks) == int:
             person_checks = [person_checks]
@@ -303,67 +296,145 @@ class GetConfWorker(FlaskWorker):
         person_dict = {}
         current_code = 'A'
         
+        # Form the list of candidate matches
+        candidate_matches = []
         for ent in doc.ents:
-            # print(ent, ent.label_)
-            
             if ent.label_ == 'PERSON':
-                is_match = True
+                candidate_matches.append((ent.start, ent.end))
+                    
+        # Check POS PROPN condition
+        if PERSON_PROPN in person_checks:
+            candidate_matches = self.check_name_condition(candidate_matches, doc, condition='propn')
+    
+        # Check uppercase words
+        if PERSON_UPPERCASE in person_checks:
+            candidate_matches = self.check_name_condition(candidate_matches, doc, condition='capital')
                 
-                start_char = ent.start_char
-                end_char = ent.end_char
-                    
-                # Check POS
-                if is_match and PERSON_PROPN in person_checks:
-                    is_match, start_char, end_char = self.check_name_condition(ent, doc, 
-                                                                               start_char, end_char,
-                                                                               condition='propn')
-                    
-                # Check capital letters
-                if is_match and PERSON_UPPERCASE in person_checks:
-                    is_match, start_char, end_char = self.check_name_condition(ent, doc, 
-                                                                               start_char, end_char,
-                                                                               condition='capital')
-                    
-                # Add capitalized words to the right
-                if end_char == ent.end_char:
-                    idx = ent[-1].i + 1
-                    
-                    while idx < len(doc) and doc[idx].text[0].isupper():
-                        end_char = doc[idx].idx + len(doc[idx])
-                        idx += 1
-                    
-                # Check number of words
-                if is_match and PERSON_TWO_WORDS in person_checks:
-                    ent_text = text[start_char:end_char]
-                    words = re.split("[" + punctuation + " ]+", ent_text)
-                    if len(words) < 2:
-                        is_match = False
+        # Check other conditions
+        final_matches = {}
+        for (start, end) in candidate_matches:
+            
+            # Add capitalized words to the right    
+            new_end = end
+            while new_end < len(doc) and doc[new_end].text[0].isupper():
+                # While next word starts with capital letter
+                new_end += 1
                 
-                if is_match:
+            # Add capitalized words to the left    
+            new_start = start
+            while new_start > 0 and doc[new_start - 1].text[0].isupper():
+                # While previous word starts with capital letter
+                new_start -= 1
+            
+            # Check minimum number of words
+            is_match = True
+            if PERSON_TWO_WORDS in person_checks:
+                ent_text = doc[new_start : new_end].text
+                words = re.split("[" + punctuation + " ]+", ent_text)
+                if len(words) < 2:
+                    is_match = False
+                    
+                    
+            if is_match:
+                start_idx = doc[new_start].idx
+                end_idx = doc[new_end - 1].idx + len(doc[new_end - 1])
+                
+                # Ignore leading and trailing punctuation
+                while text[start_idx] in punctuation:
+                    start_idx += 1
+                while text[end_idx - 1] in punctuation:
+                    end_idx -= 1
+                
+                final_matches[start_idx] = [start_idx, end_idx, "NUME"]
+                
+                person = text[start_idx:end_idx]
+                if self.debug:
+                    print(person)
+                                       
+                person_code = self.find_name(person, person_dict)
+                if not person_code:
+                    # Get the next code for names
+                    person_code = current_code
+                    current_code = self.next_name_code(current_code)
+                    
+                # Add the name to the dictionary
+                person_dict[person] = person_code
+                
+        return final_matches, person_dict
+    
+    # def match_name(self, nlp, doc, text,
+    #                person_checks=[]
+    #                ):
+    #     """ Return the position of namess in a text. """
+    #     matches = {}    
+        
+    #     if type(person_checks) == int:
+    #         person_checks = [person_checks]
+        
+    #     person_dict = {}
+    #     current_code = 'A'
+        
+    #     for ent in doc.ents:
+    #         # print(ent, ent.label_)
+            
+    #         if ent.label_ == 'PERSON':
+    #             is_match = True
+                
+    #             start_char = ent.start_char
+    #             end_char = ent.end_char
+                    
+    #             # Check POS
+    #             if is_match and PERSON_PROPN in person_checks:
+    #                 is_match, start_char, end_char = self.check_name_condition(ent, doc, 
+    #                                                                            start_char, end_char,
+    #                                                                            condition='propn')
+                    
+    #             # Check capital letters
+    #             if is_match and PERSON_UPPERCASE in person_checks:
+    #                 is_match, start_char, end_char = self.check_name_condition(ent, doc, 
+    #                                                                            start_char, end_char,
+    #                                                                            condition='capital')
+                    
+    #             # Add capitalized words to the right
+    #             if end_char == ent.end_char:
+    #                 idx = ent[-1].i + 1
+                    
+    #                 while idx < len(doc) and doc[idx].text[0].isupper():
+    #                     end_char = doc[idx].idx + len(doc[idx])
+    #                     idx += 1
+                    
+    #             # Check number of words
+    #             if is_match and PERSON_TWO_WORDS in person_checks:
+    #                 ent_text = text[start_char:end_char]
+    #                 words = re.split("[" + punctuation + " ]+", ent_text)
+    #                 if len(words) < 2:
+    #                     is_match = False
+                
+    #             if is_match:
                             
-                    # Ignore leading and trailing punctuation
-                    while text[start_char] in punctuation:
-                        start_char += 1
-                    while text[end_char - 1] in punctuation:
-                        end_char -= 1
+    #                 # Ignore leading and trailing punctuation
+    #                 while text[start_char] in punctuation:
+    #                     start_char += 1
+    #                 while text[end_char - 1] in punctuation:
+    #                     end_char -= 1
                     
-                    matches[start_char] = [start_char, end_char, "NUME"]
+    #                 matches[start_char] = [start_char, end_char, "NUME"]
                     
-                    person = text[start_char:end_char]
-                    if self.debug:
-                        print(person)
+    #                 person = text[start_char:end_char]
+    #                 if self.debug:
+    #                     print(person)
                                            
-                    person_code = self.find_name(person, person_dict)
-                    if not person_code:
-                        # Get the next code for names
-                        person_code = current_code
-                        current_code = self.next_name_code(current_code)
+    #                 person_code = self.find_name(person, person_dict)
+    #                 if not person_code:
+    #                     # Get the next code for names
+    #                     person_code = current_code
+    #                     current_code = self.next_name_code(current_code)
                         
-                    # Add the name to the dictionary
-                    person_dict[person] = person_code
+    #                 # Add the name to the dictionary
+    #                 person_dict[person] = person_code
             
                 
-        return matches, person_dict        
+    #     return matches, person_dict        
     
     def remove_punct_tokens(self, doc):
         ''' 
@@ -802,7 +873,7 @@ class GetConfWorker(FlaskWorker):
         
         # Match names
         name_matches, person_dict = self.match_name(self.nlp_model, doc, text, 
-                                                    person_checks=[PERSON_PROPN, PERSON_UPPERCASE, PERSON_TWO_WORDS])
+                                                    person_checks=[PERSON_PROPN, PERSON_UPPERCASE])
         
         matches.update(name_matches)  
         if self.debug:
@@ -926,18 +997,17 @@ if __name__ == '__main__':
     
     # DE LA CLIENT
     
-    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
     
     # 'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
     
-    'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
+    # 'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
     
 #     'DOCUMENT' : """intimatul Ionescu Lucian Florin (fiul lui Eugen şi Anicuţa, născut la data de 30.09.1984 în municipiul Bucureşti, domiciliat în municipiul Bucureşti, str. Petre Păun, nr. 3 bl. G9D, sc. 3, et. 8, ap. 126, sector 5, CNP 1840930420032, prin sentinţa penală nr. 169 din 29.10.2015 a Tribunalului Călăraşi, definitivă prin decizia penală nr. 1460/A din 07.10.2016 a Curţii de Apel Bucureşti - Secţia a II-a Penală sunt concurente cu cele pentru a căror săvârşire a fost condamnat acelaşi intimat prin sentinţa penală nr. 106/F din 09.06.2016 pronunţată de Ionescu Florin.
 # în mod corect şi motivat, Ionescu Lucian a fost declarat
-# în mod corect şi motivat, lonescu Lucian Florin  a fost declarat
-# """,
+# în mod corect şi motivat, lonescu Lucian Florin  a fost declarat""",
 
     # 'DOCUMENT' : """-a dispus restituirea către partea civilă Barbu Georgiana a tabletelor marca Sony Vaio cu seria SVD112A1SM, cu încărcător aferent şi marca ASUS seria SN:CCOKBC314490""",
     
