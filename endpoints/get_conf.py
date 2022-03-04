@@ -888,6 +888,23 @@ class GetConfWorker(FlaskWorker):
                 
         return res
     
+    def match_regex(self, text):
+        """ Return the position of all the matches for a list of user defined REGEX. """
+        
+        matches = []
+        for regex in self.conf_regex_list:
+            matches.extend(re.findall(regex, text))
+          
+        res = {}
+        for match in matches:            
+            start, end = self.find_match(match, text, res)
+            res[start] = [start, end, 'REGEX']
+                
+            if self.debug: 
+                print(match)
+                
+        return res
+    
     def match_eu_case(self, text):
         """ Return the position of all the matches for EU cases in a text. """
         
@@ -1002,6 +1019,9 @@ class GetConfWorker(FlaskWorker):
                                         
         # Match registry
         matches.update(self.match_registry(text))
+                                
+        # Match user REGEX
+        matches.update(self.match_regex(text))
         
         # Match EU case and ignore nearby matches
         cases = self.match_eu_case(text)
