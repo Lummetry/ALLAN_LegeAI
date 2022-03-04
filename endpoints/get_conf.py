@@ -939,6 +939,44 @@ class GetConfWorker(FlaskWorker):
                 print('Removed', (m_start, m_end, m_type))
                 
         return new_matches
+    
+    def select_matches(self, matches_dict):
+        """ Select the final matches. """
+        
+        matches = list(matches_dict.values())
+        
+        final_matches = {}
+        
+        for i, (start1, end1, text1) in enumerate(matches):    
+            
+            add_match = True
+            for j in range(i + 1, len(matches)):
+                (start2, end2, text2) = matches[j]
+                    
+                # First match completly included in second one
+                if start2 <= start1 and end1 <= end2:
+                    # Ignore first match
+                    add_match = False
+                    break
+                        
+                # Matches intersect each other
+                elif (start2 <= start1 and start1 <= end2) or (start2 <= end1 and end1 <= end2):
+                    # Select the larger match
+                    if len(text1) > len(text2):
+                        text = text1
+                    else:
+                        text = text2
+                            
+                    # Add match union
+                    matches[j] = (min(start1, start2), max(end1, end2), text)
+                    add_match = False
+                        
+                    break
+                        
+            if add_match:
+                final_matches[start1] = (start1, end1, text1)     
+        
+        return final_matches
         
     #######
     # AUX #
@@ -1033,6 +1071,11 @@ class GetConfWorker(FlaskWorker):
     def _post_process(self, pred):
         
         doc, matches, person_dict = pred
+        
+        # Select final matches
+        print(matches)
+        matches = self.select_matches(matches)
+        print(matches)
         
         # Order matches 
         match_tuples = list(matches.values())
