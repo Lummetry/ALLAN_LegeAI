@@ -10,11 +10,13 @@ import phonenumbers
 from string import punctuation
 from utils.utils import simple_levenshtein_distance
 import unidecode
+import json
 
 
 _CONFIG = {
   'SPACY_MODEL' : 'ro_core_news_lg',
-  'INSTITUTION_LIST' : 'C:\\Proiecte\\LegeAI\\ALLAN_LegeAI\\_cache\\_data\\nomenclator_institutii_publice.txt'
+  'INSTITUTION_LIST' : 'C:\\Proiecte\\LegeAI\\ALLAN_LegeAI\\_cache\\_data\\nomenclator_institutii_publice.txt',
+  'CONF_REGEX' : 'C:\\Proiecte\\LegeAI\\Date\\Task6\\conf_regex.json'
  }
 
 
@@ -104,11 +106,7 @@ BRAND_INCLUDE_FACILITY = 1
 BRAND_EXCLUDE_COMMON = 2
 
 # REGISTRY
-REGISTRY_DICT = ['serie', 'seria', 'marca', 'marcă', 'IMEI', 'model']
-REGISTRY_DICT_REG = '|'.join(REGISTRY_DICT)
-REGISTRY_REG = r'(' + REGISTRY_DICT_REG + ')([^0-9A-Z:-_/|]{0,10})([0-9A-Z:-_/| ]{3,})'
-REG_END = r'(?:(?=$)|(?!\d|\w))'
-REGISTRY_REG = REGISTRY_REG + REG_END
+REGISTRY_REG = '([^0-9A-Z:-_/|]{0,10})([0-9A-Z:-_/| ]{3,})'
 
 # EU CASE
 EU_CASE_REGS = {
@@ -133,8 +131,17 @@ class GetConfWorker(FlaskWorker):
 
     def _load_model(self):
         
+        # Read list of public institutions
         inst_file = open(self.config_worker['INSTITUTION_LIST'], 'r', encoding='utf-8')
         self.institution_list = inst_file.read().splitlines()
+        
+        # Read JSON REGEX file
+        json_file = open(self.config_worker['CONF_REGEX'], 'r', encoding="utf-8")
+        json_string = json_file.read().replace('\\', '\\\\')
+        json_data = json.loads(json_string)
+        
+        self.registry_keywords = '|'.join(json_data['registry_dict'])
+        self.conf_regex_list = json_data['conf_regex']
     
         # Load Romanian spaCy dataset
         try:
@@ -863,8 +870,11 @@ class GetConfWorker(FlaskWorker):
     
     def match_registry(self, text):
         """ Return the position of all the matches for Registry in a text. """
+        
+        # Build Registry REGEX
+        registry_regex = r'(' + self.registry_keywords + ')' + REGISTRY_REG + REG_END
        
-        matches = re.findall(REGISTRY_REG, text)
+        matches = re.findall(registry_regex, text)
             
         res = {}
         for groups in matches:
