@@ -103,6 +103,13 @@ ALL_CUI_REGS = '|'.join(CUI_REGS)
 BRAND_INCLUDE_FACILITY = 1
 BRAND_EXCLUDE_COMMON = 2
 
+# REGISTRY
+REGISTRY_DICT = ['serie', 'seria', 'marca', 'marcă', 'IMEI', 'model']
+REGISTRY_DICT_REG = '|'.join(REGISTRY_DICT)
+REGISTRY_REG = r'(' + REGISTRY_DICT_REG + ')([^0-9A-Z:-_/|]{0,10})([0-9A-Z:-_/| ]{3,})'
+REG_END = r'(?:(?=$)|(?!\d|\w))'
+REGISTRY_REG = REGISTRY_REG + REG_END
+
 # EU CASE
 EU_CASE_REGS = {
     # C-XXX/XX
@@ -854,6 +861,23 @@ class GetConfWorker(FlaskWorker):
                 
         return final_matches
     
+    def match_registry(self, text):
+        """ Return the position of all the matches for Registry in a text. """
+       
+        matches = re.findall(REGISTRY_REG, text)
+            
+        res = {}
+        for groups in matches:
+            match = groups[2]
+            
+            start, end = self.find_match(match, text, res)
+            res[start] = [start, end, 'SERIE']
+                
+            if self.debug: 
+                print(match)
+                
+        return res
+    
     def match_eu_case(self, text):
         """ Return the position of all the matches for EU cases in a text. """
         
@@ -963,7 +987,11 @@ class GetConfWorker(FlaskWorker):
         matches.update(self.match_cui(text))
         
         # Match Brand
-        matches.update(self.match_brand(self.nlp_model, text, brand_checks=[BRAND_EXCLUDE_COMMON, BRAND_INCLUDE_FACILITY]))
+        matches.update(self.match_brand(self.nlp_model, text, 
+                                        brand_checks=[BRAND_EXCLUDE_COMMON, BRAND_INCLUDE_FACILITY]))
+                                        
+        # Match registry
+        matches.update(self.match_registry(text))
         
         # Match EU case and ignore nearby matches
         cases = self.match_eu_case(text)
@@ -1083,9 +1111,9 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """Contractul comercial nr. 23/14 februarie 2014 încheiat între SC Sady Com SRL şi SC Managro SRL, prin care prima societate a vândut celei de-a doua cantitatea de 66 tone azotat de amoniu la preţul de 93.720 RON, precum şi factum proforma emisă de reprezentantul SC Sady Com SRL pentru suma de 93.720 RON.""",
     
-    # 'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
+    'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
     
-    'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
+    # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
     
       }
   
