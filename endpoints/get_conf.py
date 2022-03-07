@@ -67,12 +67,12 @@ PHONE_VALIDATION = 1
 PHONE_REG_VALID = 2
 
 # SERIE NUMAR CI
+SERIE_FORMS = 'serie|SERIE|Serie|seria|SERIA|Seria' 
+NUMAR_FORMS = 'numar|NUMAR|Numar|număr|NUMĂR|Număr|nr|NR|Nr'
 SERIE_NUMAR_REGS = {
-    r'seri(?:e|a) [A-Z]{2}.{0,5}num[aă]r \d{6}',
-    r'seri(?:e|a) [A-Z]{2}.{0,5}nr(?:.)? \d{6}',
-    r'seri(?:e|a) [A-Z]{2}\d{6}',
-    r'num[aă]r [A-Z]{2}\d{6}',
-    r'nr(?:.)? [A-Z]{2}\d{6}'     
+    r'(?:' + SERIE_FORMS + ') [A-Z]{2}.{0,5}(?:' + NUMAR_FORMS + ')(?:.)? \d{6}',
+    r'(?:' + SERIE_FORMS + ') [A-Z]{2}\d{6}',
+    r'(?:' + NUMAR_FORMS + ')(?:.)? [A-Z]{2}\d{6}'     
 }
 REG_END = r'(?:(?=$)|(?!\d|\w))'
 SERIE_NUMAR_REGS = [r + REG_END for r in SERIE_NUMAR_REGS]
@@ -84,16 +84,16 @@ SERII = ["AX", "TR", "AR", "ZR", "XC", "ZC", "MM", "XM", "XB", "XT", "BV", "ZV",
 SERIE_CHECK = 1
 
 # IBAN
-IBAN_REG = r'RO[ ]?\d{2}[ ]?\w{4}(?:[ ]?[A-Z0-9]{4}){4}'
+IBAN_REG = r'(?:RO|ro|Ro)[ ]?\d{2}[ ]?\w{4}(?:[ ]?[A-Z0-9]{4}){4}'
 IBAN_REG = REG_START + IBAN_REG + REG_END
 
 # CUI
 CUI_REGS = {
     # CUI 278973
-    r'(?:CUI|CIF)(?: )?(?:RO)?\d{2,10}',
+    r'(?:CUI|CIF|cui|cif|Cui|Cif)(?: )?(?:RO)?\d{2,10}',
     
     # RO278973
-    r'RO\d{2,10}',    
+    r'(?:RO|ro|Ro)\d{2,10}',    
     
     # J12/123456/2000
     r'(?:J|F|C)(?: )?\d{1,2}\/\d{1,7}\/\d{4}',
@@ -140,7 +140,6 @@ class GetConfWorker(FlaskWorker):
         json_string = json_file.read().replace('\\', '\\\\')
         json_data = json.loads(json_string)
         
-        self.registry_keywords = '|'.join(json_data['registry_dict'])
         self.conf_regex_list = json_data['conf_regex']
     
         # Load Romanian spaCy dataset
@@ -378,81 +377,7 @@ class GetConfWorker(FlaskWorker):
                 # Add the name to the dictionary
                 person_dict[person] = person_code
                 
-        return final_matches, person_dict
-    
-    # def match_name(self, nlp, doc, text,
-    #                person_checks=[]
-    #                ):
-    #     """ Return the position of namess in a text. """
-    #     matches = {}    
-        
-    #     if type(person_checks) == int:
-    #         person_checks = [person_checks]
-        
-    #     person_dict = {}
-    #     current_code = 'A'
-        
-    #     for ent in doc.ents:
-    #         # print(ent, ent.label_)
-            
-    #         if ent.label_ == 'PERSON':
-    #             is_match = True
-                
-    #             start_char = ent.start_char
-    #             end_char = ent.end_char
-                    
-    #             # Check POS
-    #             if is_match and PERSON_PROPN in person_checks:
-    #                 is_match, start_char, end_char = self.check_name_condition(ent, doc, 
-    #                                                                            start_char, end_char,
-    #                                                                            condition='propn')
-                    
-    #             # Check capital letters
-    #             if is_match and PERSON_UPPERCASE in person_checks:
-    #                 is_match, start_char, end_char = self.check_name_condition(ent, doc, 
-    #                                                                            start_char, end_char,
-    #                                                                            condition='capital')
-                    
-    #             # Add capitalized words to the right
-    #             if end_char == ent.end_char:
-    #                 idx = ent[-1].i + 1
-                    
-    #                 while idx < len(doc) and doc[idx].text[0].isupper():
-    #                     end_char = doc[idx].idx + len(doc[idx])
-    #                     idx += 1
-                    
-    #             # Check number of words
-    #             if is_match and PERSON_TWO_WORDS in person_checks:
-    #                 ent_text = text[start_char:end_char]
-    #                 words = re.split("[" + punctuation + " ]+", ent_text)
-    #                 if len(words) < 2:
-    #                     is_match = False
-                
-    #             if is_match:
-                            
-    #                 # Ignore leading and trailing punctuation
-    #                 while text[start_char] in punctuation:
-    #                     start_char += 1
-    #                 while text[end_char - 1] in punctuation:
-    #                     end_char -= 1
-                    
-    #                 matches[start_char] = [start_char, end_char, "NUME"]
-                    
-    #                 person = text[start_char:end_char]
-    #                 if self.debug:
-    #                     print(person)
-                                           
-    #                 person_code = self.find_name(person, person_dict)
-    #                 if not person_code:
-    #                     # Get the next code for names
-    #                     person_code = current_code
-    #                     current_code = self.next_name_code(current_code)
-                        
-    #                 # Add the name to the dictionary
-    #                 person_dict[person] = person_code
-            
-                
-    #     return matches, person_dict        
+        return final_matches, person_dict      
     
     def remove_punct_tokens(self, doc):
         ''' 
@@ -868,40 +793,35 @@ class GetConfWorker(FlaskWorker):
                 
         return final_matches
     
-    def match_registry(self, text):
-        """ Return the position of all the matches for Registry in a text. """
-        
-        # Build Registry REGEX
-        registry_regex = r'(' + self.registry_keywords + ')' + REGISTRY_REG + REG_END
-       
-        matches = re.findall(registry_regex, text)
-            
-        res = {}
-        for groups in matches:
-            match = groups[2]
-            
-            start, end = self.find_match(match, text, res)
-            res[start] = [start, end, 'SERIE']
-                
-            if self.debug: 
-                print(match)
-                
-        return res
-    
     def match_regex(self, text):
         """ Return the position of all the matches for a list of user defined REGEX. """
         
-        matches = []
-        for regex in self.conf_regex_list:
-            matches.extend(re.findall(regex, text))
-          
         res = {}
-        for match in matches:            
-            start, end = self.find_match(match, text, res)
-            res[start] = [start, end, 'REGEX']
+        
+        for entry in self.conf_regex_list:
+            if type(entry) is list:
+                # Keyword + REGEX
+                # Form all variants of trigger
+                trigger = '(?:' + entry[0].lower() + '|' + entry[0].upper() + '|' + entry[0].lower().title() + ')'
+                regex = trigger + entry[1]
+                tag = entry[0].upper()
                 
-            if self.debug: 
-                print(match)
+            else:
+                # Simple REGEX
+                regex = entry
+                tag = "REGEX"
+            
+            matches = re.findall(regex, text)  
+            for match in matches:  
+                if type(match) is tuple:
+                    # If there were multiple capturing groups, concatenate them
+                    match = ''.join(match).strip()
+                    
+                start, end = self.find_match(match, text, res)
+                res[start] = [start, end, tag]
+                    
+                if self.debug: 
+                    print(match)
                 
         return res
     
@@ -994,7 +914,7 @@ class GetConfWorker(FlaskWorker):
           
         self.debug = bool(inputs.get('DEBUG', False))
         
-        # TODO Remove
+        # TODO De sters cand institutiile vor fi deja normalizate la citire
         # Normalize institution names
         self.new_institution_list = []
         for inst in self.institution_list:
@@ -1014,6 +934,9 @@ class GetConfWorker(FlaskWorker):
         text, doc = prep_inputs    
         
         matches = {}
+        
+        # Match institutions
+        matches.update(self.match_institution(self.nlp_model, text, public_insts=self.new_institution_list))
         
         # Match CNPS
         matches.update(self.match_cnp(text))
@@ -1042,9 +965,6 @@ class GetConfWorker(FlaskWorker):
         # Match IBAN
         matches.update(self.match_iban(text))
         
-        # Match institutions
-        matches.update(self.match_institution(self.nlp_model, text, public_insts=self.new_institution_list))
-        
         # Match birthdate
         matches.update(self.match_birthdate(doc, text))
         
@@ -1054,9 +974,6 @@ class GetConfWorker(FlaskWorker):
         # Match Brand
         matches.update(self.match_brand(self.nlp_model, text, 
                                         brand_checks=[BRAND_EXCLUDE_COMMON, BRAND_INCLUDE_FACILITY]))
-                                        
-        # Match registry
-        matches.update(self.match_registry(text))
                                 
         # Match user REGEX
         matches.update(self.match_regex(text))
@@ -1073,9 +990,7 @@ class GetConfWorker(FlaskWorker):
         doc, matches, person_dict = pred
         
         # Select final matches
-        print(matches)
         matches = self.select_matches(matches)
-        print(matches)
         
         # Order matches 
         match_tuples = list(matches.values())
@@ -1129,8 +1044,8 @@ if __name__ == '__main__':
 # În baza lucrărilor din dosar, constată următoarele:
 # Prin sentinţa penală nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală, pronunţată în dosarul nr.490/35/2014, în baza art. 386 din Codul de procedură penală a respins cererea de schimbare a încadrării juridice a faptei de sustragere sau distrugere de înscrisuri, prev. de art. 242 al. 1 şi 3 din Codul penal, cu aplic. art. 5 din Codul penal, în cea de sustragere sau distrugere de probe ori de înscrisuri, prev. de art. 275 al. 1 şi 2 din Codul penal, formulată de inculpatul POPA VASILE CONSTANTIN
 # """,
-      
-       # 'DOCUMENT': """Se desemnează domnul Cocea Radu, avocat, cocea@gmail.com, 0216667896 domiciliat în municipiul Bucureşti, Bd. Laminorului nr. 84, sectorul 1, legitimat cu C.I. seria RD nr. 040958, eliberată la data de 16 septembrie 1998 de Secţia 5 Poliţie Bucureşti, CNP 1561119034963, în calitate de administrator special. Se desemneaza si doamna Alice Munteanu cu telefon 0216654343, domiciliata in Bd. Timisoara nr. 107 """, 
+       
+        # 'DOCUMENT': """Se desemnează domnul Cocea Radu, avocat, cocea@gmail.com, 0216667896 domiciliat în municipiul Bucureşti, Bd. Laminorului nr. 84, sectorul 1, legitimat cu C.I. Seria RD Nr. 040958, eliberată la data de 16 septembrie 1998 de Secţia 5 Poliţie Bucureşti, CNP 1561119034963, în calitate de administrator special. Se desemneaza si doamna Alice Munteanu cu telefon 0216654343, domiciliata in Bd. Timisoara nr. 107 """, 
         
       # 'DOCUMENT': """Cod numeric personal: 1505952103022. Doi copii minori înregistraţi în documentul de identitate.""",
         
@@ -1159,7 +1074,7 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """decizia recurată a fost dată cu încălcarea autorităţii de lucru interpretat, respectiv cu încălcarea dispozitivului hotărârii preliminare pronunţate de Curtea de Justiţie a Uniunii Europene în Cauza C-52/07 (hotărâre care are autoritate de lucru interpretat „erga omnes”)""",
     
     # 'DOCUMENT' : """Subsemnatul Laurentiu Piciu, data nastere 23.07.1995, loc nastere in Rm. Valcea, jud. Valcea, Bd. Tineretului 3A, bl A13, angajat al 
-    # S.C. Knowledge Investment Group S.R.L. CUI 278973, cu adresa in Sector 3 Bucuresti, Str. Frunzei 26 et 1, va rog a-mi aproba cererea de concediu pentru 
+    # S.C. Knowledge Investment Group S.R.L. Cui 278973, cu adresa in Sector 3 Bucuresti, Str. Frunzei 26 et 1, va rog a-mi aproba cererea de concediu pentru 
     # perioada 16.02.2022 - 18.02.2022"""
     
     # 'DOCUMENT' : """Majorează de la 100 lei lunar la câte 175 lei lunar contribuţia de întreţinere datorată de pârâtă reclamantului, în favoarea minorilor A... C... R... Cezărel nascut la data de 20.02.2001 şi A... D... D... născută la data de 07 iunie 2002, începând cu data"""
@@ -1184,9 +1099,9 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """Contractul comercial nr. 23/14 februarie 2014 încheiat între SC Sady Com SRL şi SC Managro SRL, prin care prima societate a vândut celei de-a doua cantitatea de 66 tone azotat de amoniu la preţul de 93.720 RON, precum şi factum proforma emisă de reprezentantul SC Sady Com SRL pentru suma de 93.720 RON.""",
     
-    'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
+    # 'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
     
-    # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
+    'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
     
       }
   
