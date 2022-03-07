@@ -10,11 +10,13 @@ import phonenumbers
 from string import punctuation
 from utils.utils import simple_levenshtein_distance
 import unidecode
+import json
 
 
 _CONFIG = {
-  'SPACY_MODEL' : 'ro_core_news_md',
-  'INSTITUTION_LIST' : 'C:\\Proiecte\\LegeAI\\ALLAN_LegeAI\\_cache\\_data\\nomenclator_institutii_publice.txt'
+  'SPACY_MODEL' : 'ro_core_news_lg',
+  'INSTITUTION_LIST' : 'C:\\Proiecte\\LegeAI\\ALLAN_LegeAI\\_cache\\_data\\nomenclator_institutii_publice.txt',
+  'CONF_REGEX' : 'C:\\Proiecte\\LegeAI\\Date\\Task6\\conf_regex.json'
  }
 
 
@@ -99,6 +101,13 @@ CUI_REGS = {
 CUI_REGS = [REG_START + r + REG_END for r in CUI_REGS]
 ALL_CUI_REGS = '|'.join(CUI_REGS)
 
+# BRAND
+BRAND_INCLUDE_FACILITY = 1
+BRAND_EXCLUDE_COMMON = 2
+
+# REGISTRY
+REGISTRY_REG = '([^0-9A-Z:-_/|]{0,10})([0-9A-Z:-_/| ]{3,})'
+
 # EU CASE
 EU_CASE_REGS = {
     # C-XXX/XX
@@ -122,8 +131,17 @@ class GetConfWorker(FlaskWorker):
 
     def _load_model(self):
         
+        # Read list of public institutions
         inst_file = open(self.config_worker['INSTITUTION_LIST'], 'r', encoding='utf-8')
         self.institution_list = inst_file.read().splitlines()
+        
+        # Read JSON REGEX file
+        json_file = open(self.config_worker['CONF_REGEX'], 'r', encoding="utf-8")
+        json_string = json_file.read().replace('\\', '\\\\')
+        json_data = json.loads(json_string)
+        
+        self.registry_keywords = '|'.join(json_data['registry_dict'])
+        self.conf_regex_list = json_data['conf_regex']
     
         # Load Romanian spaCy dataset
         try:
@@ -257,45 +275,38 @@ class GetConfWorker(FlaskWorker):
         return False
     
     
-    def check_name_condition(self, ent, doc, start_char, end_char,
-                             condition
-                            ):
-        """ Only keep a sequence of words starting with a capital letter """
+    def check_name_condition(self, matches, doc, condition):
+        """ Split matches in sequence of words which respect a condition. """
         
-        is_match = False
-                    
-        i = ent.start
-        while doc[i].idx < start_char:
-            i += 1
+        new_matches = []
         
-        start = start_char
-        end = end_char
-                
-        while i < len(doc) and doc[i].idx < end_char:
-            token = doc[i]
-                        
-            if is_match == False:
-                # Check one of the conditions
+        for (start, end) in matches:
+    
+            current_match_start = -1
+            current_match_end = -1
+    
+            for i in range(start, end):
+                token = doc[i]
+    
                 if self.check_token_condition(token, condition):
-                    start = token.idx
-                    end = token.idx + len(token.text)
-                    is_match = True
-            else:
-                # Check one of the conditions
-                if not self.check_token_condition(token, condition):
-                    break
-                else:          
-                    end = token.idx + len(token.text)
-                        
-            i += 1
-            
-        return is_match, start, end    
+                    if current_match_start == -1:
+                        current_match_start = i
+                    current_match_end = i + 1
+    
+                if not self.check_token_condition(token, condition) or i == end - 1:
+                    if current_match_start != -1:
+    
+                        new_matches.append((current_match_start,current_match_end))
+    
+                        current_match_end = -1
+                        current_match_start = -1
+                    
+        return new_matches  
     
     def match_name(self, nlp, doc, text,
                    person_checks=[]
-                   ):
-        """ Return the position of namess in a text. """
-        matches = {}    
+                  ):
+        """ Return the position of names in a text. """  
         
         if type(person_checks) == int:
             person_checks = [person_checks]
@@ -303,67 +314,145 @@ class GetConfWorker(FlaskWorker):
         person_dict = {}
         current_code = 'A'
         
+        # Form the list of candidate matches
+        candidate_matches = []
         for ent in doc.ents:
-            print(ent, ent.label_)
-            
             if ent.label_ == 'PERSON':
-                is_match = True
+                candidate_matches.append((ent.start, ent.end))
+                    
+        # Check POS PROPN condition
+        if PERSON_PROPN in person_checks:
+            candidate_matches = self.check_name_condition(candidate_matches, doc, condition='propn')
+    
+        # Check uppercase words
+        if PERSON_UPPERCASE in person_checks:
+            candidate_matches = self.check_name_condition(candidate_matches, doc, condition='capital')
                 
-                start_char = ent.start_char
-                end_char = ent.end_char
-                    
-                # Check POS
-                if is_match and PERSON_PROPN in person_checks:
-                    is_match, start_char, end_char = self.check_name_condition(ent, doc, 
-                                                                               start_char, end_char,
-                                                                               condition='propn')
-                    
-                # Check capital letters
-                if is_match and PERSON_UPPERCASE in person_checks:
-                    is_match, start_char, end_char = self.check_name_condition(ent, doc, 
-                                                                               start_char, end_char,
-                                                                               condition='capital')
-                    
-                # Add capitalized words to the right
-                if end_char == ent.end_char:
-                    idx = ent[-1].i + 1
-                    
-                    while idx < len(doc) and doc[idx].text[0].isupper():
-                        end_char = doc[idx].idx + len(doc[idx])
-                        idx += 1
-                    
-                # Check number of words
-                if is_match and PERSON_TWO_WORDS in person_checks:
-                    ent_text = text[start_char:end_char]
-                    words = re.split("[" + punctuation + " ]+", ent_text)
-                    if len(words) < 2:
-                        is_match = False
+        # Check other conditions
+        final_matches = {}
+        for (start, end) in candidate_matches:
+            
+            # Add capitalized words to the right    
+            new_end = end
+            while new_end < len(doc) and doc[new_end].text[0].isupper():
+                # While next word starts with capital letter
+                new_end += 1
                 
-                if is_match:
+            # Add capitalized words to the left    
+            new_start = start
+            while new_start > 0 and doc[new_start - 1].text[0].isupper():
+                # While previous word starts with capital letter
+                new_start -= 1
+            
+            # Check minimum number of words
+            is_match = True
+            if PERSON_TWO_WORDS in person_checks:
+                ent_text = doc[new_start : new_end].text
+                words = re.split("[" + punctuation + " ]+", ent_text)
+                if len(words) < 2:
+                    is_match = False
+                    
+                    
+            if is_match:
+                start_idx = doc[new_start].idx
+                end_idx = doc[new_end - 1].idx + len(doc[new_end - 1])
+                
+                # Ignore leading and trailing punctuation
+                while text[start_idx] in punctuation:
+                    start_idx += 1
+                while text[end_idx - 1] in punctuation:
+                    end_idx -= 1
+                
+                final_matches[start_idx] = [start_idx, end_idx, "NUME"]
+                
+                person = text[start_idx:end_idx]
+                if self.debug:
+                    print(person)
+                                       
+                person_code = self.find_name(person, person_dict)
+                if not person_code:
+                    # Get the next code for names
+                    person_code = current_code
+                    current_code = self.next_name_code(current_code)
+                    
+                # Add the name to the dictionary
+                person_dict[person] = person_code
+                
+        return final_matches, person_dict
+    
+    # def match_name(self, nlp, doc, text,
+    #                person_checks=[]
+    #                ):
+    #     """ Return the position of namess in a text. """
+    #     matches = {}    
+        
+    #     if type(person_checks) == int:
+    #         person_checks = [person_checks]
+        
+    #     person_dict = {}
+    #     current_code = 'A'
+        
+    #     for ent in doc.ents:
+    #         # print(ent, ent.label_)
+            
+    #         if ent.label_ == 'PERSON':
+    #             is_match = True
+                
+    #             start_char = ent.start_char
+    #             end_char = ent.end_char
+                    
+    #             # Check POS
+    #             if is_match and PERSON_PROPN in person_checks:
+    #                 is_match, start_char, end_char = self.check_name_condition(ent, doc, 
+    #                                                                            start_char, end_char,
+    #                                                                            condition='propn')
+                    
+    #             # Check capital letters
+    #             if is_match and PERSON_UPPERCASE in person_checks:
+    #                 is_match, start_char, end_char = self.check_name_condition(ent, doc, 
+    #                                                                            start_char, end_char,
+    #                                                                            condition='capital')
+                    
+    #             # Add capitalized words to the right
+    #             if end_char == ent.end_char:
+    #                 idx = ent[-1].i + 1
+                    
+    #                 while idx < len(doc) and doc[idx].text[0].isupper():
+    #                     end_char = doc[idx].idx + len(doc[idx])
+    #                     idx += 1
+                    
+    #             # Check number of words
+    #             if is_match and PERSON_TWO_WORDS in person_checks:
+    #                 ent_text = text[start_char:end_char]
+    #                 words = re.split("[" + punctuation + " ]+", ent_text)
+    #                 if len(words) < 2:
+    #                     is_match = False
+                
+    #             if is_match:
                             
-                    # Ignore leading and trailing punctuation
-                    while text[start_char] in punctuation:
-                        start_char += 1
-                    while text[end_char - 1] in punctuation:
-                        end_char -= 1
+    #                 # Ignore leading and trailing punctuation
+    #                 while text[start_char] in punctuation:
+    #                     start_char += 1
+    #                 while text[end_char - 1] in punctuation:
+    #                     end_char -= 1
                     
-                    matches[start_char] = [start_char, end_char, "NUME"]
+    #                 matches[start_char] = [start_char, end_char, "NUME"]
                     
-                    person = text[start_char:end_char]
-                    if self.debug:
-                        print(person)
+    #                 person = text[start_char:end_char]
+    #                 if self.debug:
+    #                     print(person)
                                            
-                    person_code = self.find_name(person, person_dict)
-                    if not person_code:
-                        # Get the next code for names
-                        person_code = current_code
-                        current_code = self.next_name_code(current_code)
+    #                 person_code = self.find_name(person, person_dict)
+    #                 if not person_code:
+    #                     # Get the next code for names
+    #                     person_code = current_code
+    #                     current_code = self.next_name_code(current_code)
                         
-                    # Add the name to the dictionary
-                    person_dict[person] = person_code
+    #                 # Add the name to the dictionary
+    #                 person_dict[person] = person_code
             
                 
-        return matches, person_dict        
+    #     return matches, person_dict        
     
     def remove_punct_tokens(self, doc):
         ''' 
@@ -522,72 +611,40 @@ class GetConfWorker(FlaskWorker):
             
         return res
     
-    def match_institution(self, text, insts, matches,
-                          removeDots=True                     
-                         ):
+    def match_institution(self, nlp, text, public_insts):
         """ Return the position of all the matches for institutions in a text. """
         
-        normalized_text = unidecode.unidecode(text.lower())
+        matches = {}    
         
-        res = {}
+        doc = nlp(text)
         
-        i = 0 
-        while i < len(insts):
+        # Collect all Organization matches
+        for ent in doc.ents:
             
-            inst = insts[i]
-            normalized_inst = unidecode.unidecode(inst.lower())
-            
-            # If the name contains dots, also include the name without dots
-            if removeDots and '.' in normalized_inst:
-                insts.append(normalized_inst.replace('.', ''))
-            
-            start = 0
-            while True:
-                start = normalized_text.find(normalized_inst, start)
+            if ent.label_ == 'ORGANIZATION':
                 
-                if start == -1: 
-                    break
-                else:
-                    add_match = True
-                    end = start + len(normalized_inst)
-                    
-                    # Check if the match is delimitated
-                    if text[start -1].isalpha() or text[end].isalpha():
-                        add_match = False
-                    
-                    if add_match:
-                        # Check for overlapping matches
-                        for (s, t) in res.items():
-                            e = t[1]
-                            if start >= s and start < e:
-                                add_match = False
-                                if len(normalized_inst) > e - s:
-                                    # Choose the larger name
-                                    res.pop(s)
-                                    add_match = True
-                                break
-                    
-                    if add_match:
-                    
-                        # Check if it was part of any previous match
-                        contained = False
-                        
-                        for (prev_start, prev_match) in matches.items():
-                            prev_end = prev_match[1]
-                            if (prev_start <= start and start < prev_end) or (prev_start < end and end <= prev_end):
-                                contained = True
-                                break
-                        
-                        if not contained:
-                            res[start] = [start, end, 'INSTITUTION']
-                        if self.debug:
-                            print(normalized_inst)
+                is_match = True
+    
+                start_char = ent.start_char
+                end_char = ent.end_char
                 
-                start += len(normalized_inst)
+                # Filter matches the represent public institutions
                 
-            i += 1
+                match_normalized = unidecode.unidecode(ent.text.lower())
+                match_stripped = ''.join(filter(str.isalnum, match_normalized))
                 
-        return res
+                for public_inst in public_insts:
+    
+                    if match_normalized == public_inst or match_stripped == public_inst:
+                        is_match = False
+                        break
+    
+                if is_match:
+                    matches[start_char] = [start_char, end_char, "INSTITUTIE"]
+                    if self.debug:
+                        print(ent.text)
+                
+        return matches
     
     def match_iban(self, text):
         """ Return the position of all the matches for IBANs in a text. """
@@ -714,7 +771,6 @@ class GetConfWorker(FlaskWorker):
             end = start + len(doc[match_tokens[1]].text) 
         
         elif match_name == 'birthdate4':
-            print(match_tokens)
             start = doc[match_tokens[2]].idx
             end = doc[match_tokens[3]].idx + len(doc[match_tokens[3]].text)
             
@@ -747,6 +803,103 @@ class GetConfWorker(FlaskWorker):
             start, end = self.find_match(match, text, res)
             res[start] = [start, end, 'CUI']
             
+            if self.debug: 
+                print(match)
+                
+        return res
+    
+    def check_common_words(self, matches, doc):
+        """ Split matches in sequence of words which do not contain common words. """
+        
+        new_matches = []
+        
+        for (start, end) in matches:
+    
+            current_match_start = -1
+            current_match_end = -1
+    
+            for i in range(start, end):
+                token = doc[i]
+    
+                if not token.is_alpha or token.text[0].isupper():
+                    if current_match_start == -1:
+                        current_match_start = i
+                    current_match_end = i + 1
+    
+                if (token.is_alpha and not token.text[0].isupper()) or i == end - 1:
+                    if current_match_start != -1:
+    
+                        new_matches.append((current_match_start,current_match_end))
+    
+                        current_match_end = -1
+                        current_match_start = -1
+                    
+        return new_matches
+    
+    def match_brand(self, nlp, text,
+                    brand_checks=[]
+                   ):
+        """ Return the position of all the matches for brands in a text. """
+        
+        if type(brand_checks) == int:
+            brand_checks = [brand_checks]
+        
+        doc = nlp(text)    
+        
+        # Form the list of candidate matches
+        candidate_matches = []
+        for ent in doc.ents:
+            if ent.label_ == 'PRODUCT' or (BRAND_INCLUDE_FACILITY in brand_checks and ent.label_ == 'FACILITY'):
+                candidate_matches.append((ent.start, ent.end))
+        
+        # Exclude common words
+        if BRAND_EXCLUDE_COMMON in brand_checks:
+            candidate_matches = self.check_common_words(candidate_matches, doc)     
+        
+        # Get final matches
+        final_matches = {}
+        for (start, end) in candidate_matches:
+            start_idx = doc[start].idx
+            end_idx = doc[end - 1].idx + len(doc[end - 1])
+            final_matches[start_idx] = [start_idx, end_idx, "BRAND"]
+            
+            if self.debug: 
+                print(doc[start:end])
+                
+        return final_matches
+    
+    def match_registry(self, text):
+        """ Return the position of all the matches for Registry in a text. """
+        
+        # Build Registry REGEX
+        registry_regex = r'(' + self.registry_keywords + ')' + REGISTRY_REG + REG_END
+       
+        matches = re.findall(registry_regex, text)
+            
+        res = {}
+        for groups in matches:
+            match = groups[2]
+            
+            start, end = self.find_match(match, text, res)
+            res[start] = [start, end, 'SERIE']
+                
+            if self.debug: 
+                print(match)
+                
+        return res
+    
+    def match_regex(self, text):
+        """ Return the position of all the matches for a list of user defined REGEX. """
+        
+        matches = []
+        for regex in self.conf_regex_list:
+            matches.extend(re.findall(regex, text))
+          
+        res = {}
+        for match in matches:            
+            start, end = self.find_match(match, text, res)
+            res[start] = [start, end, 'REGEX']
+                
             if self.debug: 
                 print(match)
                 
@@ -786,6 +939,44 @@ class GetConfWorker(FlaskWorker):
                 print('Removed', (m_start, m_end, m_type))
                 
         return new_matches
+    
+    def select_matches(self, matches_dict):
+        """ Select the final matches. """
+        
+        matches = list(matches_dict.values())
+        
+        final_matches = {}
+        
+        for i, (start1, end1, text1) in enumerate(matches):    
+            
+            add_match = True
+            for j in range(i + 1, len(matches)):
+                (start2, end2, text2) = matches[j]
+                    
+                # First match completly included in second one
+                if start2 <= start1 and end1 <= end2:
+                    # Ignore first match
+                    add_match = False
+                    break
+                        
+                # Matches intersect each other
+                elif (start2 <= start1 and start1 <= end2) or (start2 <= end1 and end1 <= end2):
+                    # Select the larger match
+                    if len(text1) > len(text2):
+                        text = text1
+                    else:
+                        text = text2
+                            
+                    # Add match union
+                    matches[j] = (min(start1, start2), max(end1, end2), text)
+                    add_match = False
+                        
+                    break
+                        
+            if add_match:
+                final_matches[start1] = (start1, end1, text1)     
+        
+        return final_matches
         
     #######
     # AUX #
@@ -802,6 +993,16 @@ class GetConfWorker(FlaskWorker):
             text, ct.MODELS.TAG_MIN_INPUT))
           
         self.debug = bool(inputs.get('DEBUG', False))
+        
+        # TODO Remove
+        # Normalize institution names
+        self.new_institution_list = []
+        for inst in self.institution_list:
+            inst_normalized = unidecode.unidecode(inst.lower())
+            self.new_institution_list.append(inst_normalized)
+            
+            inst_stripped = ''.join(filter(str.isalnum, inst_normalized))
+            self.new_institution_list.append(inst_stripped)
         
         # Apply spaCy analysis
         doc = self.nlp_model(text)
@@ -825,7 +1026,7 @@ class GetConfWorker(FlaskWorker):
         
         # Match names
         name_matches, person_dict = self.match_name(self.nlp_model, doc, text, 
-                                                    person_checks=[PERSON_PROPN, PERSON_UPPERCASE, PERSON_TWO_WORDS])
+                                                    person_checks=[PERSON_PROPN, PERSON_UPPERCASE])
         
         matches.update(name_matches)  
         if self.debug:
@@ -842,14 +1043,23 @@ class GetConfWorker(FlaskWorker):
         matches.update(self.match_iban(text))
         
         # Match institutions
-        matches.update(self.match_institution(text, insts=self.institution_list, 
-                                              matches=matches, removeDots=True))
+        matches.update(self.match_institution(self.nlp_model, text, public_insts=self.new_institution_list))
         
         # Match birthdate
         matches.update(self.match_birthdate(doc, text))
         
         # Match CUI
         matches.update(self.match_cui(text))
+        
+        # Match Brand
+        matches.update(self.match_brand(self.nlp_model, text, 
+                                        brand_checks=[BRAND_EXCLUDE_COMMON, BRAND_INCLUDE_FACILITY]))
+                                        
+        # Match registry
+        matches.update(self.match_registry(text))
+                                
+        # Match user REGEX
+        matches.update(self.match_regex(text))
         
         # Match EU case and ignore nearby matches
         cases = self.match_eu_case(text)
@@ -862,6 +1072,11 @@ class GetConfWorker(FlaskWorker):
         
         doc, matches, person_dict = pred
         
+        # Select final matches
+        print(matches)
+        matches = self.select_matches(matches)
+        print(matches)
+        
         # Order matches 
         match_tuples = list(matches.values())
         match_starts = list(sorted(matches.keys(), reverse=True))
@@ -873,8 +1088,9 @@ class GetConfWorker(FlaskWorker):
             if label != 'NUME':
                 hidden_doc = hidden_doc[:start] + 'X' + hidden_doc[end:]
         
-        # Replace names with their codes
-        for (name, code) in person_dict.items():
+        # Replace names with their codes, starting with longer names (which might include the shorter ones)
+        for name in sorted(person_dict, key=len, reverse=True):
+            code = person_dict[name]
             
             # Search for all occurances of name
             while True:
@@ -909,7 +1125,7 @@ if __name__ == '__main__':
 #       'DOCUMENT': """S-au luat în examinare ADPP apelurile declarate de Parchetul de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia naţională Anticorupţie şi de inculpatul Popa Vasile Constantin împotriva sentinţei penale nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală.
 # Dezbaterile au fost consemnate în încheierea de şedinţă din data de 09 ianuarie 2020,  ce face parte integrantă din prezenta decizie şi având nevoie de timp pentru a delibera, în baza art. 391 din Codul de procedură penală a amânat pronunţarea pentru azi 22 ianuarie 2020, când în aceeaşi compunere a pronunţat următoarea decizie:
 # ÎNALA CURTE
-# 	Asupra apelurilor penale de faţă;
+#  	Asupra apelurilor penale de faţă;
 # În baza lucrărilor din dosar, constată următoarele:
 # Prin sentinţa penală nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală, pronunţată în dosarul nr.490/35/2014, în baza art. 386 din Codul de procedură penală a respins cererea de schimbare a încadrării juridice a faptei de sustragere sau distrugere de înscrisuri, prev. de art. 242 al. 1 şi 3 din Codul penal, cu aplic. art. 5 din Codul penal, în cea de sustragere sau distrugere de probe ori de înscrisuri, prev. de art. 275 al. 1 şi 2 din Codul penal, formulată de inculpatul POPA VASILE CONSTANTIN
 # """,
@@ -946,7 +1162,31 @@ if __name__ == '__main__':
     # S.C. Knowledge Investment Group S.R.L. CUI 278973, cu adresa in Sector 3 Bucuresti, Str. Frunzei 26 et 1, va rog a-mi aproba cererea de concediu pentru 
     # perioada 16.02.2022 - 18.02.2022"""
     
-    'DOCUMENT' : """Majorează de la 100 lei lunar la câte 175 lei lunar contribuţia de întreţinere datorată de pârâtă reclamantului, în favoarea minorilor A... C... R... Cezărel nascut la data de 20.02.2001 şi A... D... D... născută la data de 07 iunie 2002, începând cu data"""
+    # 'DOCUMENT' : """Majorează de la 100 lei lunar la câte 175 lei lunar contribuţia de întreţinere datorată de pârâtă reclamantului, în favoarea minorilor A... C... R... Cezărel nascut la data de 20.02.2001 şi A... D... D... născută la data de 07 iunie 2002, începând cu data"""
+    
+    # DE LA CLIENT
+    
+    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    
+    # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
+    
+    # 'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
+    
+    # 'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
+    
+#     'DOCUMENT' : """intimatul Ionescu Lucian Florin (fiul lui Eugen şi Anicuţa, născut la data de 30.09.1984 în municipiul Bucureşti, domiciliat în municipiul Bucureşti, str. Petre Păun, nr. 3 bl. G9D, sc. 3, et. 8, ap. 126, sector 5, CNP 1840930420032, prin sentinţa penală nr. 169 din 29.10.2015 a Tribunalului Călăraşi, definitivă prin decizia penală nr. 1460/A din 07.10.2016 a Curţii de Apel Bucureşti - Secţia a II-a Penală sunt concurente cu cele pentru a căror săvârşire a fost condamnat acelaşi intimat prin sentinţa penală nr. 106/F din 09.06.2016 pronunţată de Ionescu Florin.
+# în mod corect şi motivat, Ionescu Lucian a fost declarat
+# în mod corect şi motivat, lonescu Lucian Florin  a fost declarat""",
+
+    # 'DOCUMENT' : """-a dispus restituirea către partea civilă Barbu Georgiana a tabletelor marca Sony Vaio cu seria SVD112A1SM, cu încărcător aferent şi marca ASUS seria SN:CCOKBC314490""",
+    
+    # 'DOCUMENT' : """Comanda comerciala nr. 1320679561/27 august 2014 efectuată de reprezentantul SC Sady Com SRL de la societatea Borealis L.A.T., prin care prima societate a achiziţionat o cantitate de îngrăşăminte la preţul de 44.684,64 lei,""",
+    
+    # 'DOCUMENT' : """Contractul comercial nr. 23/14 februarie 2014 încheiat între SC Sady Com SRL şi SC Managro SRL, prin care prima societate a vândut celei de-a doua cantitatea de 66 tone azotat de amoniu la preţul de 93.720 RON, precum şi factum proforma emisă de reprezentantul SC Sady Com SRL pentru suma de 93.720 RON.""",
+    
+    'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
+    
+    # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
     
       }
   
