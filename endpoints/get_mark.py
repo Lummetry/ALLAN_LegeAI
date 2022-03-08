@@ -21,6 +21,14 @@ _CONFIG = {
   'IDX2WORD' : 'lai_ro_i2w_191K.pkl'
   }
 
+MIN_SUBDOCUMENTS = 2
+MIN_SUBDOCUMENT_WORDS = 100
+MAX_QUERY_WORDS = 50
+
+MAX_COS_DISTANCE = 0.5
+
+
+__VER__='0.1.0.0'
 class GetMarkWorker(FlaskWorker):
   def __init__(self, **kwargs):
     super(GetMarkWorker, self).__init__(**kwargs)
@@ -54,56 +62,78 @@ class GetMarkWorker(FlaskWorker):
 
     self._create_notification('LOAD', 'Loaded EmbeddingApproximator')
     return
+
+
+#######
+# AUX #
+#######
+
+  def cosine_distance(self, a, b):
+      a_norm = np.linalg.norm(a)
+      b_norm = np.linalg.norm(b)
+      similiarity = np.dot(a, b.T)/(a_norm * b_norm)
+      dist = 1. - similiarity
+      
+      return dist
+
     
 
-  def _pre_process(self, inputs):
+  def _pre_process(self, inputs): 
+      
+    # Read query
     query = inputs['QUERY']
-
-    if len(query.split(' ')) > ct.MODELS.QA_MAX_INPUT:
-      raise ValueError("Query: '{}' exceedes max number of allowed words of {}".format(
-        query, ct.MODELS.QA_MAX_INPUT))
+    if len(query.split(' ')) > MAX_QUERY_WORDS:
+        raise ValueError("Query: '{}' exceedes max number of allowed words of {}".format(
+            query, MAX_QUERY_WORDS))
+    # Embed query
     query_embeds = self.encoder.encode_convert_unknown_words(
-      query,
-      fixed_len=ct.MODELS.TAG_MAX_LEN
-    )
-    self.current_query_embeds = query_embeds # not needed in tagger
-
-    n_hits = int(inputs.get('TOP_N', 10))
+              query,
+              fixed_len=ct.MODELS.TAG_MAX_LEN
+    )    
     
+    # Read subdocument list
+    docs = inputs['DOCUMENTS']    
+    if len(docs) < MIN_SUBDOCUMENTS:
+      raise ValueError("Number of subdocuments is below the minimum of {}".format(
+        MIN_SUBDOCUMENTS))
     
-    docs = inputs['DOCUMENTS']
-    self.current_docs_embeds = []
-    
+    # Embed each subdocument
+    docs_embeds = []    
     for doc in docs:
-        if len(doc) < ct.MODELS.TAG_MIN_INPUT:
+        if len(doc) < MIN_SUBDOCUMENT_WORDS:
           raise ValueError("Document: '{}' is below the minimum of {} words".format(
-            doc, ct.MODELS.TAG_MIN_INPUT))
+            doc, MIN_SUBDOCUMENT_WORDS))
         doc_embeds = self.encoder.encode_convert_unknown_words(
           doc,
           fixed_len=ct.MODELS.TAG_MAX_LEN
         )
-        self.current_docs_embeds.append(doc_embeds)
-        
-    print(self.current_docs_embeds)
+        docs_embeds.append(doc_embeds)
 
-    return query_embeds, n_hits
-    
+    return query_embeds, docs_embeds    
+
 
   def _predict(self, prep_inputs):
-    inputs, n_hits = prep_inputs
-    res = self.tagger_model(inputs).numpy()
-    return res, n_hits
+    query_embeds, docs_embeds = prep_inputs
+    
+    query_tag_vector = self.tagger_model(query_embeds).numpy().squeeze()
+    
+    selected_docs = []
+    for i, doc_embeds in enumerate(docs_embeds):
+        doc_tag_vector = self.tagger_model(doc_embeds).numpy().squeeze()
+        distance = self.cosine_distance(query_tag_vector, doc_tag_vector)
+        
+        if distance < MAX_COS_DISTANCE:
+            selected_docs.append(i)    
+    
+    return selected_docs
 
   def _post_process(self, pred):
-    predictions, n_hits = pred
-    top_n_idxs = np.argsort(predictions.squeeze())[-n_hits:]
+    selected_docs = pred
+    
+    # TODO REPLACE N HITS
 
     res = {}
-    res['results'] = [
-      [self.id_to_label[i], round(predictions.squeeze()[i].astype(float), 3)]
-      for i in top_n_idxs
-    ]
-    res['results'].reverse()
+    res['results'] = selected_docs
 
     return res
     
@@ -118,17 +148,12 @@ if __name__ == '__main__':
       'QUERY' : 'Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti?',
       'DOCUMENTS': [
           """Subsemnatul Damian Ionut Andrei, domiciliat in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 , nascut pe data 24-01-1982, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Bucuresti, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126413223 serie RK, numar 897567 nu detine averi ilicite""",
-          """decizia recurată a fost dată cu încălcarea autorităţii de lucru interpretat, respectiv cu încălcarea dispozitivului hotărârii preliminare pronunţate de Curtea de Justiţie a Uniunii Europene în Cauza C-52/07 (hotărâre care are autoritate de lucru interpretat „erga omnes”)"""
-          ],
-      'TOP_N' : 5
+          """decizia recurată a fost dată cu încălcarea autorităţii de lucru interpretat, respectiv cu încălcarea dispozitivului hotărârii preliminare pronunţate de Curtea de Justiţie a Uniunii Europene în Cauza C-52/07 (hotărâre care are autoritate de lucru interpretat „erga omnes”)""",
+           """Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti? Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti? Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti?""",
+          ]
     },
-
-    # {
-    #   'QUERY' : 'Cat la suta din salariul brut merge la pensii pentru un programator?',
-    #   'TOP_N' : 7
-    # }
   ]
 
   for i,_input in enumerate(inputs_to_test):
     result = w.execute(inputs=_input, counter=i)
-    log.P("Input: {}\nResult:{}".format(_input, result), color='m')
+    print(result)
