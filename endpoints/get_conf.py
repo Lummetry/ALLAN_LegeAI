@@ -20,6 +20,15 @@ _CONFIG = {
  }
 
 
+# File paths
+# Debug
+INSTITUTION_LIST_DEBUG = 'C:\\Proiecte\\LegeAI\\ALLAN_LegeAI\\_cache\\_data\\nomenclator_institutii_publice.txt'
+CONF_REGEX_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\conf_regex.json'
+# Prod
+INSTITUTION_LIST_PROD = 'C:\\allan_data\\2022.01.26\\nomenclator institutii publice.txt'
+CONF_REGEX_PROD = 'C:\\allan_data\\2022.03.07\\conf_regex.json'
+
+
 # CNP 
 CNP_REG1 = re.compile(r'[0-9]{13}')
 CNP_REG2 = re.compile(r'[1-8][0-9]{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[1-2][0-9]|3[0-1])[0-9]{6}')
@@ -119,6 +128,7 @@ ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
 
+__VER__='0.1.1.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -130,17 +140,6 @@ class GetConfWorker(FlaskWorker):
       return
 
     def _load_model(self):
-        
-        # Read list of public institutions
-        inst_file = open(self.config_worker['INSTITUTION_LIST'], 'r', encoding='utf-8')
-        self.institution_list = inst_file.read().splitlines()
-        
-        # Read JSON REGEX file
-        json_file = open(self.config_worker['CONF_REGEX'], 'r', encoding="utf-8")
-        json_string = json_file.read().replace('\\', '\\\\')
-        json_data = json.loads(json_string)
-        
-        self.conf_regex_list = json_data['conf_regex']
     
         # Load Romanian spaCy dataset
         try:
@@ -906,13 +905,33 @@ class GetConfWorker(FlaskWorker):
     
     
     def _pre_process(self, inputs):
+        
+        self.debug = bool(inputs.get('DEBUG', False))
+        
+        # Read files
+        if self.debug:
+            institution_file = INSTITUTION_LIST_DEBUG
+            regex_file = CONF_REGEX_DEBUG
+        else:
+            institution_file = INSTITUTION_LIST_PROD
+            regex_file = CONF_REGEX_PROD
+        
+        # Read list of public institutions
+        inst_file = open(institution_file, 'r', encoding='utf-8')
+        self.institution_list = inst_file.read().splitlines()
+        
+        # Read JSON REGEX file
+        json_file = open(regex_file, 'r', encoding="utf-8")
+        json_string = json_file.read().replace('\\', '\\\\')
+        json_data = json.loads(json_string)        
+        self.conf_regex_list = json_data['conf_regex']
                 
+        
         text = inputs['DOCUMENT']
         if len(text) < ct.MODELS.TAG_MIN_INPUT:
           raise ValueError("Document: '{}' is below the minimum of {} words".format(
             text, ct.MODELS.TAG_MIN_INPUT))
           
-        self.debug = bool(inputs.get('DEBUG', False))
         
         # TODO De sters cand institutiile vor fi deja normalizate la citire
         # Normalize institution names
