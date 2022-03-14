@@ -128,7 +128,7 @@ ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
 
-__VER__='0.1.1.0'
+__VER__='0.1.1.1'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -317,7 +317,7 @@ class GetConfWorker(FlaskWorker):
         for ent in doc.ents:
             if ent.label_ == 'PERSON':
                 candidate_matches.append((ent.start, ent.end))
-                    
+                  
         # Check POS PROPN condition
         if PERSON_PROPN in person_checks:
             candidate_matches = self.check_name_condition(candidate_matches, doc, condition='propn')
@@ -341,7 +341,7 @@ class GetConfWorker(FlaskWorker):
             while new_start > 0 and doc[new_start - 1].text[0].isupper():
                 # While previous word starts with capital letter
                 new_start -= 1
-            
+        
             # Check minimum number of words
             is_match = True
             if PERSON_TWO_WORDS in person_checks:
@@ -932,6 +932,8 @@ class GetConfWorker(FlaskWorker):
           raise ValueError("Document: '{}' is below the minimum of {} words".format(
             text, ct.MODELS.TAG_MIN_INPUT))
           
+        # Remove extra whitespaces
+        text = re.sub(' +', ' ', text)          
         
         # TODO De sters cand institutiile vor fi deja normalizate la citire
         # Normalize institution names
@@ -1120,8 +1122,33 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
     
-    'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
+    # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
     
+    'DOCUMENT' : """Prn cererea de chemare în judecată înregistrată pe rolul Curţii de Apel Bucureşti – Secţia a VIII- a Contencios Administrativ şi Fiscal sub numărul 2570/2/2017, reclamantul Curuti   Ionel, a solicitat, în contradictoriu cu pârâta Agenţia Naţională de Integritate anularea Raportului de evaluare nr. 9756/G/II/17.03.2017 întocmit de ANI - Inspecţia de Integritate şi obligarea pârâtei la plata cheltuielilor de judecata ocazionate.""",
+#     'DOCUMENT' : """S-au luat în examinare recursurile formulate de reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A. și chemata în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.) împotriva Sentinţei nr. 97 din 12 aprilie 2017 pronunţată de Curtea de Apel Ploiești – Secţia a II-a Civilă, de Contencios Administrativ şi Fiscal. La apelul nominal, făcut în şedinţă publică, răspunde recurenta- reclamantă S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin consilier juridic Niţă Vasile Laurenţiu, care depune delegaţie de reprezentare la dosar, recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.), prin consilier juridic Marinela Vladescu, care depune delegaţie de reprezentare la dosarul cauzei, lipsă fiind intimatul-pârât Ministerul Investiţiilor şi Proiectelor Europene (fostul Ministerul Fondurilor Europene). Procedura de citare este legal îndeplinită. Se prezintă referatul cauzei, magistratul – asistent învederând că recurenta-reclamantă a formulat o cerere de renunţare la cererea de chemare în judecată precum şi la cererea de chemare în garanţie, cu privire la care s-a depus punct de vedere în sensul de a se lua act de cererea de renunţare la judecată. Reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin avocat, conform art. 406 alin. 5 Cod procedură civilă, solicită a se lua act de cererea de renunţare la judecată, respectiv de chemare în garanţie, cu consecinţa anulării hotărârilor pronunţate de Curtea de Apel Ploieşti. Recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L., prin consilier juridic, precizează că nu se opune renunţării la judecată, astfel cum a fost solicitată de recurenta-reclamantă, apreciind că sunt îndeplinite condiţiile prevăzute de dispozițiile art. 406 Cod procedură civilă.""",
+#     'DOCUMENT' : """Totodată, a notificat beneficiarii PNDL cu privire la epuizarea creditelor bugetare în proporţie de 80% pentru PNDL 1, ultimele transferuri efectuându-se parţial pentru solicitările de finanţare depuse până în data de 08.11.2017 (adresa nr. 155732/18.12.2017).""",
+#     'DOCUMENT' : """S-au luat în examinare recursul formulat de petentul Lupea Nicodim Eugen împotriva sentinţei penale nr. 494 din data de 27 noiembrie 2020, pronunţate de Înalta Curte de Casaţie şi Justiţie – Secţia penală în dosarul nr. 3039/1/2020.
+# La apelul nominal, făcut în şedinţă publică, a lipsit recurentul Lupea Eugen Nicodim.
+# Procedura de citare a fost legal îndeplinită.
+# În conformitate cu dispoziţiile art. 369 alin. 1 din Codul de procedură penală, instanţa a procedat la înregistrarea desfăşurării şedinţei de judecată cu mijloace tehnice, stocarea informaţiilor realizându-se în memoria calculatorului.
+# S-a făcut referatul cauzei de către magistratul asistent, care a învederat următoarele:
+# - cauza are ca obiect recursul formulat de petentul Lupea Nicodim împotriva sentinţei penale nr. 494 din data de 27 noiembrie 2020, pronunţate de Înalta Curte de Casaţie şi Justiţie – Secţia penală în dosarul nr. 3039/1/2020;""",
+#     'DOCUMENT' : """Cum în prezenta cauză s-a formulat contestaţie în anulare împotriva unei decizii prin care a fost respins, ca inadmisibil, recursul formulat de contestatorul Dumitrescu Iulian, cale de atac exercitată împotriva unei hotărâri, prin care au fost respinse, ca inadmisibile, căile de atac formulate de acelaşi contestator în nume propriu şi pentru numiţii Patatu Geta, Branzariu Maria Crina, Paltinisanu Adrian, Ignat Vasile, Ciurcu Octavian Constantin, Florici Gheorghe, Sfrijan Marius, Puscasu Ermina Nicoleta, Dragoi Silvia Alina, Bolog Sandrino Iulian, Popa Georgeta, Malanciuc Petru Iulian, Tudorei Vladimir, Buscu Nicoleta Cristina, Budai Paul, Lostun Elena, Bolohan Marcel şi Musca Marinela, împotriva încheierii penale nr. 226/RC din data de 7 iunie 2019, pronunțate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1181/1/2019 , Completul de 5 Judecători, a constatat că prin hotărârea atacată nu a fost soluţionată""",
+#     'DOCUMENT' : """S-a luat în examinare apelul formulat de contestatoarea Ignatenko (Păvăloiu) Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
+# La apelul nominal făcut în ședință publică, a lipsit apelanta contestatoare Ignatenko (Păvăloiu) Nela, pentru care a răspuns apărătorul ales, avocat Nastasiu Ciprian, cu împuternicire avocaţială la dosarul cauzei (fila 9 din dosar).
+# Procedura de citare a fost legal îndeplinită.
+# În conformitate cu dispozițiile art. 369 alin. (1) din Codul de procedură penală, s-a procedat la înregistrarea desfășurării ședinței de judecată cu mijloace tehnice, stocarea datelor realizându-se în memoria calculatorului.
+# S-a făcut referatul cauzei de către magistratul asistent, care a învederat faptul că prezentul dosar are ca obiect apelul formulat de contestatoarea Ignatenko (Păvăloiu) Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
+# Cu titlu prealabil, reprezentantul Ministerului Public a invocat excepţia inadmisibilităţii căii de atac formulate întrucât vizează o decizie definitivă, pronunţată de Secţia penală a instanţei supreme în calea extraordinară de atac a contestaţiei în anulare.
+# Înalta Curte de Casaţie şi Justiţie, Completul de 5 Judecători a supus discuţiei părţilor excepţia inadmisibilităţii căii de atac, invocate de reprezentantul Ministerului Public.
+# Apărătorul ales al apelantei contestatoare Ignatenko (Păvăloiu) Nela a învederat că este admisibil apelul declarat împotriva deciziei penale nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021, această din urmă decizie fiind definitivă doar în ceea ce priveşte dispoziţia de admitere a contestaţiei în anulare formulate de S.C. Reciplia SRL.
+# În ceea ce priveşte dispoziţia de respingere a contestaţiei în anulare formulate de contestatoarea Ignatenko (Păvăloiu) Nela, apărarea a opinat că în această ipoteză este aplicabil art. 432 alin. (4) din Codul de procedură penală, în cuprinsul căruia se stipulează faptul că sentinţele pronunţate în calea de atac a contestaţiei în anulare, altele decât cele privind admisibilitatea, sunt supuse apelului. În acest sens, apărătorul ales a făcut trimitere la decizia nr. 5/2015, pronunţată de instanţa supremă.""",
+#     'DOCUMENT' : """Prin sentinţa penală nr. 112/F din data de 16 mai 2019 pronunţată în dosarul nr. 2555/2/2019 (1235/2019), Curtea de Apel Bucureşti – Secţia a II-a Penală, a admis sesizarea formulată de Parchetul de pe lângă Curtea de Apel Bucureşti.
+# A dispus punerea în executare a mandatului european de arestare emis la 24.04.2019 de Procuratura Graz pe numele persoanei solicitate Buzdugan Eminescu (cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj).""",
+#     'DOCUMENT' : """Verificând actele aflate la dosar, Înalta Curte constată că, la data de 03.05.2019 a fost înregistrată pe rolul instanţei, sub nr. 2555/2/2019 (1235/2019), sesizarea Parchetului de pe lângă Curtea de Apel Bucureşti, în conformitate cu dispoz. art. 101 alin. 4 din Legea nr. 302/2004 republicată, având ca obiect procedura de punere în executare a mandatului european de arestare emis la data de 24.04.2019 (fiind indicată din eroare data de 1.04.2019), de către autorităţile judiciare austriece, respectiv Procuratura Graz, pe numele persoanei solicitate BUZDUGAN EMINESCU, cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj, urmărit pentru săvârşirea infracţiunii de  tentativă de furt prin efracţie într-o locuinţă, ca membru al unei organizaţii criminale,  prevăzute şi pedepsite de secţiunile 15, 127, 129/2 cifra 1, 130 alin. 1, al doilea caz şi alin. 2 din Codul penal austriac.""",
+#     'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
+#     'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
+        
       }
   
   res = eng.execute(inputs=test, counter=1)
