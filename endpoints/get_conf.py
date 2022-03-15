@@ -126,7 +126,7 @@ ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
 
-__VER__='0.1.1.2'
+__VER__='0.1.1.3'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -427,6 +427,7 @@ class GetConfWorker(FlaskWorker):
                                 break
     
                     if is_match:
+                        
                         if token_pos_dict:
                             # If a position dictionary for the Tokens was given, make the changes
                             orig_start, orig_end = self.get_entity_original_pos(ent, token_pos_dict)
@@ -860,41 +861,50 @@ class GetConfWorker(FlaskWorker):
     
     def select_matches(self, matches_dict):
         """ Select the final matches. """
-        
+    
+        # Sort matches ascending by start position
         matches = list(matches_dict.values())
+        sorted_matches = sorted(matches, key=lambda tup: tup[0])
         
-        final_matches = {}
-        
-        for i, (start1, end1, text1) in enumerate(matches):    
-            
-            add_match = True
-            for j in range(i + 1, len(matches)):
-                (start2, end2, text2) = matches[j]
-                    
-                # First match completly included in second one
-                if start2 <= start1 and end1 <= end2:
-                    # Ignore first match
-                    add_match = False
-                    break
-                        
-                # Matches intersect each other
-                elif (start2 <= start1 and start1 <= end2) or (start2 <= end1 and end1 <= end2):
-                    # Select the larger match
-                    if len(text1) > len(text2):
-                        text = text1
-                    else:
-                        text = text2
-                            
-                    # Add match union
-                    matches[j] = (min(start1, start2), max(end1, end2), text)
-                    add_match = False
-                        
-                    break
-                        
-            if add_match:
-                final_matches[start1] = (start1, end1, text1)     
-        
-        return final_matches
+        final_matches = [sorted_matches[0]]
+    
+        # Check all matches
+        for (start2, end2, label2) in sorted_matches[1:]:
+    
+            (start1, end1, label1) = final_matches[-1]
+    
+            if max(start1, start2) < min(end1, end2):
+                # Intersection
+                start = min(start1, start2)
+                end = max(end1, end2)
+    
+                label = label1
+                if end2 - start2 > end1 - start1:
+                    label = label2
+    
+                final_matches[-1] = (start, end, label)
+    
+            elif start1 <= start2 and start2 < end1 and start1 < end2 and end2 <= end1:
+                # start1 < start2 < end2 < end1
+                continue
+    
+            elif start2 <= start1 and start1 < end2 and start2 < end1 and end1 <= end2:
+                # start2 < start1 < end1 < end2
+                final_matches[-1] = (start2, end2, label2)
+    
+            else:
+                # No overlap
+                final_matches.append((start2, end2, label2))
+                
+        # Form matches dictionary
+        final_dict = {}
+        for (start, end, label) in final_matches:
+            final_dict[start] = (start, end, label)
+    
+        return final_dict
+    
+    
+    
         
     #######
     # AUX #
@@ -1097,7 +1107,7 @@ if __name__ == '__main__':
     # S.C. Knowledge Investment Group S.R.L. Cui 278973, cu adresa in Sector 3 Bucuresti, Str. Frunzei 26 et 1, va rog a-mi aproba cererea de concediu pentru 
     # perioada 16.02.2022 - 18.02.2022"""
     
-    # 'DOCUMENT' : """Majorează de la 100 lei lunar la câte 175 lei lunar contribuţia de întreţinere datorată de pârâtă reclamantului, în favoarea minorilor A... C... R... Cezărel nascut la data de 20.02.2001 şi A... D... D... născută la data de 07 iunie 2002, începând cu data"""
+    # 'DOCUMENT' : """Majorează de la 100 lei lunar la câte 175 lei lunasr contribuţia de întreţinere datorată de pârâtă reclamantului, în favoarea minorilor A... C... R... Cezărel nascut la data de 20.02.2001 şi A... D... D... născută la data de 07 iunie 2002, începând cu data"""
     
     # DE LA CLIENT
     
@@ -1133,7 +1143,7 @@ if __name__ == '__main__':
 # S-a făcut referatul cauzei de către magistratul asistent, care a învederat următoarele:
 # - cauza are ca obiect recursul formulat de petentul Lupea Nicodim împotriva sentinţei penale nr. 494 din data de 27 noiembrie 2020, pronunţate de Înalta Curte de Casaţie şi Justiţie – Secţia penală în dosarul nr. 3039/1/2020;""",
     # 'DOCUMENT' : """Cum în prezenta cauză s-a formulat contestaţie în anulare împotriva unei decizii prin care a fost respins, ca inadmisibil, recursul formulat de contestatorul Dumitrescu Iulian, cale de atac exercitată împotriva unei hotărâri, prin care au fost respinse, ca inadmisibile, căile de atac formulate de acelaşi contestator în nume propriu şi pentru numiţii Patatu Geta, Branzariu Maria Crina, Paltinisanu Adrian, Ignat Vasile, Ciurcu Octavian Constantin, Florici Gheorghe, Sfrijan Marius, Puscasu Ermina Nicoleta, Dragoi Silvia Alina, Bolog Sandrino Iulian, Popa Georgeta, Malanciuc Petru Iulian, Tudorei Vladimir, Buscu Nicoleta Cristina, Budai Paul, Lostun Elena, Bolohan Marcel şi Musca Marinela, împotriva încheierii penale nr. 226/RC din data de 7 iunie 2019, pronunțate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1181/1/2019 , Completul de 5 Judecători, a constatat că prin hotărârea atacată nu a fost soluţionată""",
-#     'DOCUMENT' : """S-a luat în examinare apelul formulat de contestatoarea Ignatenko (Păvăloiu) Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
+#     'DOCUMENT' : """S-a luat în examinare apelul formulat de contestatoarea Ignatenko-Păvăloiu Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
 # La apelul nominal făcut în ședință publică, a lipsit apelanta contestatoare Ignatenko (Păvăloiu) Nela, pentru care a răspuns apărătorul ales, avocat Nastasiu Ciprian, cu împuternicire avocaţială la dosarul cauzei (fila 9 din dosar).
 # Procedura de citare a fost legal îndeplinită.
 # În conformitate cu dispozițiile art. 369 alin. (1) din Codul de procedură penală, s-a procedat la înregistrarea desfășurării ședinței de judecată cu mijloace tehnice, stocarea datelor realizându-se în memoria calculatorului.
