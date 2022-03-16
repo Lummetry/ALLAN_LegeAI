@@ -126,7 +126,7 @@ ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
 
-__VER__='0.1.1.3'
+__VER__='0.2.0.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -535,7 +535,29 @@ class GetConfWorker(FlaskWorker):
             
         return res
     
-    def match_institution(self, nlp, text, public_insts):
+    def match_noconf_institution(self, text, public_insts):
+        """ Match public institutions which should not be confidential. """
+        
+        text_lower = unidecode.unidecode(text.lower())
+        
+        matches = []
+        for i, inst in enumerate(public_insts):
+                
+            for match in re.finditer("\\b" + inst + "\\b", text_lower):
+                match_span = match.span()
+                
+                add_match = True
+                for prev_match in matches:
+                    if prev_match == match_span:
+                        add_match = False
+                        break
+                        
+                if add_match:
+                    matches.append(match_span)                
+                
+        return matches
+        
+    def match_institution(self, nlp, text):
         """ Return the position of all the matches for institutions in a text. """
         
         matches = {}    
@@ -546,27 +568,9 @@ class GetConfWorker(FlaskWorker):
         for ent in doc.ents:
             
             if ent.label_ == 'ORGANIZATION':
-                
-                is_match = True
-    
-                start_char = ent.start_char
-                end_char = ent.end_char
-                
-                # Filter matches the represent public institutions
-                
-                match_normalized = unidecode.unidecode(ent.text.lower())
-                match_stripped = ''.join(filter(str.isalnum, match_normalized))
-                
-                for public_inst in public_insts:
-    
-                    if match_normalized == public_inst or match_stripped == public_inst:
-                        is_match = False
-                        break
-    
-                if is_match:
-                    matches[start_char] = [start_char, end_char, "INSTITUTIE"]
-                    if self.debug:
-                        print(ent.text)
+                matches[ent.start_char] = [ent.start_char, ent.end_char, "INSTITUTIE"]
+                if self.debug:
+                    print(ent.text)
                 
         return matches
     
@@ -859,13 +863,43 @@ class GetConfWorker(FlaskWorker):
                 
         return new_matches
     
-    def select_matches(self, matches_dict):
-        """ Select the final matches. """
-    
-        # Sort matches ascending by start position
-        matches = list(matches_dict.values())
-        sorted_matches = sorted(matches, key=lambda tup: tup[0])
+    def filter_noconf_matches(self, matches, noconf_matches):
+        """ Eliminate the matches which intersect with non confidential matches. """
         
+        filtered_matches = []
+        
+        for match in matches:
+            [start_match, end_match, label_match] = match
+            
+            add_match = True
+            for noconf_match in noconf_matches:
+                (start_filter, end_filter) = noconf_match
+                
+                if max(start_filter, start_match) < min(end_filter, end_match):
+                    add_match = False
+                    break
+                    
+            if add_match:
+                filtered_matches.append(match)
+                
+        return filtered_matches
+    
+    def select_matches(self, matches_dict, noconf_matches):
+        """ Select the final matches. 
+        1. Eliminate matches which are not confidential.
+        2. Select matches which overlap. """
+    
+        matches = list(matches_dict.values())
+        
+        
+        # 1. Eliminate matches which are not confidential
+        matches = self.filter_noconf_matches(matches, noconf_matches)
+        
+                
+        # 2. Select matches which overlap
+        
+        # Sort matches ascending by start position
+        sorted_matches = sorted(matches, key=lambda tup: tup[0])        
         final_matches = [sorted_matches[0]]
     
         # Check all matches
@@ -945,14 +979,15 @@ class GetConfWorker(FlaskWorker):
         text = re.sub(' +', ' ', text)          
         
         # TODO De sters cand institutiile vor fi deja normalizate la citire
-        # Normalize institution names
+        # Normalize institution names            
         self.new_institution_list = []
         for inst in self.institution_list:
             inst_normalized = unidecode.unidecode(inst.lower())
             self.new_institution_list.append(inst_normalized)
             
-            inst_stripped = ''.join(filter(str.isalnum, inst_normalized))
-            self.new_institution_list.append(inst_stripped)
+            inst_stripped = inst_normalized.replace('.', '')
+            if inst_stripped != inst_normalized:
+                self.new_institution_list.append(inst_stripped)
         
         # Apply spaCy analysis
         doc = self.nlp_model(text)
@@ -966,7 +1001,7 @@ class GetConfWorker(FlaskWorker):
         matches = {}
         
         # Match institutions
-        matches.update(self.match_institution(self.nlp_model, text, public_insts=self.new_institution_list))
+        matches.update(self.match_institution(self.nlp_model, text))
         
         # Match CNPS
         matches.update(self.match_cnp(text))
@@ -1012,15 +1047,18 @@ class GetConfWorker(FlaskWorker):
         cases = self.match_eu_case(text)
         matches = self.ignore_near_case_matches(matches, cases)
         
+        # Find entities which should not be confidential        
+        noconf_matches = self.match_noconf_institution(text, public_insts=self.new_institution_list)
+        
               
-        return text, matches, person_dict
+        return text, matches, noconf_matches, person_dict
 
     def _post_process(self, pred):
         
-        doc, matches, person_dict = pred
+        doc, matches, noconf_matches, person_dict = pred
         
         # Select final matches
-        matches = self.select_matches(matches)
+        matches = self.select_matches(matches, noconf_matches)
         
         # Order matches 
         match_tuples = list(matches.values())
@@ -1119,9 +1157,9 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
     
-    'DOCUMENT' : """intimatul Ionescu Lucian Florin (fiul lui Eugen şi Anicuţa, născut la data de 30.09.1984 în municipiul Bucureşti, domiciliat în municipiul Bucureşti, str. Petre Păun, nr. 3 bl. G9D, sc. 3, et. 8, ap. 126, sector 5, CNP 1840930420032, prin sentinţa penală nr. 169 din 29.10.2015 a Tribunalului Călăraşi, definitivă prin decizia penală nr. 1460/A din 07.10.2016 a Curţii de Apel Bucureşti - Secţia a II-a Penală sunt concurente cu cele pentru a căror săvârşire a fost condamnat acelaşi intimat prin sentinţa penală nr. 106/F din 09.06.2016 pronunţată de Ionescu Florin.
-în mod corect şi motivat, Ionescu Lucian a fost declarat
-în mod corect şi motivat, lonescu Lucian Florin  a fost declarat""",
+#     'DOCUMENT' : """intimatul Ionescu Lucian Florin (fiul lui Eugen şi Anicuţa, născut la data de 30.09.1984 în municipiul Bucureşti, domiciliat în municipiul Bucureşti, str. Petre Păun, nr. 3 bl. G9D, sc. 3, et. 8, ap. 126, sector 5, CNP 1840930420032, prin sentinţa penală nr. 169 din 29.10.2015 a Tribunalului Călăraşi, definitivă prin decizia penală nr. 1460/A din 07.10.2016 a Curţii de Apel Bucureşti - Secţia a II-a Penală sunt concurente cu cele pentru a căror săvârşire a fost condamnat acelaşi intimat prin sentinţa penală nr. 106/F din 09.06.2016 pronunţată de Ionescu Florin.
+# în mod corect şi motivat, Ionescu Lucian a fost declarat
+# în mod corect şi motivat, lonescu Lucian Florin  a fost declarat""",
 
     # 'DOCUMENT' : """-a dispus restituirea către partea civilă Barbu Georgiana a tabletelor marca Sony Vaio cu seria SVD112A1SM, cu încărcător aferent şi marca ASUS seria SN:CCOKBC314490""",
     
@@ -1152,8 +1190,8 @@ if __name__ == '__main__':
 # Înalta Curte de Casaţie şi Justiţie, Completul de 5 Judecători a supus discuţiei părţilor excepţia inadmisibilităţii căii de atac, invocate de reprezentantul Ministerului Public.
 # Apărătorul ales al apelantei contestatoare Ignatenko (Păvăloiu) Nela a învederat că este admisibil apelul declarat împotriva deciziei penale nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021, această din urmă decizie fiind definitivă doar în ceea ce priveşte dispoziţia de admitere a contestaţiei în anulare formulate de S.C. Reciplia SRL.
 # În ceea ce priveşte dispoziţia de respingere a contestaţiei în anulare formulate de contestatoarea Ignatenko (Păvăloiu) Nela, apărarea a opinat că în această ipoteză este aplicabil art. 432 alin. (4) din Codul de procedură penală, în cuprinsul căruia se stipulează faptul că sentinţele pronunţate în calea de atac a contestaţiei în anulare, altele decât cele privind admisibilitatea, sunt supuse apelului. În acest sens, apărătorul ales a făcut trimitere la decizia nr. 5/2015, pronunţată de instanţa supremă.""",
-#     'DOCUMENT' : """Prin sentinţa penală nr. 112/F din data de 16 mai 2019 pronunţată în dosarul nr. 2555/2/2019 (1235/2019), Curtea de Apel Bucureşti – Secţia a II-a Penală, a admis sesizarea formulată de Parchetul de pe lângă Curtea de Apel Bucureşti.
-# A dispus punerea în executare a mandatului european de arestare emis la 24.04.2019 de Procuratura Graz pe numele persoanei solicitate Buzdugan Eminescu (cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj).""",
+    'DOCUMENT' : """Prin sentinţa penală nr. 112/F din data de 16 mai 2019 pronunţată în dosarul nr. 2555/2/2019 (1235/2019), Curtea de Apel Bucureşti – Secţia a II-a Penală, a admis sesizarea formulată de Parchetul de pe lângă Curtea de Apel Bucureşti.
+A dispus punerea în executare a mandatului european de arestare emis la 24.04.2019 de Procuratura Graz pe numele persoanei solicitate Buzdugan Eminescu (cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj).""",
     # 'DOCUMENT' : """Verificând actele aflate la dosar, Înalta Curte constată că, la data de 03.05.2019 a fost înregistrată pe rolul instanţei, sub nr. 2555/2/2019 (1235/2019), sesizarea Parchetului de pe lângă Curtea de Apel Bucureşti, în conformitate cu dispoz. art. 101 alin. 4 din Legea nr. 302/2004 republicată, având ca obiect procedura de punere în executare a mandatului european de arestare emis la data de 24.04.2019 (fiind indicată din eroare data de 1.04.2019), de către autorităţile judiciare austriece, respectiv Procuratura Graz, pe numele persoanei solicitate BUZDUGAN EMINESCU, cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj, urmărit pentru săvârşirea infracţiunii de  tentativă de furt prin efracţie într-o locuinţă, ca membru al unei organizaţii criminale,  prevăzute şi pedepsite de secţiunile 15, 127, 129/2 cifra 1, 130 alin. 1, al doilea caz şi alin. 2 din Codul penal austriac.""",
     # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
