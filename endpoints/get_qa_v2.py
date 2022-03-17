@@ -36,8 +36,8 @@ import constants as ct
 
 _CONFIG = {
   'TAGGER_MODEL': '_cache/_models/qa_1/weights/05',
-  'LABEL2ID': '20220227_095601_labels_dict.pkl',
-  'BERT_BACKBONE': '_cache/_models/5/05',
+  'LABEL2ID': 'qa_v1_labels_dict.pkl',
+  'BERT_BACKBONE': '_cache/_models/tags_5/05',
   'BERT_MAX_SEQ_LEN': 128,
 }
 

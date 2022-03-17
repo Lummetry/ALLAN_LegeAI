@@ -35,16 +35,16 @@ import tensorflow as tf
 import constants as ct
 
 _CONFIG = {
-  'TAGGER_MODEL': '_cache/_models/tags_5/weights/05',
-  'LABEL2ID': 'tags_v1_labels_dict.pkl',
-  'BERT_BACKBONE': 'readerbench/jurBERT-base',
-  'BERT_MAX_SEQ_LEN': 512,
+  'TAGGER_MODEL': '_cache/_models/qav2_0/weights/05',
+  'LABEL2ID': 'qa_v2_labels_dict.pkl',
+  'BERT_BACKBONE': '_cache/_models/tags_5/05',
+  'BERT_MAX_SEQ_LEN': 128,
 }
 
 
-class GetTagsV2Worker(FlaskWorker):
+class GetQAV3Worker(FlaskWorker):
   def __init__(self, **kwargs):
-    super(GetTagsV2Worker, self).__init__(**kwargs)
+    super(GetQAV3Worker, self).__init__(**kwargs)
     return
 
   def _load_model(self):
@@ -78,7 +78,7 @@ class GetTagsV2Worker(FlaskWorker):
     return
 
   def _pre_process(self, inputs):
-    doc = inputs['DOCUMENT']
+    doc = inputs['QUERY']
     n_hits = int(inputs.get('TOP_N', 10))
 
     inputs = self.tokenizer([doc], padding="max_length", truncation=True, max_length=self.config_worker["BERT_MAX_SEQ_LEN"], is_split_into_words=False)
@@ -112,9 +112,9 @@ if __name__ == '__main__':
 
   l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=True)
 
-  a = GetTagsV2Worker(log=l, default_config=_CONFIG, verbosity_level=0)
+  a = GetQAV3Worker(log=l, default_config=_CONFIG, verbosity_level=0)
   a._load_model()
-  ins = a._pre_process({"DOCUMENT": "Art. 63. - (1) Aerodromurile civile certificate din România pentru care există obligaţia realizării hărţilor strategice de zgomot şi a planurilor de acţiune aferente, precum şi criteriile care stau la baza realizării acestora, sunt stabilite prin hotărâre a Guvernului, la iniţiativa autorităţii publice centrale pentru protecţia mediului. (2) Administratorii aerodromurilor civile certificate din România prevăzute la alin. (1) au obligaţia ca, atunci când elaborează programe de dezvoltare a infrastructurii de aerodrom, să utilizeze cartarea zgomotului în vederea previzionării impactului activităţilor viitoare asupra vecinătăţilor aerodromurilor. (3) Autorităţile administraţiei publice locale au obligaţia integrării în documentaţiile de urbanism şi de amenajare a teritoriului a hărţilor strategice de zgomot prevăzute la alin. (1), precum şi a programelor de dezvoltare specificate la alin. (2), împreună cu rezultatele cartării zgomotului. (4) Metodologia de cartare a zgomotului în vederea previzionării impactului activităţilor existente şi viitoare de pe un aerodrom asupra vecinătăţilor acestuia, se aprobă prin hotărâre a Guvernului, la iniţiativa autorităţii publice centrale pentru protecţia mediului."})
+  ins = a._pre_process({"QUERY": "Cat la suta din salariul brut merge la pensii pentru un programator?"})
   p = a._predict(ins)
   r = a._post_process(p)
 
