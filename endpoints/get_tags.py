@@ -110,4 +110,15 @@ if __name__ == '__main__':
   from libraries import Logger
 
   l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
+  eng = GetTagsWorker(log=l, default_config=_CONFIG, verbosity_level=1)
+  
+  _input = {
+      # 'DOCUMENT': """Subsemnatul Damian Ionut Andrei, domiciliat in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 , nascut pe data 24-01-1982, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Bucuresti, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126413223 serie RK, numar 897567 nu detine averi ilicite""",
+      'DOCUMENT': """decizia recurată a fost dată cu încălcarea autorităţii de lucru interpretat, respectiv cu încălcarea dispozitivului hotărârii preliminare pronunţate de Curtea de Justiţie a Uniunii Europene în Cauza C-52/07 (hotărâre care are autoritate de lucru interpretat „erga omnes”)""",
+          
+      'TOP_N' : 5
+    }
+
+  result = eng.execute(inputs=_input, counter=1)
+  print(result)
 
