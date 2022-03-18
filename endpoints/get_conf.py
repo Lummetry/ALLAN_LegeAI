@@ -126,7 +126,7 @@ ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
 
-__VER__='0.2.0.0'
+__VER__='0.3.0.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -796,36 +796,93 @@ class GetConfWorker(FlaskWorker):
                 
         return final_matches
     
+    def match_trigger_regex(self, text, trigger, regex):
+        """ Match a Regex starting with a trigger """
+        
+        pos = text.find(trigger)
+        
+        matches = []
+        
+        while pos > -1:
+            subtext = text[pos + len(trigger):]
+            match = re.match(regex, subtext)
+            
+            if match:
+                # Check all groups
+                delta_pos = 0
+                
+                for group in match.groups():
+                    # Find first occurance of group
+                    group_pos = subtext.find(group)
+                    
+                    # Get actual position of group
+                    start = pos + len(trigger) + delta_pos + group_pos
+                    end = start + len(group)
+                    add_match = True
+                    
+                    # Check if match should be concatenated with previous one
+                    if matches:
+                        (prev_start, prev_end) = matches[-1]
+                        if prev_start <= start and start <= prev_end:
+                            # Concatenate matches
+                            matches[-1] = (min(prev_start, start), max(prev_end,end))
+                            add_match = False
+                            
+                    if add_match:
+                        # Add new match
+                        matches.append((start, end))
+                    
+                    # Move forward in text
+                    subtext = subtext[group_pos + 1:]
+                    delta_pos += group_pos + 1
+                    
+            pos = text.find(trigger, pos + 1)
+        
+        # Form match dictionary
+        match_dict = {}
+        for (start, end) in matches:
+            match_dict[start] = (start, end, trigger.upper())
+            
+        return match_dict
+    
     def match_regex(self, text):
         """ Return the position of all the matches for a list of user defined REGEX. """
-        
+            
         res = {}
-        
+            
         for entry in self.conf_regex_list:
+            regex = entry[1]
+            
             if type(entry) is list:
-                # Keyword + REGEX
-                # Form all variants of trigger
-                trigger = '(?:' + entry[0].lower() + '|' + entry[0].upper() + '|' + entry[0].lower().title() + ')'
-                regex = trigger + entry[1]
-                tag = entry[0].upper()
+                # Trigger + Regex
                 
+                if type(entry[0]) is list:
+                    # Trigger list
+                    trigger_list = []
+                    for trigger in entry[0]:
+                        # Add all variants of each trigger
+                        trigger_list.extend([trigger.lower(), trigger.upper(), trigger.lower().title()])             
+                else:
+                    # Single trigger, add all variants                
+                    trigger_list = [entry[0].lower(), entry[0].upper(), entry[0].lower().title()]
+                
+                for trigger in trigger_list:
+                    res.update(self.match_trigger_regex(text, trigger, regex))
+                    
             else:
                 # Simple REGEX
                 regex = entry
                 tag = "REGEX"
-            
-            matches = re.findall(regex, text)  
-            for match in matches:  
-                if type(match) is tuple:
-                    # If there were multiple capturing groups, concatenate them
-                    match = ''.join(match).strip()
-                    
-                start, end = self.find_match(match, text, res)
-                res[start] = [start, end, tag]
-                    
-                if self.debug: 
-                    print(match)
                 
+                matches = re.findall(regex, text) 
+                for match in matches:  
+                    if type(match) is tuple:
+                        # If there were multiple capturing groups, concatenate them
+                        match = ''.join(match).strip()
+    
+                    start, end = self.find_match(match, text, res)
+                    res[start] = [start, end, tag]
+                    
         return res
     
     def match_eu_case(self, text):
@@ -1171,7 +1228,7 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
     
-    # 'DOCUMENT' : """Prin cererea de chemare în judecată înregistrată pe rolul Curţii de Apel Bucureşti – Secţia a VIII- a Contencios Administrativ şi Fiscal sub numărul 2570/2/22.10.2017, reclamantul Curuti   Ionel, a solicitat, în contradictoriu cu pârâta Agenţia Naţională de Integritate anularea Raportului de evaluare nr. 9756/G/II/17.03.2017 întocmit de ANI - Inspecţia de Integritate şi obligarea pârâtei la plata cheltuielilor de judecata ocazionate.""",
+    # 'DOCUMENT' : """Prin cererea de chemare în judecată înregistrată pe rolul Curţii de Apel Bucureşti – Secţia a VIII- a Contencios Administrativ şi Fiscal sub numărul 2570/2/2017, reclamantul Curuti  Ionel, a solicitat, în contradictoriu cu pârâta Agenţia Naţională de Integritate anularea Raportului de evaluare nr. 9756/G/II/17.03.2017 întocmit de ANI - Inspecţia de Integritate şi obligarea pârâtei la plata cheltuielilor de judecata ocazionate.""",
     # 'DOCUMENT' : """S-au luat în examinare recursurile formulate de reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A. și chemata în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.) împotriva Sentinţei nr. 97 din 12 aprilie 2017 pronunţată de Curtea de Apel Ploiești – Secţia a II-a Civilă, de Contencios Administrativ şi Fiscal. La apelul nominal, făcut în şedinţă publică, răspunde recurenta- reclamantă S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin consilier juridic Niţă Vasile Laurenţiu, care depune delegaţie de reprezentare la dosar, recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.), prin consilier juridic Marinela Vladescu, care depune delegaţie de reprezentare la dosarul cauzei, lipsă fiind intimatul-pârât Ministerul Investiţiilor şi Proiectelor Europene (fostul Ministerul Fondurilor Europene). Procedura de citare este legal îndeplinită. Se prezintă referatul cauzei, magistratul – asistent învederând că recurenta-reclamantă a formulat o cerere de renunţare la cererea de chemare în judecată precum şi la cererea de chemare în garanţie, cu privire la care s-a depus punct de vedere în sensul de a se lua act de cererea de renunţare la judecată. Reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin avocat, conform art. 406 alin. 5 Cod procedură civilă, solicită a se lua act de cererea de renunţare la judecată, respectiv de chemare în garanţie, cu consecinţa anulării hotărârilor pronunţate de Curtea de Apel Ploieşti. Recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L., prin consilier juridic, precizează că nu se opune renunţării la judecată, astfel cum a fost solicitată de recurenta-reclamantă, apreciind că sunt îndeplinite condiţiile prevăzute de dispozițiile art. 406 Cod procedură civilă.""",
     # 'DOCUMENT' : """Totodată, a notificat beneficiarii PNDL cu privire la epuizarea creditelor bugetare în proporţie de 80% pentru PNDL 1, ultimele transferuri efectuându-se parţial pentru solicitările de finanţare depuse până în data de 08.11.2017 (adresa nr. 155732/18.12.2017).""",
 #     'DOCUMENT' : """S-au luat în examinare recursul formulat de petentul Lupea Nicodim Eugen împotriva sentinţei penale nr. 494 din data de 27 noiembrie 2020, pronunţate de Înalta Curte de Casaţie şi Justiţie – Secţia penală în dosarul nr. 3039/1/2020.
