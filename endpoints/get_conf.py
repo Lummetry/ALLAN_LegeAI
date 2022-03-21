@@ -126,7 +126,7 @@ ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
 
-__VER__='0.3.1.0'
+__VER__='0.3.2.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -354,7 +354,7 @@ class GetConfWorker(FlaskWorker):
             candidate_matches = self.check_name_condition(candidate_matches, doc, condition='capital')
                 
         # Check other conditions
-        final_matches = {}
+        match_list = []
         for (start, end) in candidate_matches:
             
             # Check words to the right    
@@ -399,23 +399,39 @@ class GetConfWorker(FlaskWorker):
                     start_idx += 1
                 while text[end_idx - 1] in punctuation:
                     end_idx -= 1
-                
-                final_matches[start_idx] = [start_idx, end_idx, "NUME"]
-                
-                person = text[start_idx:end_idx]
-                if self.debug:
-                    print(person)
-                                       
-                person_code = self.find_name(person, person_dict)
-                if not person_code:
-                    # Get the next code for names
-                    person_code = current_code
-                    current_code = self.next_name_code(current_code)
                     
-                # Add the name to the dictionary
-                person_dict[person] = person_code
+                # Check if similar to previous match
+                add_match = True
+                if len(match_list):
+                    prev_start_idx, prev_end_idx = match_list[-1]
+                    if prev_start_idx <= start_idx and end_idx <= prev_end_idx:
+                        add_match = False
+                    elif start_idx <= prev_start_idx and prev_end_idx <= end_idx:
+                        match_list[-1] = (start_idx, end_idx)
+                        add_match = False
                 
-        return final_matches, person_dict      
+                if add_match:
+                    match_list.append((start_idx, end_idx))    
+                    
+        # Form match dictionary
+        match_dict = {}
+        for (start, end) in match_list:
+            match_dict[start] = (start, end, "NUME")
+                
+            person = text[start:end]
+            if self.debug:
+                print(person)
+                                       
+            person_code = self.find_name(person, person_dict)
+            if not person_code:
+                # Get the next code for names
+                person_code = current_code
+                current_code = self.next_name_code(current_code)
+                    
+            # Add the name to the dictionary
+            person_dict[person] = person_code
+                
+        return match_dict, person_dict      
     
     def remove_punct_tokens(self, doc):
         ''' 
