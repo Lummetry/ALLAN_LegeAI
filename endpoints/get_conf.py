@@ -21,9 +21,11 @@ _CONFIG = {
 # File paths
 # Debug
 INSTITUTION_LIST_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\nomenclator institutii publice.txt'
+ORGANIZATION_LIST_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\organizatii.txt'
 CONF_REGEX_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\conf_regex.json'
 # Prod
 INSTITUTION_LIST_PROD = 'C:\\allan_data\\2022.01.26\\nomenclator institutii publice.txt'
+ORGANIZATION_LIST_PROD = 'C:\\allan_data\\2022.01.26\\organizatii.txt'
 CONF_REGEX_PROD = 'C:\\allan_data\\2022.03.07\\conf_regex.json'
 
 
@@ -126,7 +128,7 @@ ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
 
-__VER__='0.3.2.0'
+__VER__='0.3.3.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -613,8 +615,8 @@ class GetConfWorker(FlaskWorker):
                 
         return matches
         
-    def match_institution(self, nlp, text):
-        """ Return the position of all the matches for institutions in a text. """
+    def match_organization(self, nlp, text):
+        """ Return the position of all the matches for organizations in a text. """
         
         matches = {}    
         
@@ -627,6 +629,16 @@ class GetConfWorker(FlaskWorker):
                 matches[ent.start_char] = [ent.start_char, ent.end_char, "INSTITUTIE"]
                 if self.debug:
                     print(ent.text)
+                    
+        # Search for matches in the organization file
+        for org in self.organization_list:
+            
+            # Check all the matches
+            for m in re.finditer(re.escape(org), text):
+                matches[m.start()] = [m.start(), m.end(), "INSTITUTIE"]
+                if self.debug:
+                    print(org)
+                                
                 
         return matches
     
@@ -1066,18 +1078,24 @@ class GetConfWorker(FlaskWorker):
         
         # Read files
         if self.debug:
-            institution_file = INSTITUTION_LIST_DEBUG
-            regex_file = CONF_REGEX_DEBUG
+            institution_path = INSTITUTION_LIST_DEBUG
+            organization_path = ORGANIZATION_LIST_DEBUG
+            regex_path = CONF_REGEX_DEBUG
         else:
-            institution_file = INSTITUTION_LIST_PROD
-            regex_file = CONF_REGEX_PROD
+            institution_path = INSTITUTION_LIST_PROD
+            organization_path = ORGANIZATION_LIST_PROD
+            regex_path = CONF_REGEX_PROD
         
         # Read list of public institutions
-        inst_file = open(institution_file, 'r', encoding='utf-8')
-        self.institution_list = inst_file.read().splitlines()
+        institution_file = open(institution_path, 'r', encoding='utf-8')
+        self.institution_list = institution_file.read().splitlines()
+    
+        # Read list of organizations
+        organization_file = open(organization_path, 'r', encoding='utf-8')
+        self.organization_list = organization_file.read().splitlines()
         
         # Read JSON REGEX file
-        json_file = open(regex_file, 'r', encoding="utf-8")
+        json_file = open(regex_path, 'r', encoding="utf-8")
         json_string = json_file.read().replace('\\', '\\\\')
         json_data = json.loads(json_string)        
         self.conf_regex_list = json_data['conf_regex']
@@ -1114,7 +1132,7 @@ class GetConfWorker(FlaskWorker):
         matches = {}
         
         # Match institutions
-        matches.update(self.match_institution(self.nlp_model, text))
+        matches.update(self.match_organization(self.nlp_model, text))
         
         # Match CNPS
         matches.update(self.match_cnp(text))
@@ -1280,7 +1298,7 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """Contractul comercial nr. 23/14 februarie 2014 încheiat între SC Sady Com SRL şi SC Managro SRL, prin care prima societate a vândut celei de-a doua cantitatea de 66 tone azotat de amoniu la preţul de 93.720 RON, precum şi factum proforma emisă de reprezentantul SC Sady Com SRL pentru suma de 93.720 RON.""",
     
-    # 'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
+    'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
     
     # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
     
@@ -1294,15 +1312,15 @@ if __name__ == '__main__':
 # S-a făcut referatul cauzei de către magistratul asistent, care a învederat următoarele:
 # - cauza are ca obiect recursul formulat de petentul Lupea Nicodim împotriva sentinţei penale nr. 494 din data de 27 noiembrie 2020, pronunţate de Înalta Curte de Casaţie şi Justiţie – Secţia penală în dosarul nr. 3039/1/2020;""",
     # 'DOCUMENT' : """Cum în prezenta cauză s-a formulat contestaţie în anulare împotriva unei decizii prin care a fost respins, ca inadmisibil, recursul formulat de contestatorul Dumitrescu Iulian, cale de atac exercitată împotriva unei hotărâri, prin care au fost respinse, ca inadmisibile, căile de atac formulate de acelaşi contestator în nume propriu şi pentru numiţii Patatu Geta, Branzariu Maria Crina, Paltinisanu Adrian, Ignat Vasile, Ciurcu Octavian Constantin, Florici Gheorghe, Sfrijan Marius, Puscasu Ermina Nicoleta, Dragoi Silvia Alina, Bolog Sandrino Iulian, Popa Georgeta, Malanciuc Petru Iulian, Tudorei Vladimir, Buscu Nicoleta Cristina, Budai Paul, Lostun Elena, Bolohan Marcel şi Musca Marinela, împotriva încheierii penale nr. 226/RC din data de 7 iunie 2019, pronunțate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1181/1/2019 , Completul de 5 Judecători, a constatat că prin hotărârea atacată nu a fost soluţionată""",
-    'DOCUMENT' : """S-a luat în examinare apelul formulat de contestatoarea Ignatenko-Păvăloiu Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
-La apelul nominal făcut în ședință publică, a lipsit apelanta contestatoare Ignatenko (Păvăloiu) Nela, pentru care a răspuns apărătorul ales, avocat Nastasiu Ciprian, cu împuternicire avocaţială la dosarul cauzei (fila 9 din dosar).
-Procedura de citare a fost legal îndeplinită.
-În conformitate cu dispozițiile art. 369 alin. (1) din Codul de procedură penală, s-a procedat la înregistrarea desfășurării ședinței de judecată cu mijloace tehnice, stocarea datelor realizându-se în memoria calculatorului.
-S-a făcut referatul cauzei de către magistratul asistent, care a învederat faptul că prezentul dosar are ca obiect apelul formulat de contestatoarea Ignatenko (Păvăloiu) Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
-Cu titlu prealabil, reprezentantul Ministerului Public a invocat excepţia inadmisibilităţii căii de atac formulate întrucât vizează o decizie definitivă, pronunţată de Secţia penală a instanţei supreme în calea extraordinară de atac a contestaţiei în anulare.
-Înalta Curte de Casaţie şi Justiţie, Completul de 5 Judecători a supus discuţiei părţilor excepţia inadmisibilităţii căii de atac, invocate de reprezentantul Ministerului Public.
-Apărătorul ales al apelantei contestatoare Ignatenko (Păvăloiu) Nela a învederat că este admisibil apelul declarat împotriva deciziei penale nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021, această din urmă decizie fiind definitivă doar în ceea ce priveşte dispoziţia de admitere a contestaţiei în anulare formulate de S.C. Reciplia SRL.
-În ceea ce priveşte dispoziţia de respingere a contestaţiei în anulare formulate de contestatoarea Ignatenko (Păvăloiu) Nela, apărarea a opinat că în această ipoteză este aplicabil art. 432 alin. (4) din Codul de procedură penală, în cuprinsul căruia se stipulează faptul că sentinţele pronunţate în calea de atac a contestaţiei în anulare, altele decât cele privind admisibilitatea, sunt supuse apelului. În acest sens, apărătorul ales a făcut trimitere la decizia nr. 5/2015, pronunţată de instanţa supremă.""",
+#     'DOCUMENT' : """S-a luat în examinare apelul formulat de contestatoarea Ignatenko-Păvăloiu Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
+# La apelul nominal făcut în ședință publică, a lipsit apelanta contestatoare Ignatenko (Păvăloiu) Nela, pentru care a răspuns apărătorul ales, avocat Nastasiu Ciprian, cu împuternicire avocaţială la dosarul cauzei (fila 9 din dosar).
+# Procedura de citare a fost legal îndeplinită.
+# În conformitate cu dispozițiile art. 369 alin. (1) din Codul de procedură penală, s-a procedat la înregistrarea desfășurării ședinței de judecată cu mijloace tehnice, stocarea datelor realizându-se în memoria calculatorului.
+# S-a făcut referatul cauzei de către magistratul asistent, care a învederat faptul că prezentul dosar are ca obiect apelul formulat de contestatoarea Ignatenko (Păvăloiu) Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
+# Cu titlu prealabil, reprezentantul Ministerului Public a invocat excepţia inadmisibilităţii căii de atac formulate întrucât vizează o decizie definitivă, pronunţată de Secţia penală a instanţei supreme în calea extraordinară de atac a contestaţiei în anulare.
+# Înalta Curte de Casaţie şi Justiţie, Completul de 5 Judecători a supus discuţiei părţilor excepţia inadmisibilităţii căii de atac, invocate de reprezentantul Ministerului Public.
+# Apărătorul ales al apelantei contestatoare Ignatenko (Păvăloiu) Nela a învederat că este admisibil apelul declarat împotriva deciziei penale nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021, această din urmă decizie fiind definitivă doar în ceea ce priveşte dispoziţia de admitere a contestaţiei în anulare formulate de S.C. Reciplia SRL.
+# În ceea ce priveşte dispoziţia de respingere a contestaţiei în anulare formulate de contestatoarea Ignatenko (Păvăloiu) Nela, apărarea a opinat că în această ipoteză este aplicabil art. 432 alin. (4) din Codul de procedură penală, în cuprinsul căruia se stipulează faptul că sentinţele pronunţate în calea de atac a contestaţiei în anulare, altele decât cele privind admisibilitatea, sunt supuse apelului. În acest sens, apărătorul ales a făcut trimitere la decizia nr. 5/2015, pronunţată de instanţa supremă.""",
 #     'DOCUMENT' : """Prin sentinţa penală nr. 112/F din data de 16 mai 2019 pronunţată în dosarul nr. 2555/2/2019 (1235/2019), Curtea de Apel Bucureşti – Secţia a II-a Penală, a admis sesizarea formulată de Parchetul de pe lângă Curtea de Apel Bucureşti.
 # A dispus punerea în executare a mandatului european de arestare emis la 24.04.2019 de Procuratura Graz pe numele persoanei solicitate Buzdugan Eminescu (cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj).""",
     # 'DOCUMENT' : """Verificând actele aflate la dosar, Înalta Curte constată că, la data de 03.05.2019 a fost înregistrată pe rolul instanţei, sub nr. 2555/2/2019 (1235/2019), sesizarea Parchetului de pe lângă Curtea de Apel Bucureşti, în conformitate cu dispoz. art. 101 alin. 4 din Legea nr. 302/2004 republicată, având ca obiect procedura de punere în executare a mandatului european de arestare emis la data de 24.04.2019 (fiind indicată din eroare data de 1.04.2019), de către autorităţile judiciare austriece, respectiv Procuratura Graz, pe numele persoanei solicitate BUZDUGAN EMINESCU, cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj, urmărit pentru săvârşirea infracţiunii de  tentativă de furt prin efracţie într-o locuinţă, ca membru al unei organizaţii criminale,  prevăzute şi pedepsite de secţiunile 15, 127, 129/2 cifra 1, 130 alin. 1, al doilea caz şi alin. 2 din Codul penal austriac.""",
