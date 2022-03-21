@@ -126,7 +126,7 @@ ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
 
-__VER__='0.3.0.1'
+__VER__='0.3.1.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -298,7 +298,35 @@ class GetConfWorker(FlaskWorker):
                         current_match_end = -1
                         current_match_start = -1
                     
-        return new_matches  
+        return new_matches 
+    
+    def clean_match(self, doc, start, end):
+        """ Check and clean a match. """
+        
+        # Remove unwanted punctuation at the end
+        if doc[end - 1].text in ['(', '-']:
+            end -= 1
+        # Remove unwanted punctuation at the start
+        if doc[start].text in [')', '-']:
+            start += 1
+        
+        # Check paranthesis to be matched
+        left_par, right_par = False, False
+        for i in range(start, end):
+            token = doc[i]        
+            if token.text == '(':
+                left_par = True            
+            if token.text == ')':
+                if left_par == False:
+                    # Unmatched right paranthesis, ignore added words
+                    return -1, -1
+                else:
+                    right_par = True                
+        if left_par == True and right_par == False:
+            # Unmatched right paranthesis, ignore added words
+            return -1, -1        
+        
+        return start, end 
     
     def match_name(self, nlp, doc, text,
                    person_checks=[]
@@ -329,18 +357,30 @@ class GetConfWorker(FlaskWorker):
         final_matches = {}
         for (start, end) in candidate_matches:
             
-            # Add capitalized words to the right    
+            # Check words to the right    
             new_end = end
-            while new_end < len(doc) and doc[new_end].text[0].isupper():
-                # While next word starts with capital letter
-                new_end += 1
+            while new_end < len(doc):
+                if doc[new_end].text[0].isupper() or doc[new_end].text in ['(', ')', '-']:
+                    # Add capitalized words to the right
+                    new_end += 1
+                else:
+                    break
                 
-            # Add capitalized words to the left, except if they are at the start of a sentence    
+            # Check words to the left
             new_start = start
-            while new_start > 0 and doc[new_start - 1].text[0].isupper() and not doc[new_start - 1].is_sent_start:
-                # While previous word starts with capital letter
-                new_start -= 1
-        
+            while new_start > 0:
+                if (doc[new_start - 1].text[0].isupper() or 
+                    doc[new_start - 1].text in ['(', ')', '-']) and not doc[new_start - 1].is_sent_start:
+                    # Add capitalized words to the left, except if they are at the start of a sentence 
+                    new_start -= 1               
+                else:
+                    break
+           
+            # Check and cleand the new match
+            new_start, new_end = self.clean_match(doc, new_start, new_end)
+            if new_start == -1 and new_end == -1:
+                new_start, new_end = start, end
+            
             # Check minimum number of words
             is_match = True
             if PERSON_TWO_WORDS in person_checks:
@@ -1126,7 +1166,7 @@ class GetConfWorker(FlaskWorker):
         for key in match_starts:
             [start, end, label] = matches[key]
             if label != 'NUME':
-                hidden_doc = hidden_doc[:start] + 'X' + hidden_doc[end:]
+                hidden_doc = hidden_doc[:start] + 'x' + hidden_doc[end:]
         
         # Replace names with their codes, starting with longer names (which might include the shorter ones)
         for name in sorted(person_dict, key=len, reverse=True):
@@ -1135,7 +1175,7 @@ class GetConfWorker(FlaskWorker):
             # Search for all occurances of name
             while True:
                 # Ignore the case of the letters
-                name_match = re.search(name.lower(), hidden_doc.lower())
+                name_match = re.search(re.escape(name.lower()), hidden_doc.lower())
                 
                 if name_match:
                     start, end = name_match.span()
@@ -1238,20 +1278,20 @@ if __name__ == '__main__':
 # S-a făcut referatul cauzei de către magistratul asistent, care a învederat următoarele:
 # - cauza are ca obiect recursul formulat de petentul Lupea Nicodim împotriva sentinţei penale nr. 494 din data de 27 noiembrie 2020, pronunţate de Înalta Curte de Casaţie şi Justiţie – Secţia penală în dosarul nr. 3039/1/2020;""",
     # 'DOCUMENT' : """Cum în prezenta cauză s-a formulat contestaţie în anulare împotriva unei decizii prin care a fost respins, ca inadmisibil, recursul formulat de contestatorul Dumitrescu Iulian, cale de atac exercitată împotriva unei hotărâri, prin care au fost respinse, ca inadmisibile, căile de atac formulate de acelaşi contestator în nume propriu şi pentru numiţii Patatu Geta, Branzariu Maria Crina, Paltinisanu Adrian, Ignat Vasile, Ciurcu Octavian Constantin, Florici Gheorghe, Sfrijan Marius, Puscasu Ermina Nicoleta, Dragoi Silvia Alina, Bolog Sandrino Iulian, Popa Georgeta, Malanciuc Petru Iulian, Tudorei Vladimir, Buscu Nicoleta Cristina, Budai Paul, Lostun Elena, Bolohan Marcel şi Musca Marinela, împotriva încheierii penale nr. 226/RC din data de 7 iunie 2019, pronunțate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1181/1/2019 , Completul de 5 Judecători, a constatat că prin hotărârea atacată nu a fost soluţionată""",
-#     'DOCUMENT' : """S-a luat în examinare apelul formulat de contestatoarea Ignatenko-Păvăloiu Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
-# La apelul nominal făcut în ședință publică, a lipsit apelanta contestatoare Ignatenko (Păvăloiu) Nela, pentru care a răspuns apărătorul ales, avocat Nastasiu Ciprian, cu împuternicire avocaţială la dosarul cauzei (fila 9 din dosar).
-# Procedura de citare a fost legal îndeplinită.
-# În conformitate cu dispozițiile art. 369 alin. (1) din Codul de procedură penală, s-a procedat la înregistrarea desfășurării ședinței de judecată cu mijloace tehnice, stocarea datelor realizându-se în memoria calculatorului.
-# S-a făcut referatul cauzei de către magistratul asistent, care a învederat faptul că prezentul dosar are ca obiect apelul formulat de contestatoarea Ignatenko (Păvăloiu) Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
-# Cu titlu prealabil, reprezentantul Ministerului Public a invocat excepţia inadmisibilităţii căii de atac formulate întrucât vizează o decizie definitivă, pronunţată de Secţia penală a instanţei supreme în calea extraordinară de atac a contestaţiei în anulare.
-# Înalta Curte de Casaţie şi Justiţie, Completul de 5 Judecători a supus discuţiei părţilor excepţia inadmisibilităţii căii de atac, invocate de reprezentantul Ministerului Public.
-# Apărătorul ales al apelantei contestatoare Ignatenko (Păvăloiu) Nela a învederat că este admisibil apelul declarat împotriva deciziei penale nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021, această din urmă decizie fiind definitivă doar în ceea ce priveşte dispoziţia de admitere a contestaţiei în anulare formulate de S.C. Reciplia SRL.
-# În ceea ce priveşte dispoziţia de respingere a contestaţiei în anulare formulate de contestatoarea Ignatenko (Păvăloiu) Nela, apărarea a opinat că în această ipoteză este aplicabil art. 432 alin. (4) din Codul de procedură penală, în cuprinsul căruia se stipulează faptul că sentinţele pronunţate în calea de atac a contestaţiei în anulare, altele decât cele privind admisibilitatea, sunt supuse apelului. În acest sens, apărătorul ales a făcut trimitere la decizia nr. 5/2015, pronunţată de instanţa supremă.""",
+    'DOCUMENT' : """S-a luat în examinare apelul formulat de contestatoarea Ignatenko-Păvăloiu Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
+La apelul nominal făcut în ședință publică, a lipsit apelanta contestatoare Ignatenko (Păvăloiu) Nela, pentru care a răspuns apărătorul ales, avocat Nastasiu Ciprian, cu împuternicire avocaţială la dosarul cauzei (fila 9 din dosar).
+Procedura de citare a fost legal îndeplinită.
+În conformitate cu dispozițiile art. 369 alin. (1) din Codul de procedură penală, s-a procedat la înregistrarea desfășurării ședinței de judecată cu mijloace tehnice, stocarea datelor realizându-se în memoria calculatorului.
+S-a făcut referatul cauzei de către magistratul asistent, care a învederat faptul că prezentul dosar are ca obiect apelul formulat de contestatoarea Ignatenko (Păvăloiu) Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
+Cu titlu prealabil, reprezentantul Ministerului Public a invocat excepţia inadmisibilităţii căii de atac formulate întrucât vizează o decizie definitivă, pronunţată de Secţia penală a instanţei supreme în calea extraordinară de atac a contestaţiei în anulare.
+Înalta Curte de Casaţie şi Justiţie, Completul de 5 Judecători a supus discuţiei părţilor excepţia inadmisibilităţii căii de atac, invocate de reprezentantul Ministerului Public.
+Apărătorul ales al apelantei contestatoare Ignatenko (Păvăloiu) Nela a învederat că este admisibil apelul declarat împotriva deciziei penale nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021, această din urmă decizie fiind definitivă doar în ceea ce priveşte dispoziţia de admitere a contestaţiei în anulare formulate de S.C. Reciplia SRL.
+În ceea ce priveşte dispoziţia de respingere a contestaţiei în anulare formulate de contestatoarea Ignatenko (Păvăloiu) Nela, apărarea a opinat că în această ipoteză este aplicabil art. 432 alin. (4) din Codul de procedură penală, în cuprinsul căruia se stipulează faptul că sentinţele pronunţate în calea de atac a contestaţiei în anulare, altele decât cele privind admisibilitatea, sunt supuse apelului. În acest sens, apărătorul ales a făcut trimitere la decizia nr. 5/2015, pronunţată de instanţa supremă.""",
 #     'DOCUMENT' : """Prin sentinţa penală nr. 112/F din data de 16 mai 2019 pronunţată în dosarul nr. 2555/2/2019 (1235/2019), Curtea de Apel Bucureşti – Secţia a II-a Penală, a admis sesizarea formulată de Parchetul de pe lângă Curtea de Apel Bucureşti.
 # A dispus punerea în executare a mandatului european de arestare emis la 24.04.2019 de Procuratura Graz pe numele persoanei solicitate Buzdugan Eminescu (cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj).""",
     # 'DOCUMENT' : """Verificând actele aflate la dosar, Înalta Curte constată că, la data de 03.05.2019 a fost înregistrată pe rolul instanţei, sub nr. 2555/2/2019 (1235/2019), sesizarea Parchetului de pe lângă Curtea de Apel Bucureşti, în conformitate cu dispoz. art. 101 alin. 4 din Legea nr. 302/2004 republicată, având ca obiect procedura de punere în executare a mandatului european de arestare emis la data de 24.04.2019 (fiind indicată din eroare data de 1.04.2019), de către autorităţile judiciare austriece, respectiv Procuratura Graz, pe numele persoanei solicitate BUZDUGAN EMINESCU, cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj, urmărit pentru săvârşirea infracţiunii de  tentativă de furt prin efracţie într-o locuinţă, ca membru al unei organizaţii criminale,  prevăzute şi pedepsite de secţiunile 15, 127, 129/2 cifra 1, 130 alin. 1, al doilea caz şi alin. 2 din Codul penal austriac.""",
     # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
-    'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
+    # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
         
       }
   
