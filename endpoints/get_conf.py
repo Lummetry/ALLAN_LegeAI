@@ -126,7 +126,7 @@ ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
 
-__VER__='0.3.0.0'
+__VER__='0.3.0.1'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -335,9 +335,9 @@ class GetConfWorker(FlaskWorker):
                 # While next word starts with capital letter
                 new_end += 1
                 
-            # Add capitalized words to the left    
+            # Add capitalized words to the left, except if they are at the start of a sentence    
             new_start = start
-            while new_start > 0 and doc[new_start - 1].text[0].isupper():
+            while new_start > 0 and doc[new_start - 1].text[0].isupper() and not doc[new_start - 1].is_sent_start:
                 # While previous word starts with capital letter
                 new_start -= 1
         
@@ -1247,11 +1247,11 @@ if __name__ == '__main__':
 # Înalta Curte de Casaţie şi Justiţie, Completul de 5 Judecători a supus discuţiei părţilor excepţia inadmisibilităţii căii de atac, invocate de reprezentantul Ministerului Public.
 # Apărătorul ales al apelantei contestatoare Ignatenko (Păvăloiu) Nela a învederat că este admisibil apelul declarat împotriva deciziei penale nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021, această din urmă decizie fiind definitivă doar în ceea ce priveşte dispoziţia de admitere a contestaţiei în anulare formulate de S.C. Reciplia SRL.
 # În ceea ce priveşte dispoziţia de respingere a contestaţiei în anulare formulate de contestatoarea Ignatenko (Păvăloiu) Nela, apărarea a opinat că în această ipoteză este aplicabil art. 432 alin. (4) din Codul de procedură penală, în cuprinsul căruia se stipulează faptul că sentinţele pronunţate în calea de atac a contestaţiei în anulare, altele decât cele privind admisibilitatea, sunt supuse apelului. În acest sens, apărătorul ales a făcut trimitere la decizia nr. 5/2015, pronunţată de instanţa supremă.""",
-    'DOCUMENT' : """Prin sentinţa penală nr. 112/F din data de 16 mai 2019 pronunţată în dosarul nr. 2555/2/2019 (1235/2019), Curtea de Apel Bucureşti – Secţia a II-a Penală, a admis sesizarea formulată de Parchetul de pe lângă Curtea de Apel Bucureşti.
-A dispus punerea în executare a mandatului european de arestare emis la 24.04.2019 de Procuratura Graz pe numele persoanei solicitate Buzdugan Eminescu (cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj).""",
+#     'DOCUMENT' : """Prin sentinţa penală nr. 112/F din data de 16 mai 2019 pronunţată în dosarul nr. 2555/2/2019 (1235/2019), Curtea de Apel Bucureşti – Secţia a II-a Penală, a admis sesizarea formulată de Parchetul de pe lângă Curtea de Apel Bucureşti.
+# A dispus punerea în executare a mandatului european de arestare emis la 24.04.2019 de Procuratura Graz pe numele persoanei solicitate Buzdugan Eminescu (cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj).""",
     # 'DOCUMENT' : """Verificând actele aflate la dosar, Înalta Curte constată că, la data de 03.05.2019 a fost înregistrată pe rolul instanţei, sub nr. 2555/2/2019 (1235/2019), sesizarea Parchetului de pe lângă Curtea de Apel Bucureşti, în conformitate cu dispoz. art. 101 alin. 4 din Legea nr. 302/2004 republicată, având ca obiect procedura de punere în executare a mandatului european de arestare emis la data de 24.04.2019 (fiind indicată din eroare data de 1.04.2019), de către autorităţile judiciare austriece, respectiv Procuratura Graz, pe numele persoanei solicitate BUZDUGAN EMINESCU, cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj, urmărit pentru săvârşirea infracţiunii de  tentativă de furt prin efracţie într-o locuinţă, ca membru al unei organizaţii criminale,  prevăzute şi pedepsite de secţiunile 15, 127, 129/2 cifra 1, 130 alin. 1, al doilea caz şi alin. 2 din Codul penal austriac.""",
     # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
-    # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
+    'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
         
       }
   
