@@ -128,7 +128,7 @@ ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
 
-__VER__='0.3.3.1'
+__VER__='0.4.0.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -239,8 +239,7 @@ class GetConfWorker(FlaskWorker):
         return res
     
     def next_name_code(self, code):
-        """ Get the next code for a new name. """
-        
+        """ Get the next code for a new name. """        
         
         if code[0] == 'Z':
             next_code = 'A' * (len(code) + 1)
@@ -250,18 +249,40 @@ class GetConfWorker(FlaskWorker):
             
         return next_code
     
-    def find_name(self, name, person_dict):
-        """ Find a name in the dictionary of names. """
+    def set_name_codes(self):
+        """ Form the dictionary of names and codes. """
+        
+        # Sort the names according to their first position in the text
+        self.name_list.sort(key=lambda tup: tup[0])
+        
+        print(self.name_list)
+        
+        current_code = 'A'
+        
+        name_code_dict = {}
+        for (pos, name) in self.name_list:
+            # Add the name to the dictionary
+            name_code_dict[name] = current_code
+            # Get the next code
+            current_code = self.next_name_code(current_code)
+            
+        print(name_code_dict)
+        
+        return name_code_dict
+        
+    
+    def find_name(self, name):
+        """ Find a name in the list of names. """
         
         low_name = name.lower()
         
-        for (n, code) in person_dict.items():
-            lev_dist = simple_levenshtein_distance(n.lower(), low_name, 
+        for (pos, name) in self.name_list:
+            lev_dist = simple_levenshtein_distance(name.lower(), low_name, 
                                                    normalize=False)
-            if n.lower() == low_name or lev_dist < MAX_LEV_DIST:
-                return code
+            if name.lower() == low_name or lev_dist < MAX_LEV_DIST:
+                return True
             
-        return None
+        return False
     
 
     def check_token_condition(self, token, condition):
@@ -337,9 +358,6 @@ class GetConfWorker(FlaskWorker):
         
         if type(person_checks) == int:
             person_checks = [person_checks]
-        
-        person_dict = {}
-        current_code = 'A'
         
         # Form the list of candidate matches
         candidate_matches = []
@@ -423,17 +441,11 @@ class GetConfWorker(FlaskWorker):
             person = text[start:end]
             if self.debug:
                 print(person)
-                                       
-            person_code = self.find_name(person, person_dict)
-            if not person_code:
-                # Get the next code for names
-                person_code = current_code
-                current_code = self.next_name_code(current_code)
-                    
-            # Add the name to the dictionary
-            person_dict[person] = person_code
                 
-        return match_dict, person_dict      
+            if not self.find_name(person):
+                self.name_list.append((start, person))
+                
+        return match_dict      
     
     def remove_punct_tokens(self, doc):
         ''' 
@@ -626,7 +638,7 @@ class GetConfWorker(FlaskWorker):
         for ent in doc.ents:
             
             if ent.label_ == 'ORGANIZATION':
-                matches[ent.start_char] = [ent.start_char, ent.end_char, "INSTITUTIE"]
+                matches[ent.start_char] = (ent.start_char, ent.end_char, "INSTITUTIE")
                 if self.debug:
                     print(ent.text)
                     
@@ -635,10 +647,16 @@ class GetConfWorker(FlaskWorker):
             
             # Check all the matches
             for m in re.finditer(re.escape(org), text):
-                matches[m.start()] = [m.start(), m.end(), "INSTITUTIE"]
+                matches[m.start()] = (m.start(), m.end(), "INSTITUTIE")
+                
                 if self.debug:
-                    print(org)
-                                
+                    print(org)                    
+                
+        # Add matches to list of names
+        for (start, end, _) in matches.values():    
+            organization = text[start:end]
+            if not self.find_name(organization):
+                self.name_list.append((start, organization))
                 
         return matches
     
@@ -1122,6 +1140,8 @@ class GetConfWorker(FlaskWorker):
         
         # Apply spaCy analysis
         doc = self.nlp_model(text)
+        
+        self.name_list = [] 
     
         return text, doc
 
@@ -1144,13 +1164,9 @@ class GetConfWorker(FlaskWorker):
         matches.update(self.match_email(text))
         
         # Match names
-        name_matches, person_dict = self.match_name(self.nlp_model, doc, text, 
-                                                    person_checks=[PERSON_PROPN, PERSON_UPPERCASE])
-        
-        matches.update(name_matches)  
-        if self.debug:
-            print(person_dict)
-            
+        matches.update(self.match_name(self.nlp_model, doc, text, 
+                                       person_checks=[PERSON_PROPN, PERSON_UPPERCASE]))
+                    
         # Match addresses
         matches.update(self.match_address(self.nlp_model, doc, text, 
                                           address_checks=[ADDRESS_INCLUDE_GPE, ADDRESS_REMOVE_PUNCT]))
@@ -1180,13 +1196,12 @@ class GetConfWorker(FlaskWorker):
         
         # Find entities which should not be confidential        
         noconf_matches = self.match_noconf_institution(text, public_insts=self.new_institution_list)
-        
               
-        return text, matches, noconf_matches, person_dict
+        return text, matches, noconf_matches
 
     def _post_process(self, pred):
         
-        doc, matches, noconf_matches, person_dict = pred
+        doc, matches, noconf_matches = pred
         
         # Select final matches
         matches = self.select_matches(matches, noconf_matches)
@@ -1199,12 +1214,15 @@ class GetConfWorker(FlaskWorker):
         hidden_doc = doc
         for key in match_starts:
             [start, end, label] = matches[key]
-            if label != 'NUME':
+            if not label in ['NUME', 'INSTITUTIE']:
                 hidden_doc = hidden_doc[:start] + 'x' + hidden_doc[end:]
+                
+        # Set the codes for the names
+        name_code_dict = self.set_name_codes()
         
         # Replace names with their codes, starting with longer names (which might include the shorter ones)
-        for name in sorted(person_dict, key=len, reverse=True):
-            code = person_dict[name]
+        for name in sorted(name_code_dict, key=len, reverse=True):
+            code = name_code_dict[name]
             
             # Search for all occurances of name
             while True:
@@ -1294,9 +1312,9 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
     
-#     'DOCUMENT' : """intimatul Ionescu Lucian Florin (fiul lui Eugen şi Anicuţa, născut la data de 30.09.1984 în municipiul Bucureşti, domiciliat în municipiul Bucureşti, str. Petre Păun, nr. 3 bl. G9D, sc. 3, et. 8, ap. 126, sector 5, CNP 1840930420032, prin sentinţa penală nr. 169 din 29.10.2015 a Tribunalului Călăraşi, definitivă prin decizia penală nr. 1460/A din 07.10.2016 a Curţii de Apel Bucureşti - Secţia a II-a Penală sunt concurente cu cele pentru a căror săvârşire a fost condamnat acelaşi intimat prin sentinţa penală nr. 106/F din 09.06.2016 pronunţată de Ionescu Florin.
-# în mod corect şi motivat, Ionescu Lucian a fost declarat
-# în mod corect şi motivat, lonescu Lucian Florin  a fost declarat""",
+    'DOCUMENT' : """intimatul Ionescu Lucian Florin (fiul lui Eugen şi Anicuţa, născut la data de 30.09.1984 în municipiul Bucureşti, domiciliat în municipiul Bucureşti, str. Petre Păun, nr. 3 bl. G9D, sc. 3, et. 8, ap. 126, sector 5, CNP 1840930420032, prin sentinţa penală nr. 169 din 29.10.2015 a Tribunalului Călăraşi, definitivă prin decizia penală nr. 1460/A din 07.10.2016 a Curţii de Apel Bucureşti - Secţia a II-a Penală sunt concurente cu cele pentru a căror săvârşire a fost condamnat acelaşi intimat prin sentinţa penală nr. 106/F din 09.06.2016 pronunţată de Ionescu Florin.
+în mod corect şi motivat, Ionescu Lucian a fost declarat
+în mod corect şi motivat, lonescu Lucian Florin  a fost declarat""",
 
     # 'DOCUMENT' : """-a dispus restituirea către partea civilă Barbu Georgiana a tabletelor marca Sony Vaio cu seria SVD112A1SM, cu încărcător aferent şi marca ASUS seria SN:CCOKBC314490""",
     
@@ -1329,7 +1347,7 @@ if __name__ == '__main__':
 # În ceea ce priveşte dispoziţia de respingere a contestaţiei în anulare formulate de contestatoarea Ignatenko (Păvăloiu) Nela, apărarea a opinat că în această ipoteză este aplicabil art. 432 alin. (4) din Codul de procedură penală, în cuprinsul căruia se stipulează faptul că sentinţele pronunţate în calea de atac a contestaţiei în anulare, altele decât cele privind admisibilitatea, sunt supuse apelului. În acest sens, apărătorul ales a făcut trimitere la decizia nr. 5/2015, pronunţată de instanţa supremă.""",
 #     'DOCUMENT' : """Prin sentinţa penală nr. 112/F din data de 16 mai 2019 pronunţată în dosarul nr. 2555/2/2019 (1235/2019), Curtea de Apel Bucureşti – Secţia a II-a Penală, a admis sesizarea formulată de Parchetul de pe lângă Curtea de Apel Bucureşti.
 # A dispus punerea în executare a mandatului european de arestare emis la 24.04.2019 de Procuratura Graz pe numele persoanei solicitate Buzdugan Eminescu (cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj).""",
-    'DOCUMENT' : """Verificând actele aflate la dosar, Înalta Curte constată că, la data de 03.05.2019 a fost înregistrată pe rolul instanţei, sub nr. 2555/2/2019 (1235/2019), sesizarea Parchetului de pe lângă Curtea de Apel Bucureşti, în conformitate cu dispoz. art. 101 alin. 4 din Legea nr. 302/2004 republicată, având ca obiect procedura de punere în executare a mandatului european de arestare emis la data de 24.04.2019 (fiind indicată din eroare data de 1.04.2019), de către autorităţile judiciare austriece, respectiv Procuratura Graz, pe numele persoanei solicitate BUZDUGAN EMINESCU, cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj, urmărit pentru săvârşirea infracţiunii de  tentativă de furt prin efracţie într-o locuinţă, ca membru al unei organizaţii criminale,  prevăzute şi pedepsite de secţiunile 15, 127, 129/2 cifra 1, 130 alin. 1, al doilea caz şi alin. 2 din Codul penal austriac.""",
+    # 'DOCUMENT' : """Verificând actele aflate la dosar, Înalta Curte constată că, la data de 03.05.2019 a fost înregistrată pe rolul instanţei, sub nr. 2555/2/2019 (1235/2019), sesizarea Parchetului de pe lângă Curtea de Apel Bucureşti, în conformitate cu dispoz. art. 101 alin. 4 din Legea nr. 302/2004 republicată, având ca obiect procedura de punere în executare a mandatului european de arestare emis la data de 24.04.2019 (fiind indicată din eroare data de 1.04.2019), de către autorităţile judiciare austriece, respectiv Procuratura Graz, pe numele persoanei solicitate BUZDUGAN EMINESCU, cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj, urmărit pentru săvârşirea infracţiunii de  tentativă de furt prin efracţie într-o locuinţă, ca membru al unei organizaţii criminale,  prevăzute şi pedepsite de secţiunile 15, 127, 129/2 cifra 1, 130 alin. 1, al doilea caz şi alin. 2 din Codul penal austriac.""",
     # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
         
