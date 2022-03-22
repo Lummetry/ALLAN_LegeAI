@@ -148,13 +148,14 @@ if __name__ == "__main__":
     for x in labels:
         all_labels.extend(x)
     print("Total number of adnotations:", len(all_labels))
-
     labels_counter = Counter(all_labels)
     print("Total number of unique labels:", len(labels_counter))
-
-    occurences = list(map(lambda x: labels_counter[x], labels_counter))
+    lens = [len(x) for x in labels]
+    print("Labels per entry: Min {0} | Median {2} | Mean {1} | Max {3}".format(np.min(lens), np.mean(lens), np.median(lens), np.max(lens)))
 
     print()
+    occurences = list(map(lambda x: labels_counter[x], labels_counter))
+
     bc = np.bincount(occurences)
     for index, value in reversed(list(enumerate(bc))):
       if value != 0:
