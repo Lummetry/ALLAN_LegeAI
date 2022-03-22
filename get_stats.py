@@ -3,6 +3,7 @@ import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
+from collections import Counter
 
 parser = argparse.ArgumentParser(description='Get data stats for corpora')
 parser.add_argument('-data_path', help='path + files desciptor (i.e. _cache/_data/qa_v1). if this parameters is missing, data is directly collected from live db')
@@ -17,6 +18,7 @@ def find_values_by_occurences(counter, occurences):
       values.append(x)
 
   return values
+
 
 def get_data_db():
   from libraries.db_conn.odbc_conn import ODBCConnector
@@ -108,52 +110,77 @@ def get_data_db():
         ),
         end='', flush=True)    
 
-  return lst_y_labels  
+  return lst_X_pars, lst_y_labels  
 
 if __name__ == "__main__":
 
     if args.data_path != None:
+      docs = pickle.load(open(args.data_path + "_x_data.pkl", "rb"))
       labels = pickle.load(open(args.data_path + "_y_data.pkl", "rb"))
     else:
-      labels = get_data_db()
+      docs, labels = get_data_db()
+      print()
 
-    print("Total number of documents:", len(labels))
+    print("Total number of documents:", len(docs))
+
+    print("#"*100)
+
+    words = []
+    for doc in docs:
+      words.extend(doc)
+    lens = [len(x) for x in docs]
+    words_counter = Counter(words)
+    print("Total number of words {0} | Unique words {1}".format(len(words), len(words_counter)))
+    print("Words per entry: Min {0} | Median {2} | Mean {1} | Max {3}".format(np.min(lens), np.mean(lens), np.median(lens), np.max(lens)))
+    print("Most common 20 words:", words_counter.most_common(20))
+
+    bc = np.bincount(lens)
+    plt.bar(range(len(bc)), height=bc)
+    plt.title('Distribution of number of words per document')
+    plt.xlabel('no words')
+    plt.ylabel('no documents')
+    plt.show()
+
+
+    print("#"*100)
+
     all_labels = []
-    from collections import Counter
     for x in labels:
         all_labels.extend(x)
     print("Total number of adnotations:", len(all_labels))
 
-    full_counter = Counter(all_labels)
-    print("Total number of unique labels:", len(full_counter))
+    labels_counter = Counter(all_labels)
+    print("Total number of unique labels:", len(labels_counter))
 
-    occurences = list(map(lambda x: full_counter[x], full_counter))
+    occurences = list(map(lambda x: labels_counter[x], labels_counter))
 
     print()
     bc = np.bincount(occurences)
     for index, value in reversed(list(enumerate(bc))):
       if value != 0:
-        words = find_values_by_occurences(full_counter, index)
+        words = find_values_by_occurences(labels_counter, index)
         if value == 1:
           print("    {0} label appears {1} times: {2}".format(value, index, words[0]))
+        elif index == 1:
+          print("    {0} labels appear {1} time: {2}".format(value, index, ', '.join(words)))
         else:
           print("    {0} labels appear {1} times: {2}".format(value, index, ', '.join(words)))
 
         print()
 
     plt.hist(occurences, density=False, bins=range(max(occurences)+2))
-    plt.title('Cate label-uri (OY) apar de n (OX) ori')
-    plt.ylabel('nr label-uri')
-    plt.xlabel('aparitii')
+    plt.title('Count of labels (OY) that appear n (OX) times')
+    plt.ylabel('no labels')
+    plt.xlabel('occurences')
     plt.xticks(range(max(occurences)+2), range(max(occurences)+2), rotation=90)
     plt.show()
 
     t = []
-    for x in full_counter:
+    for x in labels_counter:
       t.append(x)
     plt.bar(range(len(occurences)), height=occurences)
-    plt.title('Frecventa aparitii pentru fiecare label')
+    plt.title('Occurences for each label')
     plt.xticks(range(len(occurences)), t, rotation=90)
-    plt.ylabel('aparitii')
+    plt.ylabel('occurences')
     plt.subplots_adjust(bottom=0.4)
     plt.show()
