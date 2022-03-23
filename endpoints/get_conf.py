@@ -128,7 +128,7 @@ ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
 
-__VER__='0.4.0.0'
+__VER__='0.4.0.1'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -211,7 +211,7 @@ class GetConfWorker(FlaskWorker):
                 
                 res[start] = [start, end, 'CNP']
                 if self.debug:
-                    print(match)
+                    print('CNP:', text[start:end])
                 
         return res
     
@@ -233,7 +233,7 @@ class GetConfWorker(FlaskWorker):
                 start, end = self.find_match(match, text, res)
                 res[start] = [start, end, 'SERIENUMAR']
                 if self.debug:
-                    print(match)
+                    print('Serie Numar CI:', text[start:end])
                         
             
         return res
@@ -255,8 +255,6 @@ class GetConfWorker(FlaskWorker):
         # Sort the names according to their first position in the text
         self.name_list.sort(key=lambda tup: tup[0])
         
-        print(self.name_list)
-        
         current_code = 'A'
         
         name_code_dict = {}
@@ -265,8 +263,6 @@ class GetConfWorker(FlaskWorker):
             name_code_dict[name] = current_code
             # Get the next code
             current_code = self.next_name_code(current_code)
-            
-        print(name_code_dict)
         
         return name_code_dict
         
@@ -440,7 +436,7 @@ class GetConfWorker(FlaskWorker):
                 
             person = text[start:end]
             if self.debug:
-                print(person)
+                print('Nume:', person)
                 
             if not self.find_name(person):
                 self.name_list.append((start, person))
@@ -521,7 +517,7 @@ class GetConfWorker(FlaskWorker):
                             matches[orig_start] = [orig_start, orig_end, "ADRESA"]
                         
                         if self.debug:
-                            print(ent)
+                            print('Adresa:', ent)
                         
         return matches
     
@@ -537,7 +533,7 @@ class GetConfWorker(FlaskWorker):
                 if ent.label_ == 'GPE':
                     matches[ent.start_char] = [ent.start_char, ent.end_char, "ADRESA"]
                     if self.debug:
-                        print(ent)
+                        print('Place:', ent)
     
         # Check all LOC entities from initial Doc
         matches = self.check_loc_entities(doc, matches, address_checks)  
@@ -566,7 +562,7 @@ class GetConfWorker(FlaskWorker):
             start, end = self.find_match(match, text, res)
             res[start] = [start, end, 'EMAIL']
             if self.debug:
-                print(match)
+                print('EMAIL:', text[start:end])
                 
         return res
     
@@ -592,7 +588,7 @@ class GetConfWorker(FlaskWorker):
                     start, end = self.find_match(match, text, res)
                     res[start] = [start, end, 'TELEFON']
                     if self.debug:
-                        print(match)
+                        print('Telefon:', text[start:end])
                 
         elif check_strength == PHONE_VALIDATION:
             matches = phonenumbers.PhoneNumberMatcher(text, "RO")
@@ -601,7 +597,7 @@ class GetConfWorker(FlaskWorker):
                 start, end = self.find_match(match, text, res)
                 res[start] = [start, end, 'TELEFON']
                 if self.debug:
-                    print(match)
+                    print('Telefon:', text[start:end])
             
         return res
     
@@ -640,7 +636,7 @@ class GetConfWorker(FlaskWorker):
             if ent.label_ == 'ORGANIZATION':
                 matches[ent.start_char] = (ent.start_char, ent.end_char, "INSTITUTIE")
                 if self.debug:
-                    print(ent.text)
+                    print('Organizatie:', ent.text)
                     
         # Search for matches in the organization file
         for org in self.organization_list:
@@ -650,7 +646,7 @@ class GetConfWorker(FlaskWorker):
                 matches[m.start()] = (m.start(), m.end(), "INSTITUTIE")
                 
                 if self.debug:
-                    print(org)                    
+                    print('Organizatie:', org)                    
                 
         # Add matches to list of names
         for (start, end, _) in matches.values():    
@@ -672,7 +668,7 @@ class GetConfWorker(FlaskWorker):
             res[start] = [start, end, 'CNP']
                
             if self.debug: 
-                print(match)
+                print('IBAN:', text[start:end])
         
         return res
     
@@ -803,7 +799,7 @@ class GetConfWorker(FlaskWorker):
             res[start] = [start, end, 'NASTERE']
             
             if self.debug: 
-                print(match)
+                print('Data nastere:', text[start:end])
                 
         return res
     
@@ -818,7 +814,7 @@ class GetConfWorker(FlaskWorker):
             res[start] = [start, end, 'CUI']
             
             if self.debug: 
-                print(match)
+                print('CUI:', text[start:end])
                 
         return res
     
@@ -878,7 +874,7 @@ class GetConfWorker(FlaskWorker):
             final_matches[start_idx] = [start_idx, end_idx, "BRAND"]
             
             if self.debug: 
-                print(doc[start:end])
+                print('Brand:', doc[start:end])
                 
         return final_matches
     
@@ -981,7 +977,7 @@ class GetConfWorker(FlaskWorker):
             res.append(self.find_match(match, text, res))
             
             if self.debug: 
-                print(match)
+                print('EU Case', match)
                 
         return res
     
@@ -1186,7 +1182,7 @@ class GetConfWorker(FlaskWorker):
         # Match Brand
         matches.update(self.match_brand(self.nlp_model, text, 
                                         brand_checks=[BRAND_EXCLUDE_COMMON, BRAND_INCLUDE_FACILITY]))
-                                
+                        
         # Match user REGEX
         matches.update(self.match_regex(text))
         
@@ -1218,7 +1214,10 @@ class GetConfWorker(FlaskWorker):
                 hidden_doc = hidden_doc[:start] + 'x' + hidden_doc[end:]
                 
         # Set the codes for the names
-        name_code_dict = self.set_name_codes()
+        name_code_dict = self.set_name_codes()  
+            
+        if self.debug:
+            print(name_code_dict)
         
         # Replace names with their codes, starting with longer names (which might include the shorter ones)
         for name in sorted(name_code_dict, key=len, reverse=True):
@@ -1236,7 +1235,6 @@ class GetConfWorker(FlaskWorker):
                     break
                 
         # Add non confidential matches to result
-        print(noconf_matches)
         for (start, end) in noconf_matches:
             match_tuples.append((start, end, "ORGANIZATIE_PUBLICA"))
             
@@ -1304,7 +1302,7 @@ if __name__ == '__main__':
     
     # DE LA CLIENT
     
-    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
     
@@ -1312,9 +1310,9 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
     
-    'DOCUMENT' : """intimatul Ionescu Lucian Florin (fiul lui Eugen şi Anicuţa, născut la data de 30.09.1984 în municipiul Bucureşti, domiciliat în municipiul Bucureşti, str. Petre Păun, nr. 3 bl. G9D, sc. 3, et. 8, ap. 126, sector 5, CNP 1840930420032, prin sentinţa penală nr. 169 din 29.10.2015 a Tribunalului Călăraşi, definitivă prin decizia penală nr. 1460/A din 07.10.2016 a Curţii de Apel Bucureşti - Secţia a II-a Penală sunt concurente cu cele pentru a căror săvârşire a fost condamnat acelaşi intimat prin sentinţa penală nr. 106/F din 09.06.2016 pronunţată de Ionescu Florin.
-în mod corect şi motivat, Ionescu Lucian a fost declarat
-în mod corect şi motivat, lonescu Lucian Florin  a fost declarat""",
+#     'DOCUMENT' : """intimatul Ionescu Lucian Florin (fiul lui Eugen şi Anicuţa, născut la data de 30.09.1984 în municipiul Bucureşti, domiciliat în municipiul Bucureşti, str. Petre Păun, nr. 3 bl. G9D, sc. 3, et. 8, ap. 126, sector 5, CNP 1840930420032, prin sentinţa penală nr. 169 din 29.10.2015 a Tribunalului Călăraşi, definitivă prin decizia penală nr. 1460/A din 07.10.2016 a Curţii de Apel Bucureşti - Secţia a II-a Penală sunt concurente cu cele pentru a căror săvârşire a fost condamnat acelaşi intimat prin sentinţa penală nr. 106/F din 09.06.2016 pronunţată de Ionescu Florin.
+# în mod corect şi motivat, Ionescu Lucian a fost declarat
+# în mod corect şi motivat, lonescu Lucian Florin  a fost declarat""",
 
     # 'DOCUMENT' : """-a dispus restituirea către partea civilă Barbu Georgiana a tabletelor marca Sony Vaio cu seria SVD112A1SM, cu încărcător aferent şi marca ASUS seria SN:CCOKBC314490""",
     
