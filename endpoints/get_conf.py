@@ -15,17 +15,17 @@ import json
 
 _CONFIG = {
   'SPACY_MODEL' : 'ro_core_news_lg',
-  'INSTITUTION_LIST' : 'C:\\Proiecte\\LegeAI\\ALLAN_LegeAI\\_cache\\_data\\nomenclator_institutii_publice.txt',
-  'CONF_REGEX' : 'C:\\Proiecte\\LegeAI\\Date\\Task6\\conf_regex.json'
  }
 
 
 # File paths
 # Debug
-INSTITUTION_LIST_DEBUG = 'C:\\Proiecte\\LegeAI\\ALLAN_LegeAI\\_cache\\_data\\nomenclator_institutii_publice.txt'
+INSTITUTION_LIST_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\nomenclator institutii publice.txt'
+ORGANIZATION_LIST_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\organizatii.txt'
 CONF_REGEX_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\conf_regex.json'
 # Prod
 INSTITUTION_LIST_PROD = 'C:\\allan_data\\2022.01.26\\nomenclator institutii publice.txt'
+ORGANIZATION_LIST_PROD = 'C:\\allan_data\\2022.01.26\\organizatii.txt'
 CONF_REGEX_PROD = 'C:\\allan_data\\2022.03.07\\conf_regex.json'
 
 
@@ -128,7 +128,7 @@ ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
 
-__VER__='0.1.1.0'
+__VER__='0.4.0.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -208,6 +208,7 @@ class GetConfWorker(FlaskWorker):
             
             if check_strength < CNP_FULL_CHECK or (check_strength == CNP_FULL_CHECK and self.check_cnp(match)):
                 start, end = self.find_match(match, text, res)
+                
                 res[start] = [start, end, 'CNP']
                 if self.debug:
                     print(match)
@@ -238,8 +239,7 @@ class GetConfWorker(FlaskWorker):
         return res
     
     def next_name_code(self, code):
-        """ Get the next code for a new name. """
-        
+        """ Get the next code for a new name. """        
         
         if code[0] == 'Z':
             next_code = 'A' * (len(code) + 1)
@@ -249,18 +249,40 @@ class GetConfWorker(FlaskWorker):
             
         return next_code
     
-    def find_name(self, name, person_dict):
-        """ Find a name in the dictionary of names. """
+    def set_name_codes(self):
+        """ Form the dictionary of names and codes. """
+        
+        # Sort the names according to their first position in the text
+        self.name_list.sort(key=lambda tup: tup[0])
+        
+        print(self.name_list)
+        
+        current_code = 'A'
+        
+        name_code_dict = {}
+        for (pos, name) in self.name_list:
+            # Add the name to the dictionary
+            name_code_dict[name] = current_code
+            # Get the next code
+            current_code = self.next_name_code(current_code)
+            
+        print(name_code_dict)
+        
+        return name_code_dict
+        
+    
+    def find_name(self, name):
+        """ Find a name in the list of names. """
         
         low_name = name.lower()
         
-        for (n, code) in person_dict.items():
-            lev_dist = simple_levenshtein_distance(n.lower(), low_name, 
+        for (pos, name) in self.name_list:
+            lev_dist = simple_levenshtein_distance(name.lower(), low_name, 
                                                    normalize=False)
-            if n.lower() == low_name or lev_dist < MAX_LEV_DIST:
-                return code
+            if name.lower() == low_name or lev_dist < MAX_LEV_DIST:
+                return True
             
-        return None
+        return False
     
 
     def check_token_condition(self, token, condition):
@@ -299,7 +321,35 @@ class GetConfWorker(FlaskWorker):
                         current_match_end = -1
                         current_match_start = -1
                     
-        return new_matches  
+        return new_matches 
+    
+    def clean_match(self, doc, start, end):
+        """ Check and clean a match. """
+        
+        # Remove unwanted punctuation at the end
+        if doc[end - 1].text in ['(', '-']:
+            end -= 1
+        # Remove unwanted punctuation at the start
+        if doc[start].text in [')', '-']:
+            start += 1
+        
+        # Check paranthesis to be matched
+        left_par, right_par = False, False
+        for i in range(start, end):
+            token = doc[i]        
+            if token.text == '(':
+                left_par = True            
+            if token.text == ')':
+                if left_par == False:
+                    # Unmatched right paranthesis, ignore added words
+                    return -1, -1
+                else:
+                    right_par = True                
+        if left_par == True and right_par == False:
+            # Unmatched right paranthesis, ignore added words
+            return -1, -1        
+        
+        return start, end 
     
     def match_name(self, nlp, doc, text,
                    person_checks=[]
@@ -309,15 +359,12 @@ class GetConfWorker(FlaskWorker):
         if type(person_checks) == int:
             person_checks = [person_checks]
         
-        person_dict = {}
-        current_code = 'A'
-        
         # Form the list of candidate matches
         candidate_matches = []
         for ent in doc.ents:
             if ent.label_ == 'PERSON':
                 candidate_matches.append((ent.start, ent.end))
-                    
+                  
         # Check POS PROPN condition
         if PERSON_PROPN in person_checks:
             candidate_matches = self.check_name_condition(candidate_matches, doc, condition='propn')
@@ -327,20 +374,32 @@ class GetConfWorker(FlaskWorker):
             candidate_matches = self.check_name_condition(candidate_matches, doc, condition='capital')
                 
         # Check other conditions
-        final_matches = {}
+        match_list = []
         for (start, end) in candidate_matches:
             
-            # Add capitalized words to the right    
+            # Check words to the right    
             new_end = end
-            while new_end < len(doc) and doc[new_end].text[0].isupper():
-                # While next word starts with capital letter
-                new_end += 1
+            while new_end < len(doc):
+                if doc[new_end].text[0].isupper() or doc[new_end].text in ['(', ')', '-']:
+                    # Add capitalized words to the right
+                    new_end += 1
+                else:
+                    break
                 
-            # Add capitalized words to the left    
+            # Check words to the left
             new_start = start
-            while new_start > 0 and doc[new_start - 1].text[0].isupper():
-                # While previous word starts with capital letter
-                new_start -= 1
+            while new_start > 0:
+                if (doc[new_start - 1].text[0].isupper() or 
+                    doc[new_start - 1].text in ['(', ')', '-']) and not doc[new_start - 1].is_sent_start:
+                    # Add capitalized words to the left, except if they are at the start of a sentence 
+                    new_start -= 1               
+                else:
+                    break
+           
+            # Check and cleand the new match
+            new_start, new_end = self.clean_match(doc, new_start, new_end)
+            if new_start == -1 and new_end == -1:
+                new_start, new_end = start, end
             
             # Check minimum number of words
             is_match = True
@@ -360,23 +419,33 @@ class GetConfWorker(FlaskWorker):
                     start_idx += 1
                 while text[end_idx - 1] in punctuation:
                     end_idx -= 1
-                
-                final_matches[start_idx] = [start_idx, end_idx, "NUME"]
-                
-                person = text[start_idx:end_idx]
-                if self.debug:
-                    print(person)
-                                       
-                person_code = self.find_name(person, person_dict)
-                if not person_code:
-                    # Get the next code for names
-                    person_code = current_code
-                    current_code = self.next_name_code(current_code)
                     
-                # Add the name to the dictionary
-                person_dict[person] = person_code
+                # Check if similar to previous match
+                add_match = True
+                if len(match_list):
+                    prev_start_idx, prev_end_idx = match_list[-1]
+                    if prev_start_idx <= start_idx and end_idx <= prev_end_idx:
+                        add_match = False
+                    elif start_idx <= prev_start_idx and prev_end_idx <= end_idx:
+                        match_list[-1] = (start_idx, end_idx)
+                        add_match = False
                 
-        return final_matches, person_dict      
+                if add_match:
+                    match_list.append((start_idx, end_idx))    
+                    
+        # Form match dictionary
+        match_dict = {}
+        for (start, end) in match_list:
+            match_dict[start] = (start, end, "NUME")
+                
+            person = text[start:end]
+            if self.debug:
+                print(person)
+                
+            if not self.find_name(person):
+                self.name_list.append((start, person))
+                
+        return match_dict      
     
     def remove_punct_tokens(self, doc):
         ''' 
@@ -428,6 +497,7 @@ class GetConfWorker(FlaskWorker):
                                 break
     
                     if is_match:
+                        
                         if token_pos_dict:
                             # If a position dictionary for the Tokens was given, make the changes
                             orig_start, orig_end = self.get_entity_original_pos(ent, token_pos_dict)
@@ -481,8 +551,8 @@ class GetConfWorker(FlaskWorker):
             # Build a new spaCy Doc
             doc_rp = nlp(new_text)
             
-            matches = self.check_loc_entities(doc_rp, matches, address_checks,
-                                              token_pos_dict=token_pos_dict)
+            matches.update(self.check_loc_entities(doc_rp, matches, address_checks,
+                                                   token_pos_dict=token_pos_dict))
                 
         return matches
     
@@ -535,8 +605,30 @@ class GetConfWorker(FlaskWorker):
             
         return res
     
-    def match_institution(self, nlp, text, public_insts):
-        """ Return the position of all the matches for institutions in a text. """
+    def match_noconf_institution(self, text, public_insts):
+        """ Match public institutions which should not be confidential. """
+        
+        text_lower = unidecode.unidecode(text.lower())
+        
+        matches = []
+        for i, inst in enumerate(public_insts):
+                
+            for match in re.finditer("\\b" + inst + "\\b", text_lower):
+                match_span = match.span()
+                
+                add_match = True
+                for prev_match in matches:
+                    if prev_match == match_span:
+                        add_match = False
+                        break
+                        
+                if add_match:
+                    matches.append(match_span)                
+                
+        return matches
+        
+    def match_organization(self, nlp, text):
+        """ Return the position of all the matches for organizations in a text. """
         
         matches = {}    
         
@@ -546,27 +638,25 @@ class GetConfWorker(FlaskWorker):
         for ent in doc.ents:
             
             if ent.label_ == 'ORGANIZATION':
+                matches[ent.start_char] = (ent.start_char, ent.end_char, "INSTITUTIE")
+                if self.debug:
+                    print(ent.text)
+                    
+        # Search for matches in the organization file
+        for org in self.organization_list:
+            
+            # Check all the matches
+            for m in re.finditer(re.escape(org), text):
+                matches[m.start()] = (m.start(), m.end(), "INSTITUTIE")
                 
-                is_match = True
-    
-                start_char = ent.start_char
-                end_char = ent.end_char
+                if self.debug:
+                    print(org)                    
                 
-                # Filter matches the represent public institutions
-                
-                match_normalized = unidecode.unidecode(ent.text.lower())
-                match_stripped = ''.join(filter(str.isalnum, match_normalized))
-                
-                for public_inst in public_insts:
-    
-                    if match_normalized == public_inst or match_stripped == public_inst:
-                        is_match = False
-                        break
-    
-                if is_match:
-                    matches[start_char] = [start_char, end_char, "INSTITUTIE"]
-                    if self.debug:
-                        print(ent.text)
+        # Add matches to list of names
+        for (start, end, _) in matches.values():    
+            organization = text[start:end]
+            if not self.find_name(organization):
+                self.name_list.append((start, organization))
                 
         return matches
     
@@ -792,36 +882,93 @@ class GetConfWorker(FlaskWorker):
                 
         return final_matches
     
+    def match_trigger_regex(self, text, trigger, regex):
+        """ Match a Regex starting with a trigger """
+        
+        pos = text.find(trigger)
+        
+        matches = []
+        
+        while pos > -1:
+            subtext = text[pos + len(trigger):]
+            match = re.match(regex, subtext)
+            
+            if match:
+                # Check all groups
+                delta_pos = 0
+                
+                for group in match.groups():
+                    # Find first occurance of group
+                    group_pos = subtext.find(group)
+                    
+                    # Get actual position of group
+                    start = pos + len(trigger) + delta_pos + group_pos
+                    end = start + len(group)
+                    add_match = True
+                    
+                    # Check if match should be concatenated with previous one
+                    if matches:
+                        (prev_start, prev_end) = matches[-1]
+                        if prev_start <= start and start <= prev_end:
+                            # Concatenate matches
+                            matches[-1] = (min(prev_start, start), max(prev_end,end))
+                            add_match = False
+                            
+                    if add_match:
+                        # Add new match
+                        matches.append((start, end))
+                    
+                    # Move forward in text
+                    subtext = subtext[group_pos + 1:]
+                    delta_pos += group_pos + 1
+                    
+            pos = text.find(trigger, pos + 1)
+        
+        # Form match dictionary
+        match_dict = {}
+        for (start, end) in matches:
+            match_dict[start] = (start, end, trigger.upper())
+            
+        return match_dict
+    
     def match_regex(self, text):
         """ Return the position of all the matches for a list of user defined REGEX. """
-        
+            
         res = {}
-        
+            
         for entry in self.conf_regex_list:
+            regex = entry[1]
+            
             if type(entry) is list:
-                # Keyword + REGEX
-                # Form all variants of trigger
-                trigger = '(?:' + entry[0].lower() + '|' + entry[0].upper() + '|' + entry[0].lower().title() + ')'
-                regex = trigger + entry[1]
-                tag = entry[0].upper()
+                # Trigger + Regex
                 
+                if type(entry[0]) is list:
+                    # Trigger list
+                    trigger_list = []
+                    for trigger in entry[0]:
+                        # Add all variants of each trigger
+                        trigger_list.extend([trigger.lower(), trigger.upper(), trigger.lower().title()])             
+                else:
+                    # Single trigger, add all variants                
+                    trigger_list = [entry[0].lower(), entry[0].upper(), entry[0].lower().title()]
+                
+                for trigger in trigger_list:
+                    res.update(self.match_trigger_regex(text, trigger, regex))
+                    
             else:
                 # Simple REGEX
                 regex = entry
                 tag = "REGEX"
-            
-            matches = re.findall(regex, text)  
-            for match in matches:  
-                if type(match) is tuple:
-                    # If there were multiple capturing groups, concatenate them
-                    match = ''.join(match).strip()
-                    
-                start, end = self.find_match(match, text, res)
-                res[start] = [start, end, tag]
-                    
-                if self.debug: 
-                    print(match)
                 
+                matches = re.findall(regex, text) 
+                for match in matches:  
+                    if type(match) is tuple:
+                        # If there were multiple capturing groups, concatenate them
+                        match = ''.join(match).strip()
+    
+                    start, end = self.find_match(match, text, res)
+                    res[start] = [start, end, tag]
+                    
         return res
     
     def match_eu_case(self, text):
@@ -859,43 +1006,82 @@ class GetConfWorker(FlaskWorker):
                 
         return new_matches
     
-    def select_matches(self, matches_dict):
-        """ Select the final matches. """
+    def filter_noconf_matches(self, matches, noconf_matches):
+        """ Eliminate the matches which intersect with non confidential matches. """
         
-        matches = list(matches_dict.values())
+        filtered_matches = []
         
-        final_matches = {}
-        
-        for i, (start1, end1, text1) in enumerate(matches):    
+        for match in matches:
+            [start_match, end_match, label_match] = match
             
             add_match = True
-            for j in range(i + 1, len(matches)):
-                (start2, end2, text2) = matches[j]
+            for noconf_match in noconf_matches:
+                (start_filter, end_filter) = noconf_match
+                
+                if max(start_filter, start_match) < min(end_filter, end_match):
+                    add_match = False
+                    break
                     
-                # First match completly included in second one
-                if start2 <= start1 and end1 <= end2:
-                    # Ignore first match
-                    add_match = False
-                    break
-                        
-                # Matches intersect each other
-                elif (start2 <= start1 and start1 <= end2) or (start2 <= end1 and end1 <= end2):
-                    # Select the larger match
-                    if len(text1) > len(text2):
-                        text = text1
-                    else:
-                        text = text2
-                            
-                    # Add match union
-                    matches[j] = (min(start1, start2), max(end1, end2), text)
-                    add_match = False
-                        
-                    break
-                        
             if add_match:
-                final_matches[start1] = (start1, end1, text1)     
+                filtered_matches.append(match)
+                
+        return filtered_matches
+    
+    def select_matches(self, matches_dict, noconf_matches):
+        """ Select the final matches. 
+        1. Eliminate matches which are not confidential.
+        2. Select matches which overlap. """
+    
+        matches = list(matches_dict.values())
         
-        return final_matches
+        
+        # 1. Eliminate matches which are not confidential
+        matches = self.filter_noconf_matches(matches, noconf_matches)
+        
+                
+        # 2. Select matches which overlap
+        
+        # Sort matches ascending by start position
+        sorted_matches = sorted(matches, key=lambda tup: tup[0])        
+        final_matches = [sorted_matches[0]]
+    
+        # Check all matches
+        for (start2, end2, label2) in sorted_matches[1:]:
+    
+            (start1, end1, label1) = final_matches[-1]
+    
+            if max(start1, start2) < min(end1, end2):
+                # Intersection
+                start = min(start1, start2)
+                end = max(end1, end2)
+    
+                label = label1
+                if end2 - start2 > end1 - start1:
+                    label = label2
+    
+                final_matches[-1] = (start, end, label)
+    
+            elif start1 <= start2 and start2 < end1 and start1 < end2 and end2 <= end1:
+                # start1 < start2 < end2 < end1
+                continue
+    
+            elif start2 <= start1 and start1 < end2 and start2 < end1 and end1 <= end2:
+                # start2 < start1 < end1 < end2
+                final_matches[-1] = (start2, end2, label2)
+    
+            else:
+                # No overlap
+                final_matches.append((start2, end2, label2))
+                
+        # Form matches dictionary
+        final_dict = {}
+        for (start, end, label) in final_matches:
+            final_dict[start] = (start, end, label)
+    
+        return final_dict
+    
+    
+    
         
     #######
     # AUX #
@@ -910,18 +1096,24 @@ class GetConfWorker(FlaskWorker):
         
         # Read files
         if self.debug:
-            institution_file = INSTITUTION_LIST_DEBUG
-            regex_file = CONF_REGEX_DEBUG
+            institution_path = INSTITUTION_LIST_DEBUG
+            organization_path = ORGANIZATION_LIST_DEBUG
+            regex_path = CONF_REGEX_DEBUG
         else:
-            institution_file = INSTITUTION_LIST_PROD
-            regex_file = CONF_REGEX_PROD
+            institution_path = INSTITUTION_LIST_PROD
+            organization_path = ORGANIZATION_LIST_PROD
+            regex_path = CONF_REGEX_PROD
         
         # Read list of public institutions
-        inst_file = open(institution_file, 'r', encoding='utf-8')
-        self.institution_list = inst_file.read().splitlines()
+        institution_file = open(institution_path, 'r', encoding='utf-8')
+        self.institution_list = institution_file.read().splitlines()
+    
+        # Read list of organizations
+        organization_file = open(organization_path, 'r', encoding='utf-8')
+        self.organization_list = organization_file.read().splitlines()
         
         # Read JSON REGEX file
-        json_file = open(regex_file, 'r', encoding="utf-8")
+        json_file = open(regex_path, 'r', encoding="utf-8")
         json_string = json_file.read().replace('\\', '\\\\')
         json_data = json.loads(json_string)        
         self.conf_regex_list = json_data['conf_regex']
@@ -932,19 +1124,24 @@ class GetConfWorker(FlaskWorker):
           raise ValueError("Document: '{}' is below the minimum of {} words".format(
             text, ct.MODELS.TAG_MIN_INPUT))
           
+        # Remove extra whitespaces
+        text = re.sub(' +', ' ', text)          
         
         # TODO De sters cand institutiile vor fi deja normalizate la citire
-        # Normalize institution names
+        # Normalize institution names            
         self.new_institution_list = []
         for inst in self.institution_list:
             inst_normalized = unidecode.unidecode(inst.lower())
             self.new_institution_list.append(inst_normalized)
             
-            inst_stripped = ''.join(filter(str.isalnum, inst_normalized))
-            self.new_institution_list.append(inst_stripped)
+            inst_stripped = inst_normalized.replace('.', '')
+            if inst_stripped != inst_normalized:
+                self.new_institution_list.append(inst_stripped)
         
         # Apply spaCy analysis
         doc = self.nlp_model(text)
+        
+        self.name_list = [] 
     
         return text, doc
 
@@ -955,7 +1152,7 @@ class GetConfWorker(FlaskWorker):
         matches = {}
         
         # Match institutions
-        matches.update(self.match_institution(self.nlp_model, text, public_insts=self.new_institution_list))
+        matches.update(self.match_organization(self.nlp_model, text))
         
         # Match CNPS
         matches.update(self.match_cnp(text))
@@ -967,13 +1164,9 @@ class GetConfWorker(FlaskWorker):
         matches.update(self.match_email(text))
         
         # Match names
-        name_matches, person_dict = self.match_name(self.nlp_model, doc, text, 
-                                                    person_checks=[PERSON_PROPN, PERSON_UPPERCASE])
-        
-        matches.update(name_matches)  
-        if self.debug:
-            print(person_dict)
-            
+        matches.update(self.match_name(self.nlp_model, doc, text, 
+                                       person_checks=[PERSON_PROPN, PERSON_UPPERCASE]))
+                    
         # Match addresses
         matches.update(self.match_address(self.nlp_model, doc, text, 
                                           address_checks=[ADDRESS_INCLUDE_GPE, ADDRESS_REMOVE_PUNCT]))
@@ -1001,15 +1194,17 @@ class GetConfWorker(FlaskWorker):
         cases = self.match_eu_case(text)
         matches = self.ignore_near_case_matches(matches, cases)
         
+        # Find entities which should not be confidential        
+        noconf_matches = self.match_noconf_institution(text, public_insts=self.new_institution_list)
               
-        return text, matches, person_dict
+        return text, matches, noconf_matches
 
     def _post_process(self, pred):
         
-        doc, matches, person_dict = pred
+        doc, matches, noconf_matches = pred
         
         # Select final matches
-        matches = self.select_matches(matches)
+        matches = self.select_matches(matches, noconf_matches)
         
         # Order matches 
         match_tuples = list(matches.values())
@@ -1019,23 +1214,32 @@ class GetConfWorker(FlaskWorker):
         hidden_doc = doc
         for key in match_starts:
             [start, end, label] = matches[key]
-            if label != 'NUME':
-                hidden_doc = hidden_doc[:start] + 'X' + hidden_doc[end:]
+            if not label in ['NUME', 'INSTITUTIE']:
+                hidden_doc = hidden_doc[:start] + 'x' + hidden_doc[end:]
+                
+        # Set the codes for the names
+        name_code_dict = self.set_name_codes()
         
         # Replace names with their codes, starting with longer names (which might include the shorter ones)
-        for name in sorted(person_dict, key=len, reverse=True):
-            code = person_dict[name]
+        for name in sorted(name_code_dict, key=len, reverse=True):
+            code = name_code_dict[name]
             
             # Search for all occurances of name
             while True:
                 # Ignore the case of the letters
-                name_match = re.search(name.lower(), hidden_doc.lower())
+                name_match = re.search(re.escape(name.lower()), hidden_doc.lower())
                 
                 if name_match:
                     start, end = name_match.span()
                     hidden_doc = hidden_doc[:start] + code + hidden_doc[end:]
                 else:
                     break
+                
+        # Add non confidential matches to result
+        print(noconf_matches)
+        for (start, end) in noconf_matches:
+            match_tuples.append((start, end, "ORGANIZATIE_PUBLICA"))
+            
             
         res = {}
         res['positions'] = match_tuples
@@ -1096,7 +1300,7 @@ if __name__ == '__main__':
     # S.C. Knowledge Investment Group S.R.L. Cui 278973, cu adresa in Sector 3 Bucuresti, Str. Frunzei 26 et 1, va rog a-mi aproba cererea de concediu pentru 
     # perioada 16.02.2022 - 18.02.2022"""
     
-    # 'DOCUMENT' : """Majorează de la 100 lei lunar la câte 175 lei lunar contribuţia de întreţinere datorată de pârâtă reclamantului, în favoarea minorilor A... C... R... Cezărel nascut la data de 20.02.2001 şi A... D... D... născută la data de 07 iunie 2002, începând cu data"""
+    # 'DOCUMENT' : """Majorează de la 100 lei lunar la câte 175 lei lunasr contribuţia de întreţinere datorată de pârâtă reclamantului, în favoarea minorilor A... C... R... Cezărel nascut la data de 20.02.2001 şi A... D... D... născută la data de 07 iunie 2002, începând cu data"""
     
     # DE LA CLIENT
     
@@ -1108,9 +1312,9 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
     
-#     'DOCUMENT' : """intimatul Ionescu Lucian Florin (fiul lui Eugen şi Anicuţa, născut la data de 30.09.1984 în municipiul Bucureşti, domiciliat în municipiul Bucureşti, str. Petre Păun, nr. 3 bl. G9D, sc. 3, et. 8, ap. 126, sector 5, CNP 1840930420032, prin sentinţa penală nr. 169 din 29.10.2015 a Tribunalului Călăraşi, definitivă prin decizia penală nr. 1460/A din 07.10.2016 a Curţii de Apel Bucureşti - Secţia a II-a Penală sunt concurente cu cele pentru a căror săvârşire a fost condamnat acelaşi intimat prin sentinţa penală nr. 106/F din 09.06.2016 pronunţată de Ionescu Florin.
-# în mod corect şi motivat, Ionescu Lucian a fost declarat
-# în mod corect şi motivat, lonescu Lucian Florin  a fost declarat""",
+    'DOCUMENT' : """intimatul Ionescu Lucian Florin (fiul lui Eugen şi Anicuţa, născut la data de 30.09.1984 în municipiul Bucureşti, domiciliat în municipiul Bucureşti, str. Petre Păun, nr. 3 bl. G9D, sc. 3, et. 8, ap. 126, sector 5, CNP 1840930420032, prin sentinţa penală nr. 169 din 29.10.2015 a Tribunalului Călăraşi, definitivă prin decizia penală nr. 1460/A din 07.10.2016 a Curţii de Apel Bucureşti - Secţia a II-a Penală sunt concurente cu cele pentru a căror săvârşire a fost condamnat acelaşi intimat prin sentinţa penală nr. 106/F din 09.06.2016 pronunţată de Ionescu Florin.
+în mod corect şi motivat, Ionescu Lucian a fost declarat
+în mod corect şi motivat, lonescu Lucian Florin  a fost declarat""",
 
     # 'DOCUMENT' : """-a dispus restituirea către partea civilă Barbu Georgiana a tabletelor marca Sony Vaio cu seria SVD112A1SM, cu încărcător aferent şi marca ASUS seria SN:CCOKBC314490""",
     
@@ -1120,8 +1324,33 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
     
-    'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
+    # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
     
+    # 'DOCUMENT' : """Prin cererea de chemare în judecată înregistrată pe rolul Curţii de Apel Bucureşti – Secţia a VIII- a Contencios Administrativ şi Fiscal sub numărul 2570/2/2017, reclamantul Curuti  Ionel, a solicitat, în contradictoriu cu pârâta Agenţia Naţională de Integritate anularea Raportului de evaluare nr. 9756/G/II/17.03.2017 întocmit de ANI - Inspecţia de Integritate şi obligarea pârâtei la plata cheltuielilor de judecata ocazionate.""",
+    # 'DOCUMENT' : """S-au luat în examinare recursurile formulate de reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A. și chemata în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.) împotriva Sentinţei nr. 97 din 12 aprilie 2017 pronunţată de Curtea de Apel Ploiești – Secţia a II-a Civilă, de Contencios Administrativ şi Fiscal. La apelul nominal, făcut în şedinţă publică, răspunde recurenta- reclamantă S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin consilier juridic Niţă Vasile Laurenţiu, care depune delegaţie de reprezentare la dosar, recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.), prin consilier juridic Marinela Vladescu, care depune delegaţie de reprezentare la dosarul cauzei, lipsă fiind intimatul-pârât Ministerul Investiţiilor şi Proiectelor Europene (fostul Ministerul Fondurilor Europene). Procedura de citare este legal îndeplinită. Se prezintă referatul cauzei, magistratul – asistent învederând că recurenta-reclamantă a formulat o cerere de renunţare la cererea de chemare în judecată precum şi la cererea de chemare în garanţie, cu privire la care s-a depus punct de vedere în sensul de a se lua act de cererea de renunţare la judecată. Reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin avocat, conform art. 406 alin. 5 Cod procedură civilă, solicită a se lua act de cererea de renunţare la judecată, respectiv de chemare în garanţie, cu consecinţa anulării hotărârilor pronunţate de Curtea de Apel Ploieşti. Recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L., prin consilier juridic, precizează că nu se opune renunţării la judecată, astfel cum a fost solicitată de recurenta-reclamantă, apreciind că sunt îndeplinite condiţiile prevăzute de dispozițiile art. 406 Cod procedură civilă.""",
+    # 'DOCUMENT' : """Totodată, a notificat beneficiarii PNDL cu privire la epuizarea creditelor bugetare în proporţie de 80% pentru PNDL 1, ultimele transferuri efectuându-se parţial pentru solicitările de finanţare depuse până în data de 08.11.2017 (adresa nr. 155732/18.12.2017).""",
+#     'DOCUMENT' : """S-au luat în examinare recursul formulat de petentul Lupea Nicodim Eugen împotriva sentinţei penale nr. 494 din data de 27 noiembrie 2020, pronunţate de Înalta Curte de Casaţie şi Justiţie – Secţia penală în dosarul nr. 3039/1/2020.
+# La apelul nominal, făcut în şedinţă publică, a lipsit recurentul Lupea Eugen Nicodim.
+# Procedura de citare a fost legal îndeplinită.
+# În conformitate cu dispoziţiile art. 369 alin. 1 din Codul de procedură penală, instanţa a procedat la înregistrarea desfăşurării şedinţei de judecată cu mijloace tehnice, stocarea informaţiilor realizându-se în memoria calculatorului.
+# S-a făcut referatul cauzei de către magistratul asistent, care a învederat următoarele:
+# - cauza are ca obiect recursul formulat de petentul Lupea Nicodim împotriva sentinţei penale nr. 494 din data de 27 noiembrie 2020, pronunţate de Înalta Curte de Casaţie şi Justiţie – Secţia penală în dosarul nr. 3039/1/2020;""",
+    # 'DOCUMENT' : """Cum în prezenta cauză s-a formulat contestaţie în anulare împotriva unei decizii prin care a fost respins, ca inadmisibil, recursul formulat de contestatorul Dumitrescu Iulian, cale de atac exercitată împotriva unei hotărâri, prin care au fost respinse, ca inadmisibile, căile de atac formulate de acelaşi contestator în nume propriu şi pentru numiţii Patatu Geta, Branzariu Maria Crina, Paltinisanu Adrian, Ignat Vasile, Ciurcu Octavian Constantin, Florici Gheorghe, Sfrijan Marius, Puscasu Ermina Nicoleta, Dragoi Silvia Alina, Bolog Sandrino Iulian, Popa Georgeta, Malanciuc Petru Iulian, Tudorei Vladimir, Buscu Nicoleta Cristina, Budai Paul, Lostun Elena, Bolohan Marcel şi Musca Marinela, împotriva încheierii penale nr. 226/RC din data de 7 iunie 2019, pronunțate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1181/1/2019 , Completul de 5 Judecători, a constatat că prin hotărârea atacată nu a fost soluţionată""",
+#     'DOCUMENT' : """S-a luat în examinare apelul formulat de contestatoarea Ignatenko-Păvăloiu Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
+# La apelul nominal făcut în ședință publică, a lipsit apelanta contestatoare Ignatenko (Păvăloiu) Nela, pentru care a răspuns apărătorul ales, avocat Nastasiu Ciprian, cu împuternicire avocaţială la dosarul cauzei (fila 9 din dosar).
+# Procedura de citare a fost legal îndeplinită.
+# În conformitate cu dispozițiile art. 369 alin. (1) din Codul de procedură penală, s-a procedat la înregistrarea desfășurării ședinței de judecată cu mijloace tehnice, stocarea datelor realizându-se în memoria calculatorului.
+# S-a făcut referatul cauzei de către magistratul asistent, care a învederat faptul că prezentul dosar are ca obiect apelul formulat de contestatoarea Ignatenko (Păvăloiu) Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
+# Cu titlu prealabil, reprezentantul Ministerului Public a invocat excepţia inadmisibilităţii căii de atac formulate întrucât vizează o decizie definitivă, pronunţată de Secţia penală a instanţei supreme în calea extraordinară de atac a contestaţiei în anulare.
+# Înalta Curte de Casaţie şi Justiţie, Completul de 5 Judecători a supus discuţiei părţilor excepţia inadmisibilităţii căii de atac, invocate de reprezentantul Ministerului Public.
+# Apărătorul ales al apelantei contestatoare Ignatenko (Păvăloiu) Nela a învederat că este admisibil apelul declarat împotriva deciziei penale nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021, această din urmă decizie fiind definitivă doar în ceea ce priveşte dispoziţia de admitere a contestaţiei în anulare formulate de S.C. Reciplia SRL.
+# În ceea ce priveşte dispoziţia de respingere a contestaţiei în anulare formulate de contestatoarea Ignatenko (Păvăloiu) Nela, apărarea a opinat că în această ipoteză este aplicabil art. 432 alin. (4) din Codul de procedură penală, în cuprinsul căruia se stipulează faptul că sentinţele pronunţate în calea de atac a contestaţiei în anulare, altele decât cele privind admisibilitatea, sunt supuse apelului. În acest sens, apărătorul ales a făcut trimitere la decizia nr. 5/2015, pronunţată de instanţa supremă.""",
+#     'DOCUMENT' : """Prin sentinţa penală nr. 112/F din data de 16 mai 2019 pronunţată în dosarul nr. 2555/2/2019 (1235/2019), Curtea de Apel Bucureşti – Secţia a II-a Penală, a admis sesizarea formulată de Parchetul de pe lângă Curtea de Apel Bucureşti.
+# A dispus punerea în executare a mandatului european de arestare emis la 24.04.2019 de Procuratura Graz pe numele persoanei solicitate Buzdugan Eminescu (cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj).""",
+    # 'DOCUMENT' : """Verificând actele aflate la dosar, Înalta Curte constată că, la data de 03.05.2019 a fost înregistrată pe rolul instanţei, sub nr. 2555/2/2019 (1235/2019), sesizarea Parchetului de pe lângă Curtea de Apel Bucureşti, în conformitate cu dispoz. art. 101 alin. 4 din Legea nr. 302/2004 republicată, având ca obiect procedura de punere în executare a mandatului european de arestare emis la data de 24.04.2019 (fiind indicată din eroare data de 1.04.2019), de către autorităţile judiciare austriece, respectiv Procuratura Graz, pe numele persoanei solicitate BUZDUGAN EMINESCU, cetăţean român, fiul lui Giovani şi Monalisa, născut la data de 22.12.1996 în Foggia, Republica Italiană, CNP 1961222160087, domiciliat în mun. Drobeta Turnu Severin, str.Orly nr.13, judeţul Mehedinţi şi fără forme legale în mun. Craiova, str. Ştirbey Vodă nr.74, judeţul Dolj, urmărit pentru săvârşirea infracţiunii de  tentativă de furt prin efracţie într-o locuinţă, ca membru al unei organizaţii criminale,  prevăzute şi pedepsite de secţiunile 15, 127, 129/2 cifra 1, 130 alin. 1, al doilea caz şi alin. 2 din Codul penal austriac.""",
+    # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
+    # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
+        
       }
   
   res = eng.execute(inputs=test, counter=1)
