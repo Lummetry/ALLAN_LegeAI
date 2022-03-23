@@ -128,7 +128,7 @@ ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
 
-__VER__='0.4.0.1'
+__VER__='0.4.1.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -612,14 +612,20 @@ class GetConfWorker(FlaskWorker):
             for match in re.finditer("\\b" + inst + "\\b", text_lower):
                 match_span = match.span()
                 
+                # Also remove Organization from name list (so a code is not generated)
+                for i, (_, name) in enumerate(self.name_list):
+                    if name == text[match_span[0] : match_span[1]]:
+                        del self.name_list[i]
+                        break
+                
                 add_match = True
                 for prev_match in matches:
                     if prev_match == match_span:
-                        add_match = False
+                        add_match = False                            
                         break
                         
                 if add_match:
-                    matches.append(match_span)                
+                    matches.append(match_span)
                 
         return matches
         
@@ -1147,7 +1153,7 @@ class GetConfWorker(FlaskWorker):
         
         matches = {}
         
-        # Match institutions
+        # Match organizations
         matches.update(self.match_organization(self.nlp_model, text))
         
         # Match CNPS
@@ -1197,7 +1203,7 @@ class GetConfWorker(FlaskWorker):
 
     def _post_process(self, pred):
         
-        doc, matches, noconf_matches = pred
+        text, matches, noconf_matches = pred
         
         # Select final matches
         matches = self.select_matches(matches, noconf_matches)
@@ -1207,7 +1213,7 @@ class GetConfWorker(FlaskWorker):
         match_starts = list(sorted(matches.keys(), reverse=True))
     
         # Replace all confidential information (except names) in text
-        hidden_doc = doc
+        hidden_doc = text
         for key in match_starts:
             [start, end, label] = matches[key]
             if not label in ['NUME', 'INSTITUTIE']:
@@ -1302,11 +1308,11 @@ if __name__ == '__main__':
     
     # DE LA CLIENT
     
-    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
     
-    # 'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
+    'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
     
     # 'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
     
