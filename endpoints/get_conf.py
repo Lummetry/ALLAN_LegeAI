@@ -128,7 +128,7 @@ ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
 
-__VER__='0.4.1.1'
+__VER__='0.4.2.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1084,6 +1084,40 @@ class GetConfWorker(FlaskWorker):
     
         return final_dict
     
+    def replace_abbreviations(self, text):
+        """ Use the abbreviations dictionary to set abbreviations. """
+        
+        replace_list = []
+        
+        for (key, value) in self.abbr_dict.items():
+            
+            if type(value) is list:
+                abbr = value[0]
+                conditions = value[1]            
+            else:
+                abbr = value
+                conditions = []
+                
+            for match in re.finditer('\\b' + re.escape(key) + "\\b", text):
+                start, end = match.span()
+                
+                if 'nostart' in conditions:
+                    tokens = self.nlp_model.char_span(start, end)
+                    if tokens and not tokens[0].is_sent_start:
+                        replace_list.append((start, end, abbr))
+                        
+                else:
+                    replace_list.append((start, end, abbr))                    
+                
+        # Sort replace list descending by start position
+        replace_list.sort(key=lambda tup : tup[0], reverse=True)
+                
+        # Replace abbreviations
+        for (start, end, abbr) in replace_list:
+            text = text[:start] + abbr + text[end:]
+                
+        return text
+    
     
     
         
@@ -1121,7 +1155,7 @@ class GetConfWorker(FlaskWorker):
         json_string = json_file.read().replace('\\', '\\\\')
         json_data = json.loads(json_string)        
         self.conf_regex_list = json_data['conf_regex']
-                
+        self.abbr_dict = json_data['abbr_dict']                
         
         text = inputs['DOCUMENT']
         if len(text) < ct.MODELS.TAG_MIN_INPUT:
@@ -1141,6 +1175,9 @@ class GetConfWorker(FlaskWorker):
             inst_stripped = inst_normalized.replace('.', '')
             if inst_stripped != inst_normalized:
                 self.new_institution_list.append(inst_stripped)
+                
+        # Replace with abbreviations
+        text = self.replace_abbreviations(text)
         
         # Apply spaCy analysis
         doc = self.nlp_model(text)
@@ -1333,15 +1370,15 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
     
     # 'DOCUMENT' : """Prin cererea de chemare în judecată înregistrată pe rolul Curţii de Apel Bucureşti – Secţia a VIII- a Contencios Administrativ şi Fiscal sub numărul 2570/2/2017, reclamantul Curuti  Ionel, a solicitat, în contradictoriu cu pârâta Agenţia Naţională de Integritate anularea Raportului de evaluare nr. 9756/G/II/17.03.2017 întocmit de ANI - Inspecţia de Integritate şi obligarea pârâtei la plata cheltuielilor de judecata ocazionate.""",
-    # 'DOCUMENT' : """S-au luat în examinare recursurile formulate de reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A. și chemata în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.) împotriva Sentinţei nr. 97 din 12 aprilie 2017 pronunţată de Curtea de Apel Ploiești – Secţia a II-a Civilă, de Contencios Administrativ şi Fiscal. La apelul nominal, făcut în şedinţă publică, răspunde recurenta- reclamantă S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin consilier juridic Niţă Vasile Laurenţiu, care depune delegaţie de reprezentare la dosar, recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.), prin consilier juridic Marinela Vladescu, care depune delegaţie de reprezentare la dosarul cauzei, lipsă fiind intimatul-pârât Ministerul Investiţiilor şi Proiectelor Europene (fostul Ministerul Fondurilor Europene). Procedura de citare este legal îndeplinită. Se prezintă referatul cauzei, magistratul – asistent învederând că recurenta-reclamantă a formulat o cerere de renunţare la cererea de chemare în judecată precum şi la cererea de chemare în garanţie, cu privire la care s-a depus punct de vedere în sensul de a se lua act de cererea de renunţare la judecată. Reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin avocat, conform art. 406 alin. 5 Cod procedură civilă, solicită a se lua act de cererea de renunţare la judecată, respectiv de chemare în garanţie, cu consecinţa anulării hotărârilor pronunţate de Curtea de Apel Ploieşti. Recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L., prin consilier juridic, precizează că nu se opune renunţării la judecată, astfel cum a fost solicitată de recurenta-reclamantă, apreciind că sunt îndeplinite condiţiile prevăzute de dispozițiile art. 406 Cod procedură civilă.""",
+    'DOCUMENT' : """S-au luat în examinare recursurile formulate de reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A. și chemata în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.) împotriva Sentinţei nr. 97 din 12 aprilie 2017 pronunţată de Curtea de Apel Ploiești – Secţia a II-a Civilă, de Contencios Administrativ şi Fiscal. La apelul nominal, făcut în şedinţă publică, răspunde recurenta- reclamantă S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin consilier juridic Niţă Vasile Laurenţiu, care depune delegaţie de reprezentare la dosar, recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.), prin consilier juridic Marinela Vladescu, care depune delegaţie de reprezentare la dosarul cauzei, lipsă fiind intimatul-pârât Ministerul Investiţiilor şi Proiectelor Europene (fostul Ministerul Fondurilor Europene). Procedura de citare este legal îndeplinită. Se prezintă referatul cauzei, magistratul – asistent învederând că recurenta-reclamantă a formulat o cerere de renunţare la cererea de chemare în judecată precum şi la cererea de chemare în garanţie, cu privire la care s-a depus punct de vedere în sensul de a se lua act de cererea de renunţare la judecată. Reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin avocat, conform art. 406 alin. 5 Cod procedură civilă, solicită a se lua act de cererea de renunţare la judecată, respectiv de chemare în garanţie, cu consecinţa anulării hotărârilor pronunţate de Curtea de Apel Ploieşti. Recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L., prin consilier juridic, precizează că nu se opune renunţării la judecată, astfel cum a fost solicitată de recurenta-reclamantă, apreciind că sunt îndeplinite condiţiile prevăzute de dispozițiile art. 406 Cod procedură civilă.""",
     # 'DOCUMENT' : """Decizia nr. 12996 din 18.02.2016, înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 8260/23.02.2016 ce priveşte soluţionarea contestaţiei formulata de Compania de Apa Târgovişte Dâmboviţa SA împotriva notei de constatare a neregulilor si de stabilire a corecţiilor financiare nr.3966/19.01.2016; Nota de constatare a neregulilor a neregulilor si de stabilire a corecţiilor financiare nr. 3966 din 19.01.2016 înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 15178 din 30.04.201 5 şi Notificării cu privire la debit nr. 3968 din 19.01.2016 înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 3663/311-UIP din 22.01.2016.""",
     # 'DOCUMENT' : """Totodată, a notificat beneficiarii PNDL cu privire la epuizarea creditelor bugetare în proporţie de 80% pentru PNDL 1, ultimele transferuri efectuându-se parţial pentru solicitările de finanţare depuse până în data de 08.11.2017 (adresa nr. 155732/18.12.2017).""",
-    'DOCUMENT' : """S-au luat în examinare recursul formulat de petentul Lupea Nicodim Eugen împotriva sentinţei penale nr. 494 din data de 27 noiembrie 2020, pronunţate de Înalta Curte de Casaţie şi Justiţie – Secţia penală în dosarul nr. 3039/1/2020.
-La apelul nominal, făcut în şedinţă publică, a lipsit recurentul Lupea Eugen Nicodim.
-Procedura de citare a fost legal îndeplinită.
-În conformitate cu dispoziţiile art. 369 alin. 1 din Codul de procedură penală, instanţa a procedat la înregistrarea desfăşurării şedinţei de judecată cu mijloace tehnice, stocarea informaţiilor realizându-se în memoria calculatorului.
-S-a făcut referatul cauzei de către magistratul asistent, care a învederat următoarele:
-- cauza are ca obiect recursul formulat de petentul Lupea Nicodim împotriva sentinţei penale nr. 494 din data de 27 noiembrie 2020, pronunţate de Înalta Curte de Casaţie şi Justiţie – Secţia penală în dosarul nr. 3039/1/2020;""",
+#     'DOCUMENT' : """S-au luat în examinare recursul formulat de petentul Lupea Nicodim Eugen împotriva sentinţei penale nr. 494 din data de 27 noiembrie 2020, pronunţate de Înalta Curte de Casaţie şi Justiţie – Secţia penală în dosarul nr. 3039/1/2020.
+# La apelul nominal, făcut în şedinţă publică, a lipsit recurentul Lupea Eugen Nicodim.
+# Procedura de citare a fost legal îndeplinită.
+# În conformitate cu dispoziţiile art. 369 alin. 1 din Codul de procedură penală, instanţa a procedat la înregistrarea desfăşurării şedinţei de judecată cu mijloace tehnice, stocarea informaţiilor realizându-se în memoria calculatorului.
+# S-a făcut referatul cauzei de către magistratul asistent, care a învederat următoarele:
+# - cauza are ca obiect recursul formulat de petentul Lupea Nicodim împotriva sentinţei penale nr. 494 din data de 27 noiembrie 2020, pronunţate de Înalta Curte de Casaţie şi Justiţie – Secţia penală în dosarul nr. 3039/1/2020;""",
     # 'DOCUMENT' : """Cum în prezenta cauză s-a formulat contestaţie în anulare împotriva unei decizii prin care a fost respins, ca inadmisibil, recursul formulat de contestatorul Dumitrescu Iulian, cale de atac exercitată împotriva unei hotărâri, prin care au fost respinse, ca inadmisibile, căile de atac formulate de acelaşi contestator în nume propriu şi pentru numiţii Patatu Geta, Branzariu Maria Crina, Paltinisanu Adrian, Ignat Vasile, Ciurcu Octavian Constantin, Florici Gheorghe, Sfrijan Marius, Puscasu Ermina Nicoleta, Dragoi Silvia Alina, Bolog Sandrino Iulian, Popa Georgeta, Malanciuc Petru Iulian, Tudorei Vladimir, Buscu Nicoleta Cristina, Budai Paul, Lostun Elena, Bolohan Marcel şi Musca Marinela, împotriva încheierii penale nr. 226/RC din data de 7 iunie 2019, pronunțate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1181/1/2019 , Completul de 5 Judecători, a constatat că prin hotărârea atacată nu a fost soluţionată""",
 #     'DOCUMENT' : """S-a luat în examinare apelul formulat de contestatoarea Ignatenko-Păvăloiu Nela împotriva deciziei nr. 186/A din data de 6 iulie 2021, pronunţate de Înalta Curte de Casaţie şi Justiţie, Secţia penală, în dosarul nr. 1220/1/2021.
 # La apelul nominal făcut în ședință publică, a lipsit apelanta contestatoare Ignatenko (Păvăloiu) Nela, pentru care a răspuns apărătorul ales, avocat Nastasiu Ciprian, cu împuternicire avocaţială la dosarul cauzei (fila 9 din dosar).
