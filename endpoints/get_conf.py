@@ -136,7 +136,7 @@ INCLUDED_2IN1 = 3
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='0.4.3.0'
+__VER__='0.4.3.1'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -268,7 +268,7 @@ class GetConfWorker(FlaskWorker):
         name_code_dict = {}
         for (pos, name) in self.name_list:
             # Add the name to the dictionary
-            name_code_dict[name] = current_code
+            name_code_dict[name] = current_code + '.'
             # Get the next code
             current_code = self.next_name_code(current_code)
         
@@ -1065,22 +1065,20 @@ class GetConfWorker(FlaskWorker):
             # Check type of overlap
             if max(start1, start2) < min(end1, end2):
                 # Intersection
-                overlap = INTERSECTION    
-            elif start1 <= start2 and start2 < end1 and start1 < end2 and end2 <= end1:
-                # start1 < start2 < end2 < end1
-                overlap = INCLUDED_2IN1    
-            elif start2 <= start1 and start1 < end2 and start2 < end1 and end1 <= end2:
-                # start2 < start1 < end1 < end2
-                overlap = INCLUDED_1IN2    
+                overlap = INTERSECTION           
+                if start1 <= start2 and start2 < end1 and start1 < end2 and end2 <= end1:
+                    # start1 < start2 < end2 < end1
+                    overlap = INCLUDED_2IN1    
+                elif start2 <= start1 and start1 < end2 and start2 < end1 and end1 <= end2:
+                    # start2 < start1 < end1 < end2
+                    overlap = INCLUDED_1IN2 
             else:
                 # No overlap
-                overlap = NO_OVERLAP
+                overlap = NO_OVERLAP          
     
             # If any kind of overlap
             if not overlap == NO_OVERLAP:
-                print('OVERLAP:', label1, label2, overlap)
-                
-                print(text[start1:end1], label1, text[start2:end2], label2, self.name_list)
+                print('overlap', label1, label2)
                 
                 # If only one is a spaCy match, give priority to non-spaCy match
                 if label1 in SPACY_LABELS and label2 not in SPACY_LABELS:
@@ -1088,11 +1086,11 @@ class GetConfWorker(FlaskWorker):
                     removed_match = text[start1:end1]
                 
                 elif label2 in SPACY_LABELS and label1 not in SPACY_LABELS:   
-                    removed_match = text[start2:end2]                        
-                    continue
+                    removed_match = text[start2:end2]      
                     
                 # Otherwise check overlap type
                 else:
+                    print(overlap)
                     if overlap == INTERSECTION:
                         start = min(start1, start2)
                         end = max(end1, end2)
@@ -1111,7 +1109,6 @@ class GetConfWorker(FlaskWorker):
                         
                     elif overlap == INCLUDED_2IN1: 
                         removed_match = text[start2:end2]   
-                        continue
                                  
                 # If the match is in the name list, also remove it from there
                 idx = self.find_name(removed_match)
@@ -1392,7 +1389,7 @@ if __name__ == '__main__':
     
     # DE LA CLIENT
     
-    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
     
@@ -1410,7 +1407,7 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """Contractul comercial nr. 23/14 februarie 2014 încheiat între SC Sady Com SRL şi SC Managro SRL, prin care prima societate a vândut celei de-a doua cantitatea de 66 tone azotat de amoniu la preţul de 93.720 RON, precum şi factum proforma emisă de reprezentantul SC Sady Com SRL pentru suma de 93.720 RON.""",
     
-    'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
+    # 'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
     
     # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
     
