@@ -127,8 +127,16 @@ EU_CASE_REGS = [REG_START + r + REG_END for r in EU_CASE_REGS]
 ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
+# Overlap
+NO_OVERLAP = 0
+INTERSECTION = 1
+INCLUDED_1IN2 = 2
+INCLUDED_2IN1 = 3
 
-__VER__='0.4.1.0'
+SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
+
+
+__VER__='0.4.3.1'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -260,7 +268,7 @@ class GetConfWorker(FlaskWorker):
         name_code_dict = {}
         for (pos, name) in self.name_list:
             # Add the name to the dictionary
-            name_code_dict[name] = current_code
+            name_code_dict[name] = current_code + '.'
             # Get the next code
             current_code = self.next_name_code(current_code)
         
@@ -272,13 +280,13 @@ class GetConfWorker(FlaskWorker):
         
         low_name = name.lower()
         
-        for (pos, name) in self.name_list:
+        for i, (pos, name) in enumerate(self.name_list):
             lev_dist = simple_levenshtein_distance(name.lower(), low_name, 
                                                    normalize=False)
             if name.lower() == low_name or lev_dist < MAX_LEV_DIST:
-                return True
+                return i
             
-        return False
+        return -1
     
 
     def check_token_condition(self, token, condition):
@@ -438,7 +446,7 @@ class GetConfWorker(FlaskWorker):
             if self.debug:
                 print('Nume:', person)
                 
-            if not self.find_name(person):
+            if self.find_name(person) == -1:
                 self.name_list.append((start, person))
                 
         return match_dict      
@@ -609,12 +617,14 @@ class GetConfWorker(FlaskWorker):
         matches = []
         for i, inst in enumerate(public_insts):
                 
-            for match in re.finditer("\\b" + inst + "\\b", text_lower):
+            for match in re.finditer("\\b" + re.escape(inst) + "\\b", text_lower):
                 match_span = match.span()
                 
                 # Also remove Organization from name list (so a code is not generated)
                 for i, (_, name) in enumerate(self.name_list):
-                    if name == text[match_span[0] : match_span[1]]:
+                    name_lower = unidecode.unidecode(name.lower())
+                    # Check if any name in name list includes the Organization
+                    if inst in name_lower:
                         del self.name_list[i]
                         break
                 
@@ -642,7 +652,7 @@ class GetConfWorker(FlaskWorker):
             if ent.label_ == 'ORGANIZATION':
                 matches[ent.start_char] = (ent.start_char, ent.end_char, "INSTITUTIE")
                 if self.debug:
-                    print('Organizatie:', ent.text)
+                    print('Organizatie spaCy:', ent.text)
                     
         # Search for matches in the organization file
         for org in self.organization_list:
@@ -652,12 +662,12 @@ class GetConfWorker(FlaskWorker):
                 matches[m.start()] = (m.start(), m.end(), "INSTITUTIE")
                 
                 if self.debug:
-                    print('Organizatie:', org)                    
+                    print('Organizatie txt:', org)                    
                 
         # Add matches to list of names
         for (start, end, _) in matches.values():    
             organization = text[start:end]
-            if not self.find_name(organization):
+            if self.find_name(organization) == -1:
                 self.name_list.append((start, organization))
                 
         return matches
@@ -1029,7 +1039,7 @@ class GetConfWorker(FlaskWorker):
                 
         return filtered_matches
     
-    def select_matches(self, matches_dict, noconf_matches):
+    def select_matches(self, matches_dict, noconf_matches, text):
         """ Select the final matches. 
         1. Eliminate matches which are not confidential.
         2. Select matches which overlap. """
@@ -1052,26 +1062,60 @@ class GetConfWorker(FlaskWorker):
     
             (start1, end1, label1) = final_matches[-1]
     
+            # Check type of overlap
             if max(start1, start2) < min(end1, end2):
                 # Intersection
-                start = min(start1, start2)
-                end = max(end1, end2)
-    
-                label = label1
-                if end2 - start2 > end1 - start1:
-                    label = label2
-    
-                final_matches[-1] = (start, end, label)
-    
-            elif start1 <= start2 and start2 < end1 and start1 < end2 and end2 <= end1:
-                # start1 < start2 < end2 < end1
-                continue
-    
-            elif start2 <= start1 and start1 < end2 and start2 < end1 and end1 <= end2:
-                # start2 < start1 < end1 < end2
-                final_matches[-1] = (start2, end2, label2)
-    
+                overlap = INTERSECTION           
+                if start1 <= start2 and start2 < end1 and start1 < end2 and end2 <= end1:
+                    # start1 < start2 < end2 < end1
+                    overlap = INCLUDED_2IN1    
+                elif start2 <= start1 and start1 < end2 and start2 < end1 and end1 <= end2:
+                    # start2 < start1 < end1 < end2
+                    overlap = INCLUDED_1IN2 
             else:
+                # No overlap
+                overlap = NO_OVERLAP          
+    
+            # If any kind of overlap
+            if not overlap == NO_OVERLAP:
+                print('overlap', label1, label2)
+                
+                # If only one is a spaCy match, give priority to non-spaCy match
+                if label1 in SPACY_LABELS and label2 not in SPACY_LABELS:
+                    final_matches[-1] = (start2, end2, label2)       
+                    removed_match = text[start1:end1]
+                
+                elif label2 in SPACY_LABELS and label1 not in SPACY_LABELS:   
+                    removed_match = text[start2:end2]      
+                    
+                # Otherwise check overlap type
+                else:
+                    print(overlap)
+                    if overlap == INTERSECTION:
+                        start = min(start1, start2)
+                        end = max(end1, end2)
+            
+                        label = label1 
+                        removed_match = text[start1:end1]
+                        if end2 - start2 > end1 - start1:
+                            label = label2
+                            removed_match = text[start2:end2]
+            
+                        final_matches[-1] = (start, end, label)
+                        
+                    elif overlap == INCLUDED_1IN2:
+                        final_matches[-1] = (start2, end2, label2)   
+                        removed_match = text[start1:end1]
+                        
+                    elif overlap == INCLUDED_2IN1: 
+                        removed_match = text[start2:end2]   
+                                 
+                # If the match is in the name list, also remove it from there
+                idx = self.find_name(removed_match)
+                if idx > -1:
+                    del self.name_list[idx]
+                    
+            else:                
                 # No overlap
                 final_matches.append((start2, end2, label2))
                 
@@ -1081,6 +1125,40 @@ class GetConfWorker(FlaskWorker):
             final_dict[start] = (start, end, label)
     
         return final_dict
+    
+    def replace_abbreviations(self, text):
+        """ Use the abbreviations dictionary to set abbreviations. """
+        
+        replace_list = []
+        
+        for (key, value) in self.abbr_dict.items():
+            
+            if type(value) is list:
+                abbr = value[0]
+                conditions = value[1]            
+            else:
+                abbr = value
+                conditions = []
+                
+            for match in re.finditer('\\b' + re.escape(key) + "\\b", text):
+                start, end = match.span()
+                
+                if 'nostart' in conditions:
+                    tokens = self.nlp_model.char_span(start, end)
+                    if tokens and not tokens[0].is_sent_start:
+                        replace_list.append((start, end, abbr))
+                        
+                else:
+                    replace_list.append((start, end, abbr))                    
+                
+        # Sort replace list descending by start position
+        replace_list.sort(key=lambda tup : tup[0], reverse=True)
+                
+        # Replace abbreviations
+        for (start, end, abbr) in replace_list:
+            text = text[:start] + abbr + text[end:]
+                
+        return text
     
     
     
@@ -1119,7 +1197,7 @@ class GetConfWorker(FlaskWorker):
         json_string = json_file.read().replace('\\', '\\\\')
         json_data = json.loads(json_string)        
         self.conf_regex_list = json_data['conf_regex']
-                
+        self.abbr_dict = json_data['abbr_dict']                
         
         text = inputs['DOCUMENT']
         if len(text) < ct.MODELS.TAG_MIN_INPUT:
@@ -1139,6 +1217,9 @@ class GetConfWorker(FlaskWorker):
             inst_stripped = inst_normalized.replace('.', '')
             if inst_stripped != inst_normalized:
                 self.new_institution_list.append(inst_stripped)
+                
+        # Replace with abbreviations
+        text = self.replace_abbreviations(text)
         
         # Apply spaCy analysis
         doc = self.nlp_model(text)
@@ -1206,7 +1287,7 @@ class GetConfWorker(FlaskWorker):
         text, matches, noconf_matches = pred
         
         # Select final matches
-        matches = self.select_matches(matches, noconf_matches)
+        matches = self.select_matches(matches, noconf_matches, text)
         
         # Order matches 
         match_tuples = list(matches.values())
@@ -1308,11 +1389,11 @@ if __name__ == '__main__':
     
     # DE LA CLIENT
     
-    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
     
-    'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
+    # 'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
     
     # 'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
     
@@ -1332,6 +1413,7 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """Prin cererea de chemare în judecată înregistrată pe rolul Curţii de Apel Bucureşti – Secţia a VIII- a Contencios Administrativ şi Fiscal sub numărul 2570/2/2017, reclamantul Curuti  Ionel, a solicitat, în contradictoriu cu pârâta Agenţia Naţională de Integritate anularea Raportului de evaluare nr. 9756/G/II/17.03.2017 întocmit de ANI - Inspecţia de Integritate şi obligarea pârâtei la plata cheltuielilor de judecata ocazionate.""",
     # 'DOCUMENT' : """S-au luat în examinare recursurile formulate de reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A. și chemata în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.) împotriva Sentinţei nr. 97 din 12 aprilie 2017 pronunţată de Curtea de Apel Ploiești – Secţia a II-a Civilă, de Contencios Administrativ şi Fiscal. La apelul nominal, făcut în şedinţă publică, răspunde recurenta- reclamantă S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin consilier juridic Niţă Vasile Laurenţiu, care depune delegaţie de reprezentare la dosar, recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.), prin consilier juridic Marinela Vladescu, care depune delegaţie de reprezentare la dosarul cauzei, lipsă fiind intimatul-pârât Ministerul Investiţiilor şi Proiectelor Europene (fostul Ministerul Fondurilor Europene). Procedura de citare este legal îndeplinită. Se prezintă referatul cauzei, magistratul – asistent învederând că recurenta-reclamantă a formulat o cerere de renunţare la cererea de chemare în judecată precum şi la cererea de chemare în garanţie, cu privire la care s-a depus punct de vedere în sensul de a se lua act de cererea de renunţare la judecată. Reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin avocat, conform art. 406 alin. 5 Cod procedură civilă, solicită a se lua act de cererea de renunţare la judecată, respectiv de chemare în garanţie, cu consecinţa anulării hotărârilor pronunţate de Curtea de Apel Ploieşti. Recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L., prin consilier juridic, precizează că nu se opune renunţării la judecată, astfel cum a fost solicitată de recurenta-reclamantă, apreciind că sunt îndeplinite condiţiile prevăzute de dispozițiile art. 406 Cod procedură civilă.""",
+    # 'DOCUMENT' : """Decizia nr. 12996 din 18.02.2016, înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 8260/23.02.2016 ce priveşte soluţionarea contestaţiei formulata de Compania de Apa Târgovişte Dâmboviţa SA împotriva notei de constatare a neregulilor si de stabilire a corecţiilor financiare nr.3966/19.01.2016; Nota de constatare a neregulilor a neregulilor si de stabilire a corecţiilor financiare nr. 3966 din 19.01.2016 înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 15178 din 30.04.201 5 şi Notificării cu privire la debit nr. 3968 din 19.01.2016 înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 3663/311-UIP din 22.01.2016.""",
     # 'DOCUMENT' : """Totodată, a notificat beneficiarii PNDL cu privire la epuizarea creditelor bugetare în proporţie de 80% pentru PNDL 1, ultimele transferuri efectuându-se parţial pentru solicitările de finanţare depuse până în data de 08.11.2017 (adresa nr. 155732/18.12.2017).""",
 #     'DOCUMENT' : """S-au luat în examinare recursul formulat de petentul Lupea Nicodim Eugen împotriva sentinţei penale nr. 494 din data de 27 noiembrie 2020, pronunţate de Înalta Curte de Casaţie şi Justiţie – Secţia penală în dosarul nr. 3039/1/2020.
 # La apelul nominal, făcut în şedinţă publică, a lipsit recurentul Lupea Eugen Nicodim.
