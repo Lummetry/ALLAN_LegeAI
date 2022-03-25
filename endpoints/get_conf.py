@@ -127,8 +127,16 @@ EU_CASE_REGS = [REG_START + r + REG_END for r in EU_CASE_REGS]
 ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
+# Overlap
+NO_OVERLAP = 0
+INTERSECTION = 1
+INCLUDED_1IN2 = 2
+INCLUDED_2IN1 = 3
 
-__VER__='0.4.2.0'
+SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
+
+
+__VER__='0.4.3.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -272,13 +280,13 @@ class GetConfWorker(FlaskWorker):
         
         low_name = name.lower()
         
-        for (pos, name) in self.name_list:
+        for i, (pos, name) in enumerate(self.name_list):
             lev_dist = simple_levenshtein_distance(name.lower(), low_name, 
                                                    normalize=False)
             if name.lower() == low_name or lev_dist < MAX_LEV_DIST:
-                return True
+                return i
             
-        return False
+        return -1
     
 
     def check_token_condition(self, token, condition):
@@ -438,7 +446,7 @@ class GetConfWorker(FlaskWorker):
             if self.debug:
                 print('Nume:', person)
                 
-            if not self.find_name(person):
+            if self.find_name(person) == -1:
                 self.name_list.append((start, person))
                 
         return match_dict      
@@ -644,7 +652,7 @@ class GetConfWorker(FlaskWorker):
             if ent.label_ == 'ORGANIZATION':
                 matches[ent.start_char] = (ent.start_char, ent.end_char, "INSTITUTIE")
                 if self.debug:
-                    print('Organizatie:', ent.text)
+                    print('Organizatie spaCy:', ent.text)
                     
         # Search for matches in the organization file
         for org in self.organization_list:
@@ -654,12 +662,12 @@ class GetConfWorker(FlaskWorker):
                 matches[m.start()] = (m.start(), m.end(), "INSTITUTIE")
                 
                 if self.debug:
-                    print('Organizatie:', org)                    
+                    print('Organizatie txt:', org)                    
                 
         # Add matches to list of names
         for (start, end, _) in matches.values():    
             organization = text[start:end]
-            if not self.find_name(organization):
+            if self.find_name(organization) == -1:
                 self.name_list.append((start, organization))
                 
         return matches
@@ -1031,7 +1039,7 @@ class GetConfWorker(FlaskWorker):
                 
         return filtered_matches
     
-    def select_matches(self, matches_dict, noconf_matches):
+    def select_matches(self, matches_dict, noconf_matches, text):
         """ Select the final matches. 
         1. Eliminate matches which are not confidential.
         2. Select matches which overlap. """
@@ -1054,26 +1062,63 @@ class GetConfWorker(FlaskWorker):
     
             (start1, end1, label1) = final_matches[-1]
     
+            # Check type of overlap
             if max(start1, start2) < min(end1, end2):
                 # Intersection
-                start = min(start1, start2)
-                end = max(end1, end2)
-    
-                label = label1
-                if end2 - start2 > end1 - start1:
-                    label = label2
-    
-                final_matches[-1] = (start, end, label)
-    
+                overlap = INTERSECTION    
             elif start1 <= start2 and start2 < end1 and start1 < end2 and end2 <= end1:
                 # start1 < start2 < end2 < end1
-                continue
-    
+                overlap = INCLUDED_2IN1    
             elif start2 <= start1 and start1 < end2 and start2 < end1 and end1 <= end2:
                 # start2 < start1 < end1 < end2
-                final_matches[-1] = (start2, end2, label2)
-    
+                overlap = INCLUDED_1IN2    
             else:
+                # No overlap
+                overlap = NO_OVERLAP
+    
+            # If any kind of overlap
+            if not overlap == NO_OVERLAP:
+                print('OVERLAP:', label1, label2, overlap)
+                
+                print(text[start1:end1], label1, text[start2:end2], label2, self.name_list)
+                
+                # If only one is a spaCy match, give priority to non-spaCy match
+                if label1 in SPACY_LABELS and label2 not in SPACY_LABELS:
+                    final_matches[-1] = (start2, end2, label2)       
+                    removed_match = text[start1:end1]
+                
+                elif label2 in SPACY_LABELS and label1 not in SPACY_LABELS:   
+                    removed_match = text[start2:end2]                        
+                    continue
+                    
+                # Otherwise check overlap type
+                else:
+                    if overlap == INTERSECTION:
+                        start = min(start1, start2)
+                        end = max(end1, end2)
+            
+                        label = label1 
+                        removed_match = text[start1:end1]
+                        if end2 - start2 > end1 - start1:
+                            label = label2
+                            removed_match = text[start2:end2]
+            
+                        final_matches[-1] = (start, end, label)
+                        
+                    elif overlap == INCLUDED_1IN2:
+                        final_matches[-1] = (start2, end2, label2)   
+                        removed_match = text[start1:end1]
+                        
+                    elif overlap == INCLUDED_2IN1: 
+                        removed_match = text[start2:end2]   
+                        continue
+                                 
+                # If the match is in the name list, also remove it from there
+                idx = self.find_name(removed_match)
+                if idx > -1:
+                    del self.name_list[idx]
+                    
+            else:                
                 # No overlap
                 final_matches.append((start2, end2, label2))
                 
@@ -1245,7 +1290,7 @@ class GetConfWorker(FlaskWorker):
         text, matches, noconf_matches = pred
         
         # Select final matches
-        matches = self.select_matches(matches, noconf_matches)
+        matches = self.select_matches(matches, noconf_matches, text)
         
         # Order matches 
         match_tuples = list(matches.values())
@@ -1365,12 +1410,12 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """Contractul comercial nr. 23/14 februarie 2014 încheiat între SC Sady Com SRL şi SC Managro SRL, prin care prima societate a vândut celei de-a doua cantitatea de 66 tone azotat de amoniu la preţul de 93.720 RON, precum şi factum proforma emisă de reprezentantul SC Sady Com SRL pentru suma de 93.720 RON.""",
     
-    # 'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
+    'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
     
     # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
     
     # 'DOCUMENT' : """Prin cererea de chemare în judecată înregistrată pe rolul Curţii de Apel Bucureşti – Secţia a VIII- a Contencios Administrativ şi Fiscal sub numărul 2570/2/2017, reclamantul Curuti  Ionel, a solicitat, în contradictoriu cu pârâta Agenţia Naţională de Integritate anularea Raportului de evaluare nr. 9756/G/II/17.03.2017 întocmit de ANI - Inspecţia de Integritate şi obligarea pârâtei la plata cheltuielilor de judecata ocazionate.""",
-    'DOCUMENT' : """S-au luat în examinare recursurile formulate de reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A. și chemata în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.) împotriva Sentinţei nr. 97 din 12 aprilie 2017 pronunţată de Curtea de Apel Ploiești – Secţia a II-a Civilă, de Contencios Administrativ şi Fiscal. La apelul nominal, făcut în şedinţă publică, răspunde recurenta- reclamantă S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin consilier juridic Niţă Vasile Laurenţiu, care depune delegaţie de reprezentare la dosar, recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.), prin consilier juridic Marinela Vladescu, care depune delegaţie de reprezentare la dosarul cauzei, lipsă fiind intimatul-pârât Ministerul Investiţiilor şi Proiectelor Europene (fostul Ministerul Fondurilor Europene). Procedura de citare este legal îndeplinită. Se prezintă referatul cauzei, magistratul – asistent învederând că recurenta-reclamantă a formulat o cerere de renunţare la cererea de chemare în judecată precum şi la cererea de chemare în garanţie, cu privire la care s-a depus punct de vedere în sensul de a se lua act de cererea de renunţare la judecată. Reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin avocat, conform art. 406 alin. 5 Cod procedură civilă, solicită a se lua act de cererea de renunţare la judecată, respectiv de chemare în garanţie, cu consecinţa anulării hotărârilor pronunţate de Curtea de Apel Ploieşti. Recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L., prin consilier juridic, precizează că nu se opune renunţării la judecată, astfel cum a fost solicitată de recurenta-reclamantă, apreciind că sunt îndeplinite condiţiile prevăzute de dispozițiile art. 406 Cod procedură civilă.""",
+    # 'DOCUMENT' : """S-au luat în examinare recursurile formulate de reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A. și chemata în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.) împotriva Sentinţei nr. 97 din 12 aprilie 2017 pronunţată de Curtea de Apel Ploiești – Secţia a II-a Civilă, de Contencios Administrativ şi Fiscal. La apelul nominal, făcut în şedinţă publică, răspunde recurenta- reclamantă S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin consilier juridic Niţă Vasile Laurenţiu, care depune delegaţie de reprezentare la dosar, recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.), prin consilier juridic Marinela Vladescu, care depune delegaţie de reprezentare la dosarul cauzei, lipsă fiind intimatul-pârât Ministerul Investiţiilor şi Proiectelor Europene (fostul Ministerul Fondurilor Europene). Procedura de citare este legal îndeplinită. Se prezintă referatul cauzei, magistratul – asistent învederând că recurenta-reclamantă a formulat o cerere de renunţare la cererea de chemare în judecată precum şi la cererea de chemare în garanţie, cu privire la care s-a depus punct de vedere în sensul de a se lua act de cererea de renunţare la judecată. Reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin avocat, conform art. 406 alin. 5 Cod procedură civilă, solicită a se lua act de cererea de renunţare la judecată, respectiv de chemare în garanţie, cu consecinţa anulării hotărârilor pronunţate de Curtea de Apel Ploieşti. Recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L., prin consilier juridic, precizează că nu se opune renunţării la judecată, astfel cum a fost solicitată de recurenta-reclamantă, apreciind că sunt îndeplinite condiţiile prevăzute de dispozițiile art. 406 Cod procedură civilă.""",
     # 'DOCUMENT' : """Decizia nr. 12996 din 18.02.2016, înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 8260/23.02.2016 ce priveşte soluţionarea contestaţiei formulata de Compania de Apa Târgovişte Dâmboviţa SA împotriva notei de constatare a neregulilor si de stabilire a corecţiilor financiare nr.3966/19.01.2016; Nota de constatare a neregulilor a neregulilor si de stabilire a corecţiilor financiare nr. 3966 din 19.01.2016 înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 15178 din 30.04.201 5 şi Notificării cu privire la debit nr. 3968 din 19.01.2016 înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 3663/311-UIP din 22.01.2016.""",
     # 'DOCUMENT' : """Totodată, a notificat beneficiarii PNDL cu privire la epuizarea creditelor bugetare în proporţie de 80% pentru PNDL 1, ultimele transferuri efectuându-se parţial pentru solicitările de finanţare depuse până în data de 08.11.2017 (adresa nr. 155732/18.12.2017).""",
 #     'DOCUMENT' : """S-au luat în examinare recursul formulat de petentul Lupea Nicodim Eugen împotriva sentinţei penale nr. 494 din data de 27 noiembrie 2020, pronunţate de Înalta Curte de Casaţie şi Justiţie – Secţia penală în dosarul nr. 3039/1/2020.
