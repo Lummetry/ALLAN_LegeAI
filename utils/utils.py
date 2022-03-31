@@ -22,6 +22,7 @@ from difflib import ndiff
 import re
 from gensim import utils
 import numpy as np
+import spacy
 
 HTML_TAG_CLEANER = re.compile('<.*?>')
 
@@ -110,12 +111,20 @@ TITLE_STOPWORDS = ['nr', 'nr.', 'art', 'art.', 'lit', 'lit.']
 TITLE_PREFIX = ['sentinţă', 'sentinta', 'decizia', 'decizie', 'decretul', 'decret', 'ordinul',
                'hotărârea', 'hotararea', 'actul', 'cauza']
 
-def preprocess_title(title, nlp, 
+def preprocess_title(title, nlp=None, 
                      proc=[REMOVE_PARAN, REMOVE_PREFIX, REMOVE_POS, REMOVE_STOPWORDS,
                            REMOVE_DEP, REMOVE_NONALPHA, REMOVE_ENTITIES], 
                      debug=False
                     ):
     """ Preprocess title using several techniques and heuristics. """
+    
+    if nlp is None:
+        SPACY_MODEL = 'ro_core_news_lg'
+        try:
+            nlp = spacy.load(SPACY_MODEL)
+        except OSError:
+            spacy.cli.download(SPACY_MODEL)
+            nlp = spacy.load(SPACY_MODEL) 
     
     doc = nlp(title)
     remove_list = np.zeros(len(doc))
