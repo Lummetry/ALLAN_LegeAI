@@ -19,6 +19,7 @@ _CONFIG = {
   'SPACY_MODEL' : 'ro_core_news_md'
  }
 
+__VER__='0.1.0.1'
 class GetSumWorker(FlaskWorker):
     """
     Implementation of the worker for GET_SUMMARY endpoint
@@ -376,3 +377,11 @@ scad din impozitul pe profit, potrivit legislației în vigoare”.""",
   
   res = eng.execute(inputs=test, counter=1)
   print(res)
+  
+   
+  # Process several paragraphs from a file
+  # f = open("C:\\Proiecte\\LegeAI\\Date\\Task5\paragrafe.txt", encoding="utf-8")    
+  # for line in f.readlines():
+  #     test = {'DOCUMENT' : line}
+  #     res = eng.execute(inputs=test, counter=1)
+  #     print(' '.join(res['results']))
