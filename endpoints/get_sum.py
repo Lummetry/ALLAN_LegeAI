@@ -19,6 +19,7 @@ _CONFIG = {
   'SPACY_MODEL' : 'ro_core_news_md'
  }
 
+__VER__='0.1.0.1'
 class GetSumWorker(FlaskWorker):
     """
     Implementation of the worker for GET_SUMMARY endpoint
@@ -374,5 +375,28 @@ scad din impozitul pe profit, potrivit legislației în vigoare”.""",
         'DEBUG': True
       }
   
-  res = eng.execute(inputs=test, counter=1)
-  print(res)
+res = eng.execute(inputs=test, counter=1)
+print(res)
+  
+
+# import pandas as pd
+
+# PATH = 'C:\\allan_data\\2022.04.05\\'
+# PATH = 'C:\\Proiecte\\LegeAI\\Date\\'
+
+# df_texts = pd.read_csv(PATH + 'sample_titlu_para.csv')
+
+# for i, row in df_texts.iterrows():
+      
+#     text = {'DOCUMENT' : row.continut}
+#     res = eng.execute(inputs=text, counter=i)
+#     tags = ' '.join(res['results'])
+#     df_texts.loc[i, 'tags'] = tags
+       
+#     if i % 10 == 0:
+#         print(i)
+      
+#     if i == 100:
+#         break
+    
+# df_texts.to_csv(PATH + 'sample_cu_tags.csv')

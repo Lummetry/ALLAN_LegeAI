@@ -21,6 +21,8 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 from difflib import ndiff
 import re
 from gensim import utils
+import numpy as np
+import spacy
 
 HTML_TAG_CLEANER = re.compile('<.*?>')
 
@@ -91,3 +93,116 @@ def K_triplet_loss(y_pred, beta=0.5,):
 def K_identity_loss(y_true, y_pred):
   import tensorflow.keras.backend as K
   return K.mean(y_pred - 0 * y_true)
+
+
+#######################
+# TITLE PREPROCESSING #
+#######################
+
+REMOVE_PARAN = 0
+REMOVE_PREFIX = 1
+REMOVE_POS = 2
+REMOVE_STOPWORDS = 3
+REMOVE_DEP = 4
+REMOVE_NONALPHA = 5
+REMOVE_ENTITIES = 6
+
+TITLE_STOPWORDS = ['nr', 'nr.', 'art', 'art.', 'lit', 'lit.']
+TITLE_PREFIX = ['sentinţă', 'sentinta', 'decizia', 'decizie', 'decretul', 'decret', 'ordinul',
+               'hotărârea', 'hotararea', 'actul', 'cauza']
+
+def preprocess_title(title, nlp=None, 
+                     proc=[REMOVE_PARAN, REMOVE_PREFIX, REMOVE_POS, REMOVE_STOPWORDS,
+                           REMOVE_DEP, REMOVE_NONALPHA, REMOVE_ENTITIES], 
+                     debug=False
+                    ):
+    """ Preprocess title using several techniques and heuristics. """
+    
+    if nlp is None:
+        SPACY_MODEL = 'ro_core_news_lg'
+        try:
+            nlp = spacy.load(SPACY_MODEL)
+        except OSError:
+            spacy.cli.download(SPACY_MODEL)
+            nlp = spacy.load(SPACY_MODEL) 
+    
+    doc = nlp(title)
+    remove_list = np.zeros(len(doc))
+    
+    paran = False
+    prefix = False
+    
+    for i, tok in enumerate(doc):
+        
+        if debug:
+            print(tok, tok.pos_, tok.dep_, tok.is_alpha)
+        
+        # Remove prefixes
+        if i == 0 and tok.text.lower() in TITLE_PREFIX:
+            prefix = True
+            remove_list[i] = 1
+        elif prefix == True:
+            if tok.pos_ == 'NUM' or tok.dep_ == 'nummod':
+                prefix = False
+            remove_list[i] = 1
+        
+        # Remove by POS
+        if (tok.pos_ in ['PUNCT', 'SPACE', 'SYM', 'X'] or
+            # Remove punctuation, symbols, other
+            
+            tok.pos_ in ['ADP', 'CCONJ', 'SCONJ', 'DET'] or
+            # Remove preopositions, conjunctions, determiners
+            
+            tok.pos_ in ['NUM']           
+            # Remove numerals
+           
+           ):
+            remove_list[i] = 1
+            
+        # Remove parantheses
+        if REMOVE_PARAN in proc:
+            
+            if tok.is_left_punct:
+                paran = True
+                remove_list[i] = 1
+                
+            elif paran == True:
+                
+                if tok.is_right_punct:
+                    paran = False
+                    
+                remove_list[i] = 1
+            
+        # Remove certain stopwords
+        if (tok.is_stop or 
+            tok.text in TITLE_STOPWORDS):
+            remove_list[i] = 1
+            
+        # Remove by dependency
+        if tok.dep_ == 'nummod':
+            remove_list[i] = 1  
+            
+        # Remove non alphabetic
+        if tok.is_alpha == False:
+            remove_list[i] = 1
+            
+    # Remove entities
+    if REMOVE_ENTITIES in proc:
+        for ent in doc.ents:
+
+            if ent.label_ in ['PERSON', 'LOC', 'GPE']:
+                for j in range(ent.start, ent.end):
+                    if doc[i].is_title:
+                        # Only remove tokens with starting with capital letters
+                        remove_list[j] = 1       
+                
+            if ent.label_ in ['NUMERIC_VALUE']:
+                for j in range(ent.start, ent.end):
+                    remove_list[j] = 1
+    
+                
+    # Build output title
+    new_title = [doc[i].text for i in range(len(doc)) if remove_list[i] == 0]
+    new_title = ' '.join(new_title)
+                
+    return new_title
