@@ -161,14 +161,15 @@ def preprocess_title(title, nlp=None,
             
         # Remove parantheses
         if REMOVE_PARAN in proc:
-            
-            if tok.is_left_punct:
+                        
+            if tok.text in ['(', '[', '{']:
+                print(tok)
                 paran = True
                 remove_list[i] = 1
                 
             elif paran == True:
                 
-                if tok.is_right_punct:
+                if tok.text in [')', ']', '}']:
                     paran = False
                     
                 remove_list[i] = 1
@@ -206,3 +207,10 @@ def preprocess_title(title, nlp=None,
     new_title = ' '.join(new_title)
                 
     return new_title
+
+if __name__ == '__main__':
+    text = """"trafic de droguri", prev. de art. 2 al. 1 si 2 din Legea nr. 143/2000 cu aplicarea art. 41 al. 2 Cod penal si "detinere de droguri de mare risc in vederea consumului propriu", prev de art. 4 al. 1 si 2 din Legea nr. 143/2000;
+"""
+    res = preprocess_title(text, proc=[REMOVE_PARAN, REMOVE_PREFIX, REMOVE_POS, REMOVE_STOPWORDS,
+                                       REMOVE_DEP, REMOVE_NONALPHA, REMOVE_ENTITIES])
+    print(res)
