@@ -163,7 +163,6 @@ def preprocess_title(title, nlp=None,
         if REMOVE_PARAN in proc:
                         
             if tok.text in ['(', '[', '{']:
-                print(tok)
                 paran = True
                 remove_list[i] = 1
                 
