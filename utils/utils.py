@@ -144,7 +144,7 @@ def preprocess_title(title, nlp=None,
                 prefix = True
                 remove_list[i] = 1
             elif prefix == True:
-                if tok.pos_ == 'NUM' or tok.dep_ == 'nummod' or re.match('.*\d', tok.text):
+                if tok.pos_ == 'NUM' or tok.dep_ == 'nummod' or re.match('.*\d', tok.text) or tok.text in ["nr", "nr.", "numar", "număr"]:
                     prefix = False
                 remove_list[i] = 1
         
@@ -185,7 +185,7 @@ def preprocess_title(title, nlp=None,
             remove_list[i] = 1  
             
         # Remove non alphabetic
-        if REMOVE_NONALPHA in proc and tok.is_alpha == False:
+        if REMOVE_NONALPHA in proc and re.match('.*\d', tok.text):
             remove_list[i] = 1
             
             
@@ -211,7 +211,7 @@ def preprocess_title(title, nlp=None,
     return new_title
 
 if __name__ == '__main__':
-    text = """"Decizia nr.164/2012 privind contestaţia formulată împotriva masurilor dispuse de organele de inspecţie fiscala prin decizia de impunere privind obligaţiile fiscale suplimentare de plata stabilite de inspecţia fiscala
+    text = """"Decizia nr. privind contestaţia formulată împotriva masurilor dispuse de organele de inspecţie fiscala prin decizia de impunere privind obligaţiile fiscale suplimentare de plata stabilite de inspecţia fiscala
 """
     res = preprocess_title(text)
     print(res)
