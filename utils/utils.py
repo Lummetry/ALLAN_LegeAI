@@ -125,6 +125,7 @@ def preprocess_title(title, nlp=None,
         except OSError:
             spacy.cli.download(SPACY_MODEL)
             nlp = spacy.load(SPACY_MODEL) 
+            
     
     doc = nlp(title)
     remove_list = np.zeros(len(doc))
@@ -138,16 +139,17 @@ def preprocess_title(title, nlp=None,
             print(tok, tok.pos_, tok.dep_, tok.is_alpha)
         
         # Remove prefixes
-        if i == 0 and tok.text.lower() in TITLE_PREFIX:
-            prefix = True
-            remove_list[i] = 1
-        elif prefix == True:
-            if tok.pos_ == 'NUM' or tok.dep_ == 'nummod':
-                prefix = False
-            remove_list[i] = 1
+        if REMOVE_PREFIX in proc:
+            if i < 3 and tok.text.lower() in TITLE_PREFIX:
+                prefix = True
+                remove_list[i] = 1
+            elif prefix == True:
+                if tok.pos_ == 'NUM' or tok.dep_ == 'nummod' or re.match('.*\d', tok.text):
+                    prefix = False
+                remove_list[i] = 1
         
         # Remove by POS
-        if (tok.pos_ in ['PUNCT', 'SPACE', 'SYM', 'X'] or
+        if REMOVE_POS in proc and (tok.pos_ in ['PUNCT', 'SPACE', 'SYM', 'X'] or
             # Remove punctuation, symbols, other
             
             tok.pos_ in ['ADP', 'CCONJ', 'SCONJ', 'DET'] or
@@ -174,17 +176,18 @@ def preprocess_title(title, nlp=None,
                 remove_list[i] = 1
             
         # Remove certain stopwords
-        if (tok.is_stop or 
+        if REMOVE_STOPWORDS in proc and (tok.is_stop or 
             tok.text in TITLE_STOPWORDS):
             remove_list[i] = 1
             
         # Remove by dependency
-        if tok.dep_ == 'nummod':
+        if REMOVE_DEP in proc and tok.dep_ == 'nummod':
             remove_list[i] = 1  
             
         # Remove non alphabetic
-        if tok.is_alpha == False:
+        if REMOVE_NONALPHA in proc and tok.is_alpha == False:
             remove_list[i] = 1
+            
             
     # Remove entities
     if REMOVE_ENTITIES in proc:
@@ -208,8 +211,7 @@ def preprocess_title(title, nlp=None,
     return new_title
 
 if __name__ == '__main__':
-    text = """"trafic de droguri", prev. de art. 2 al. 1 si 2 din Legea nr. 143/2000 cu aplicarea art. 41 al. 2 Cod penal si "detinere de droguri de mare risc in vederea consumului propriu", prev de art. 4 al. 1 si 2 din Legea nr. 143/2000;
+    text = """"Decizia nr.164/2012 privind contestaţia formulată împotriva masurilor dispuse de organele de inspecţie fiscala prin decizia de impunere privind obligaţiile fiscale suplimentare de plata stabilite de inspecţia fiscala
 """
-    res = preprocess_title(text, proc=[REMOVE_PARAN, REMOVE_PREFIX, REMOVE_POS, REMOVE_STOPWORDS,
-                                       REMOVE_DEP, REMOVE_NONALPHA, REMOVE_ENTITIES])
+    res = preprocess_title(text)
     print(res)
