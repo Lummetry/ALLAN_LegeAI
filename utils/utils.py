@@ -185,7 +185,7 @@ def preprocess_title(title, nlp=None,
             remove_list[i] = 1  
             
         # Remove non alphabetic
-        if REMOVE_NONALPHA in proc and re.match('.*\d', tok.text):
+        if REMOVE_NONALPHA in proc and (re.match('.*\d', tok.text) or tok.is_alpha == False):
             remove_list[i] = 1
             
             
@@ -211,7 +211,7 @@ def preprocess_title(title, nlp=None,
     return new_title
 
 if __name__ == '__main__':
-    text = """"Decizia nr. privind contestaţia formulată împotriva masurilor dispuse de organele de inspecţie fiscala prin decizia de impunere privind obligaţiile fiscale suplimentare de plata stabilite de inspecţia fiscala
+    text = """"Decizia privind contesta&#355;ia av&#226;nd ca obiect "ST&#194;LP METALIC 40 m Dr. Tr. Severin - proiectare FU (SF, PT, DDE) + execu&#355;ie", cod CPV 45223210-1, organizat&#259; de ..., &#238;n calitate de autoritate contractant&#259;, cu sediul &#238;n .
 """
-    res = preprocess_title(text)
+    res = preprocess_title(text, debug=True)
     print(res)
