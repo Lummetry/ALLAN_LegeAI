@@ -109,7 +109,7 @@ REMOVE_ENTITIES = 6
 
 TITLE_STOPWORDS = ['nr', 'nr.', 'art', 'art.', 'lit', 'lit.']
 TITLE_PREFIX = ['sentinţă', 'sentinta', 'decizia', 'decizie', 'decretul', 'decret', 'ordinul',
-               'hotărârea', 'hotararea', 'actul', 'cauza']
+               'hotărârea', 'hotararea', 'actul', 'cauza', 'regulamentul', 'regulament', 'ordonanta']
 
 def preprocess_title(title, nlp=None, 
                      proc=[REMOVE_PARAN, REMOVE_PREFIX, REMOVE_POS, REMOVE_STOPWORDS,
