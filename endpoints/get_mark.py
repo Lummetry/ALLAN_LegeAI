@@ -22,13 +22,13 @@ _CONFIG = {
   }
 
 MIN_SUBDOCUMENTS = 2
-MIN_SUBDOCUMENT_WORDS = 400
+MIN_SUBDOCUMENT_WORDS = 10
 MAX_QUERY_WORDS = 50
 
 MAX_COS_DISTANCE = 0.5
 
 
-__VER__='0.1.0.0'
+__VER__='0.1.1.1'
 class GetMarkWorker(FlaskWorker):
   def __init__(self, **kwargs):
     super(GetMarkWorker, self).__init__(**kwargs)
@@ -100,9 +100,9 @@ class GetMarkWorker(FlaskWorker):
     # Embed each subdocument
     docs_embeds = []    
     for doc in docs:
-        if len(doc) < MIN_SUBDOCUMENT_WORDS:
-          raise ValueError("Document: '{}' is below the minimum of {} words".format(
-            doc, MIN_SUBDOCUMENT_WORDS))
+        if len(doc.split(' ')) < MIN_SUBDOCUMENT_WORDS:
+           raise ValueError("Document: '{}' is below the minimum of {} words".format(
+             doc, MIN_SUBDOCUMENT_WORDS))
         doc_embeds = self.encoder.encode_convert_unknown_words(
           doc,
           fixed_len=ct.MODELS.TAG_MAX_LEN
@@ -126,7 +126,6 @@ class GetMarkWorker(FlaskWorker):
     for i, doc_embeds in enumerate(docs_embeds):
         doc_tag_vector = self.tagger_model(doc_embeds).numpy().squeeze()
         distance = self.cosine_distance(query_tag_vector, doc_tag_vector)
-        print(i+1, distance)
         
         doc_distances.append((i+1, distance))
         
@@ -161,14 +160,14 @@ if __name__ == '__main__':
   w = GetMarkWorker(log=log, default_config=_CONFIG, verbosity_level=1)
 
   inputs_to_test = [
-    {
-      'QUERY' : 'Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti?',
-      'DOCUMENTS': [
-          """Subsemnatul Damian Ionut Andrei, domiciliat in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 , nascut pe data 24-01-1982, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Bucuresti, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126413223 serie RK, numar 897567 nu detine averi ilicite""",
-          """decizia recurată a fost dată cu încălcarea autorităţii de lucru interpretat, respectiv cu încălcarea dispozitivului hotărârii preliminare pronunţate de Curtea de Justiţie a Uniunii Europene în Cauza C-52/07 (hotărâre care are autoritate de lucru interpretat „erga omnes”)""",
-            """Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti? Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti? Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti?""",
-          ]
-    },
+    # {
+    #   'QUERY' : 'Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti?',
+    #   'DOCUMENTS': [
+    #       # """Subsemnatul Damian Ionut Andrei, domiciliat in Cluj, Strada Cernauti, nr. 17-21, bl. J, parter, ap. 1 , nascut pe data 24-01-1982, declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Bucuresti, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126413223 serie RK, numar 897567 nu detine averi ilicite""",
+    #       """decizia recurată a fost dată cu încălcarea autorităţii de lucru interpretat, respectiv cu încălcarea dispozitivului hotărârii preliminare pronunţate de Curtea de Justiţie a Uniunii Europene în Cauza C-52/07 (hotărâre care are autoritate de lucru interpretat „erga omnes”) decizia recurată a fost dată cu încălcarea autorităţii de lucru interpretat, respectiv cu încălcarea dispozitivului hotărârii preliminare pronunţate de Curtea de Justiţie a Uniunii Europene în Cauza C-52/07 (hotărâre care are autoritate de lucru interpretat „erga omnes”) decizia recurată a fost dată cu încălcarea autorităţii de lucru interpretat, respectiv cu încălcarea dispozitivului hotărârii preliminare pronunţate de Curtea de Justiţie a Uniunii Europene în Cauza C-52/07 (hotărâre care are autoritate de lucru interpretat „erga omnes”)""",
+    #         """Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti? Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti? Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti? Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti? Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti? Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti? Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti? Care este tva-ul intracomunitar ce se aplica atunci cand aduci masini SH de la nemti?""",
+    #       ]
+    # },
     
     # {
     #   'QUERY' : 'Operaţiunea întocmirii referatului de necesitate se situează în interiorul procedurii de achiziţie publică?',
@@ -183,25 +182,25 @@ if __name__ == '__main__':
     #       ]
     # },
     
-    # {
-    #   'QUERY' : 'Cum se concretizează sprijinul acordat, conform legii, de celelalte compartimente interne din cadrul entității contractante, compartimentului intern specializat în domeniul achizițiilor, în funcție de specificul și complexitatea obiectului achiziției?',
-    #   'TOP_N' : 0,
-    #   'DOCUMENTS': [
-    #       """a) transmiterea referatelor de necesitate care cuprind necesităţile de produse, servicii şi lucrări, valoarea estimată a acestora, precum şi informaţiile de care dispun, potrivit competenţelor, necesare pentru elaborarea strategiei de contractare a respectivelor contracte sectoriale/acorduri-cadru;""",
-    #       """b) transmiterea, dacă este cazul, a specificaţiilor tehnice aşa cum sunt acestea prevăzute la art. 165 din Lege;""",
-    #       """c) în funcţie de natura şi complexitatea necesităţilor identificate în referatele prevăzute la lit. a), transmiterea de informaţii cu privire la preţul unitar/total actualizat al respectivelor necesităţi, în urma unei cercetări a pieţei sau pe bază istorică;""",
-    #       """d) informarea cu privire la fondurile alocate pentru fiecare destinaţie, precum şi poziţia bugetară a acestora;""",
-    #       """e) informarea justificată cu privire la eventualele modificări intervenite în execuţia contractelor sectoriale/acordurilor-cadru, care cuprinde cauza, motivele şi oportunitatea modificărilor propuse;""",
-    #       # """f) transmiterea documentului constatator privind modul de îndeplinire a clauzelor contractuale.""",
-    #       """a) întreprinde demersurile necesare pentru înregistrarea/reînnoirea/recuperarea înregistrării entităţii contractante în SEAP sau recuperarea certificatului digital, dacă este cazul;""",
-    #       """b) elaborează şi, după caz, actualizează, pe baza necesităţilor transmise de celelalte compartimente ale entităţii contractante, programul anual al achiziţiilor sectoriale şi, dacă este cazul, strategia anuală de achiziţii;""",          
-    #       """c) elaborează sau, după caz, coordonează activitatea de elaborare a documentaţiei de atribuire şi a strategiei de contractare sau, în cazul organizării unui concurs de soluţii, a documentaţiei de concurs şi a strategiei de contractare, pe baza necesităţilor transmise de compartimentele de specialitate;""",
-    #       """h) verificarea propunerilor financiare prezentate de ofertanţi, inclusiv verificarea conformităţii cu propunerile tehnice, verificarea aritmetică, verificarea încadrării în fondurile care pot fi disponibilizate pentru îndeplinirea contractului sectorial respectiv, precum şi, dacă este cazul, verificarea încadrării acestora în situaţia prevăzută la art. 222 din Lege;""",
-    #       """i) elaborarea solicitărilor de clarificări şi/sau completări necesare în vederea evaluării solicitărilor de participare şi/sau ofertelor;""",
-    #       """j) stabilirea solicitărilor de participare neadecvate, a ofertelor inacceptabile şi/sau neconforme, precum şi a motivelor care stau la baza încadrării acestora în fiecare din aceste categorii;""",
-    #       """l) aplicarea criteriului de atribuire şi a factorilor de evaluare, astfel cum a fost prevăzut în anunţul de participare/simplificat/de concurs;""",
-    #       ]
-    # },
+    {
+      'QUERY' : 'Cum se concretizează sprijinul acordat, conform legii, de celelalte compartimente interne din cadrul entității contractante, compartimentului intern specializat în domeniul achizițiilor, în funcție de specificul și complexitatea obiectului achiziției?',
+      'TOP_N' : 0,
+      'DOCUMENTS': [
+          """a) transmiterea referatelor de necesitate care cuprind necesităţile de produse, servicii şi lucrări, valoarea estimată a acestora, precum şi informaţiile de care dispun, potrivit competenţelor, necesare pentru elaborarea strategiei de contractare a respectivelor contracte sectoriale/acorduri-cadru;""",
+          """b) transmiterea, dacă este cazul, a specificaţiilor tehnice aşa cum sunt acestea prevăzute la art. 165 din Lege;""",
+          """c) în funcţie de natura şi complexitatea necesităţilor identificate în referatele prevăzute la lit. a), transmiterea de informaţii cu privire la preţul unitar/total actualizat al respectivelor necesităţi, în urma unei cercetări a pieţei sau pe bază istorică;""",
+          """d) informarea cu privire la fondurile alocate pentru fiecare destinaţie, precum şi poziţia bugetară a acestora;""",
+          """e) informarea justificată cu privire la eventualele modificări intervenite în execuţia contractelor sectoriale/acordurilor-cadru, care cuprinde cauza, motivele şi oportunitatea modificărilor propuse;""",
+          """f) transmiterea documentului constatator privind modul de îndeplinire a clauzelor contractuale.""",
+          """a) întreprinde demersurile necesare pentru înregistrarea/reînnoirea/recuperarea înregistrării entităţii contractante în SEAP sau recuperarea certificatului digital, dacă este cazul;""",
+          """b) elaborează şi, după caz, actualizează, pe baza necesităţilor transmise de celelalte compartimente ale entităţii contractante, programul anual al achiziţiilor sectoriale şi, dacă este cazul, strategia anuală de achiziţii;""",          
+          """c) elaborează sau, după caz, coordonează activitatea de elaborare a documentaţiei de atribuire şi a strategiei de contractare sau, în cazul organizării unui concurs de soluţii, a documentaţiei de concurs şi a strategiei de contractare, pe baza necesităţilor transmise de compartimentele de specialitate;""",
+          """h) verificarea propunerilor financiare prezentate de ofertanţi, inclusiv verificarea conformităţii cu propunerile tehnice, verificarea aritmetică, verificarea încadrării în fondurile care pot fi disponibilizate pentru îndeplinirea contractului sectorial respectiv, precum şi, dacă este cazul, verificarea încadrării acestora în situaţia prevăzută la art. 222 din Lege;""",
+          """i) elaborarea solicitărilor de clarificări şi/sau completări necesare în vederea evaluării solicitărilor de participare şi/sau ofertelor;""",
+          """j) stabilirea solicitărilor de participare neadecvate, a ofertelor inacceptabile şi/sau neconforme, precum şi a motivelor care stau la baza încadrării acestora în fiecare din aceste categorii;""",
+          """l) aplicarea criteriului de atribuire şi a factorilor de evaluare, astfel cum a fost prevăzut în anunţul de participare/simplificat/de concurs;""",
+          ]
+    },
   ]
 
   for i,_input in enumerate(inputs_to_test):
