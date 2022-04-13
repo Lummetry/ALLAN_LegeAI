@@ -28,7 +28,7 @@ MAX_QUERY_WORDS = 50
 MAX_COS_DISTANCE = 0.5
 
 
-__VER__='0.1.1.1'
+__VER__='0.1.1.2'
 class GetMarkWorker(FlaskWorker):
   def __init__(self, **kwargs):
     super(GetMarkWorker, self).__init__(**kwargs)
@@ -79,6 +79,8 @@ class GetMarkWorker(FlaskWorker):
     
 
   def _pre_process(self, inputs): 
+  
+    self.debug = bool(inputs.get('DEBUG', False))
       
     # Read query
     query = inputs['QUERY']
@@ -99,10 +101,16 @@ class GetMarkWorker(FlaskWorker):
     
     # Embed each subdocument
     docs_embeds = []    
-    for doc in docs:
-        if len(doc.split(' ')) < MIN_SUBDOCUMENT_WORDS:
+    for i, doc in enumerate(docs):
+        num_words = len(doc.split(' '))
+        
+        if self.debug:
+            print('Doc {} - {} words.'.format(i+1, num_words))
+        
+        if num_words < MIN_SUBDOCUMENT_WORDS:
            raise ValueError("Document: '{}' is below the minimum of {} words".format(
              doc, MIN_SUBDOCUMENT_WORDS))
+           
         doc_embeds = self.encoder.encode_convert_unknown_words(
           doc,
           fixed_len=ct.MODELS.TAG_MAX_LEN
@@ -182,24 +190,38 @@ if __name__ == '__main__':
     #       ]
     # },
     
+    # {
+    #   'QUERY' : 'Cum se concretizează sprijinul acordat, conform legii, de celelalte compartimente interne din cadrul entității contractante, compartimentului intern specializat în domeniul achizițiilor, în funcție de specificul și complexitatea obiectului achiziției?',
+    #   'TOP_N' : 0,
+    #   'DOCUMENTS': [
+    #       """a) transmiterea referatelor de necesitate care cuprind necesităţile de produse, servicii şi lucrări, valoarea estimată a acestora, precum şi informaţiile de care dispun, potrivit competenţelor, necesare pentru elaborarea strategiei de contractare a respectivelor contracte sectoriale/acorduri-cadru;""",
+    #       """b) transmiterea, dacă este cazul, a specificaţiilor tehnice aşa cum sunt acestea prevăzute la art. 165 din Lege;""",
+    #       """c) în funcţie de natura şi complexitatea necesităţilor identificate în referatele prevăzute la lit. a), transmiterea de informaţii cu privire la preţul unitar/total actualizat al respectivelor necesităţi, în urma unei cercetări a pieţei sau pe bază istorică;""",
+    #       """d) informarea cu privire la fondurile alocate pentru fiecare destinaţie, precum şi poziţia bugetară a acestora;""",
+    #       """e) informarea justificată cu privire la eventualele modificări intervenite în execuţia contractelor sectoriale/acordurilor-cadru, care cuprinde cauza, motivele şi oportunitatea modificărilor propuse;""",
+    #       """f) transmiterea documentului constatator privind modul de îndeplinire a clauzelor contractuale.""",
+    #       """a) întreprinde demersurile necesare pentru înregistrarea/reînnoirea/recuperarea înregistrării entităţii contractante în SEAP sau recuperarea certificatului digital, dacă este cazul;""",
+    #       """b) elaborează şi, după caz, actualizează, pe baza necesităţilor transmise de celelalte compartimente ale entităţii contractante, programul anual al achiziţiilor sectoriale şi, dacă este cazul, strategia anuală de achiziţii;""",          
+    #       """c) elaborează sau, după caz, coordonează activitatea de elaborare a documentaţiei de atribuire şi a strategiei de contractare sau, în cazul organizării unui concurs de soluţii, a documentaţiei de concurs şi a strategiei de contractare, pe baza necesităţilor transmise de compartimentele de specialitate;""",
+    #       """h) verificarea propunerilor financiare prezentate de ofertanţi, inclusiv verificarea conformităţii cu propunerile tehnice, verificarea aritmetică, verificarea încadrării în fondurile care pot fi disponibilizate pentru îndeplinirea contractului sectorial respectiv, precum şi, dacă este cazul, verificarea încadrării acestora în situaţia prevăzută la art. 222 din Lege;""",
+    #       """i) elaborarea solicitărilor de clarificări şi/sau completări necesare în vederea evaluării solicitărilor de participare şi/sau ofertelor;""",
+    #       """j) stabilirea solicitărilor de participare neadecvate, a ofertelor inacceptabile şi/sau neconforme, precum şi a motivelor care stau la baza încadrării acestora în fiecare din aceste categorii;""",
+    #       """l) aplicarea criteriului de atribuire şi a factorilor de evaluare, astfel cum a fost prevăzut în anunţul de participare/simplificat/de concurs;""",
+    #       ]
+    # },
+    
     {
-      'QUERY' : 'Cum se concretizează sprijinul acordat, conform legii, de celelalte compartimente interne din cadrul entității contractante, compartimentului intern specializat în domeniul achizițiilor, în funcție de specificul și complexitatea obiectului achiziției?',
+      'QUERY' : 'Întocmirea și asumarea caietului de sarcini se realizează de către compartimentul intern specializat în domeniul achiziţiilor publice sau de către compartimentul intern beneficiar al achiziției publice?',
       'TOP_N' : 0,
       'DOCUMENTS': [
-          """a) transmiterea referatelor de necesitate care cuprind necesităţile de produse, servicii şi lucrări, valoarea estimată a acestora, precum şi informaţiile de care dispun, potrivit competenţelor, necesare pentru elaborarea strategiei de contractare a respectivelor contracte sectoriale/acorduri-cadru;""",
-          """b) transmiterea, dacă este cazul, a specificaţiilor tehnice aşa cum sunt acestea prevăzute la art. 165 din Lege;""",
-          """c) în funcţie de natura şi complexitatea necesităţilor identificate în referatele prevăzute la lit. a), transmiterea de informaţii cu privire la preţul unitar/total actualizat al respectivelor necesităţi, în urma unei cercetări a pieţei sau pe bază istorică;""",
-          """d) informarea cu privire la fondurile alocate pentru fiecare destinaţie, precum şi poziţia bugetară a acestora;""",
-          """e) informarea justificată cu privire la eventualele modificări intervenite în execuţia contractelor sectoriale/acordurilor-cadru, care cuprinde cauza, motivele şi oportunitatea modificărilor propuse;""",
-          """f) transmiterea documentului constatator privind modul de îndeplinire a clauzelor contractuale.""",
-          """a) întreprinde demersurile necesare pentru înregistrarea/reînnoirea/recuperarea înregistrării entităţii contractante în SEAP sau recuperarea certificatului digital, dacă este cazul;""",
-          """b) elaborează şi, după caz, actualizează, pe baza necesităţilor transmise de celelalte compartimente ale entităţii contractante, programul anual al achiziţiilor sectoriale şi, dacă este cazul, strategia anuală de achiziţii;""",          
-          """c) elaborează sau, după caz, coordonează activitatea de elaborare a documentaţiei de atribuire şi a strategiei de contractare sau, în cazul organizării unui concurs de soluţii, a documentaţiei de concurs şi a strategiei de contractare, pe baza necesităţilor transmise de compartimentele de specialitate;""",
-          """h) verificarea propunerilor financiare prezentate de ofertanţi, inclusiv verificarea conformităţii cu propunerile tehnice, verificarea aritmetică, verificarea încadrării în fondurile care pot fi disponibilizate pentru îndeplinirea contractului sectorial respectiv, precum şi, dacă este cazul, verificarea încadrării acestora în situaţia prevăzută la art. 222 din Lege;""",
-          """i) elaborarea solicitărilor de clarificări şi/sau completări necesare în vederea evaluării solicitărilor de participare şi/sau ofertelor;""",
-          """j) stabilirea solicitărilor de participare neadecvate, a ofertelor inacceptabile şi/sau neconforme, precum şi a motivelor care stau la baza încadrării acestora în fiecare din aceste categorii;""",
-          """l) aplicarea criteriului de atribuire şi a factorilor de evaluare, astfel cum a fost prevăzut în anunţul de participare/simplificat/de concurs;""",
-          ]
+          "In vederea realizării achiziţiilor publice, autoritatea contractantă înfiinţează în condiţiile legii un compartiment intern specializat în domeniul achiziţiilor, format, de regulă, din minimum trei persoane, dintre care cel puţin două treimi având studii superioare, precum şi specializări în domeniul achiziţiilor.",
+          "Decizia Consiliului a fost necesară pentru a activa mecanismul instituit de Directiva 2001/55/CE privind standardele minime pentru acordarea protecţiei temporare, în cazul unui aflux masiv de persoane deplasate şi măsurile de promovare a unui echilibru între eforturile statelor membre pentru primirea acestor persoane şi suportarea consecinţelor acestei primiri. ",
+          "În aplicarea prezentelor norme metodologice, autoritatea contractantă, prin compartimentul intern specializat în domeniul achiziţiilor publice, are următoarele atribuţii principale:  a) întreprinde demersurile necesare pentru înregistrarea/reînnoirea/recuperarea înregistrării autorităţii contractante în SEAP sau recuperarea certificatului digital, dacă este cazul;  b) elaborează şi, după caz, actualizează, pe baza necesităţilor transmise de celelalte compartimente ale autorităţii contractante, programul anual al achiziţiilor publice şi, dacă este cazul, strategia anuală de achiziţii;",
+          "Prin utilizarea interfețelor electronice, persoana impozabilă - care facilitează pe această cale vânzarea la distanță de bunuri importate din teritorii terțe sau țări terțe în loturi cu o valoare intrinsecă de maximum 150 euro, precum și livrarea de bunuri în UE de către o persoană impozabilă nestabilită în UE către o persoană neimpozabilă - se consideră că a primit și a livrat ea însăși bunurile respective. Faptul generator intervine și TVA devine exigibilă în aceste cazuri în momentul în care plata a fost acceptată",
+          "atunci când bunurile sunt importate într-un alt stat membru decât cel în care se încheie transportul bunurilor către client, locul este considerat a fi unde se află bunurile în momentul în care se încheie transportul acestora către client; o atunci când bunurile sunt importate în statul membru în care se încheie transportul bunurilor către client, locul este considerat a fi statul membru respectiv, cu condiția ca TVA pentru aceste bunuri să fie d",
+          "Având în vedere faptul că preluarea activității de soluționare a contestațiilor fiscale reprezintă un proces laborios și de durată, precum și faptul că, până la momentul împlinirii celor 6 luni de la data publicării în Monitorul Oficial a Legii nr. 295/2020 (i.e. 22 iunie 2021), nu au fost adoptate acte normative care să asigure implementarea și organizarea acestui proces, Guvernul României a decis că: ✓ Ministerul Finanțelor Publice, prin structura sa de specialitate, va prelua activitatea de soluționare a contestațiilor formulate împotriva titlurilor de creanță și împotriva altor acte administrativ-fiscale",
+          ],
+      'DEBUG' : True,
     },
   ]
 
