@@ -8,6 +8,8 @@ import numpy as np
 from sklearn.cluster import AgglomerativeClustering
 import spacy
 from gensim.models import Word2Vec
+import tensorflow as tf
+import pickle
 
 _CONFIG = {
   'LABEL2ID': 'dict_lbl_37.pkl',
@@ -21,11 +23,20 @@ _CONFIG = {
 
 # File paths
 # Debug
-SUM_MODEL_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\nomenclator institutii publice.txt'
-# Prod
-SUM_MODEL_PROD = 'C:\\Proiecte\\LegeAI\\Date\\nomenclator institutii publice.txt'
+ENCODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\sum_enc.h5'
+DECODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\sum_dec.h5'
+DICT_ID2WORD_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\dictId2Word.pkl'
+# Prod'
+ENCODER_PROD = 'C:\\allan_data\\2022.04.19\\sum_enc.h5'
+DECODER_PROD = 'C:\\allan_data\\2022.04.19\\sum_dec.h5'
+DICT_ID2WORD_PROD = 'C:\\allan_data\\2022.04.19\\dictId2Word.pkl'
 
-__VER__='0.0.0.0'
+EMBEDDING_DIM = 128 
+MAX_OUTPUT_LEN = 10
+ENCODER_SEQ_DIM = 7
+DECODER_SEQ_DIM = 15
+
+__VER__='1.0.0.0'
 class GetSumWorker(FlaskWorker):
     """
     Implementation of the worker for GET_SUMMARY endpoint
@@ -135,15 +146,92 @@ class GetSumWorker(FlaskWorker):
         # Select the closest words
         if n_selected:
             selected_zip_list = selected_zip_list[:n_selected]
-            
-            if debug:
-                for t in selected_zip_list:
-                    print(t)
         
         cluster_words = [t[0] for t in selected_zip_list]
         word_scores = [t[1] for t in selected_zip_list]
         
         return cluster_words, word_scores
+    
+    
+    def getWordFromOHE(self, ohe):
+        """ Get the word from an OHE array """
+        
+        idx = np.argmax(ohe)
+        word = self.dict_id2word.get(idx, '<UNK>')
+        
+        return word
+    
+    def getWordEmbedding(self, word):
+        """ Get the encoding for a word. """
+        
+        emb = self.encoder.encode_convert_unknown_words(
+            [word],
+            fixed_len=EMBEDDING_DIM
+        ) 
+        
+        return emb[0][0]
+    
+    def decodeIdSeq(self, seq):
+        """ Decode a sequence of ids into a sequence of words. """
+        
+        words = []
+        for idx in seq:
+            word = self.dict_id2word.get(idx)
+            if word != '<unk>':
+                words.append(word)
+        
+        sentence = ' '.join(words)
+        return sentence
+    
+    
+    def decode_sequenceOHE(self, encoder_model, decoder_model, input_seq):
+        """ Inference loop for the Seq2Seq model with OHE output. """    
+        
+        # Encode the input as state vectors.
+        states_value = encoder_model.predict(input_seq)
+    
+        # Generate empty target sequence of length 1.
+        target_seq = np.copy(self.start_token)
+        target_seq.resize(1, 1, EMBEDDING_DIM)
+        
+        res_seq = []    
+        stop_condition = False
+        decoded_sentence = ""
+        
+        stopIdx = np.argmax(self.stop_ohe)
+        unkIdx = self.vocab_length - 1
+        
+        i = 0
+        
+        # Sampling loop for a batch of sequences
+        # (to simplify, here we assume a batch of size 1).
+        while not stop_condition:
+            
+            output_tokens, h, c = decoder_model.predict([target_seq] + states_value)
+    
+            # Sample a token
+            idx = np.argmax(output_tokens[0, -1, :])
+    
+            # Exit condition: either hit max length, find stop token or repeat last word
+            if idx == stopIdx or i > MAX_OUTPUT_LEN or (i > 1 and idx != unkIdx and idx == res_seq[-1]):
+                stop_condition = True
+            else:
+                i += 1 
+                res_seq.append(idx)
+    
+                # Update the target sequence (of length 1).
+                word = self.getWordFromOHE(output_tokens[0, -1, :])
+                target_seq = self.getWordEmbedding(word)
+                target_seq = target_seq.reshape([1, 1, EMBEDDING_DIM])
+    
+                # Update states
+                states_value = [h, c]
+            
+        res_seq = np.array(res_seq)
+        
+        decodedRes = self.decodeIdSeq(res_seq)
+            
+        return decodedRes
     
     
     
@@ -153,10 +241,28 @@ class GetSumWorker(FlaskWorker):
         
         # Read files
         if self.debug:
-            sum_model_path = SUM_MODEL_DEBUG
+            encoder_model_file = ENCODER_DEBUG
+            decoder_model_file = DECODER_DEBUG
+            dict_id2word_file = DICT_ID2WORD_DEBUG
         else:
-            sum_model_path = SUM_MODEL_PROD
-                
+            encoder_model_file = ENCODER_PROD
+            decoder_model_file = DECODER_PROD
+            dict_id2word_file = DICT_ID2WORD_PROD
+            
+        self.encoder_model = tf.keras.models.load_model(encoder_model_file)
+        self.decoder_model = tf.keras.models.load_model(decoder_model_file) 
+        
+        dict_id2word_file = open(dict_id2word_file, "rb")
+        self.dict_id2word = pickle.load(dict_id2word_file)
+        dict_id2word_file.close() 
+        self.vocab_length = len(self.dict_id2word)     
+        
+        # Start and Stop tokens
+        self.start_token = np.zeros(EMBEDDING_DIM)
+        self.stop_ohe = np.zeros(self.vocab_length).astype(int)
+        self.stop_ohe[-2] = 1
+        
+                            
         doc = inputs['DOCUMENT']
         if len(doc) < ct.MODELS.TAG_MIN_INPUT:
           raise ValueError("Document: '{}' is below the minimum of {} words".format(
@@ -226,9 +332,6 @@ class GetSumWorker(FlaskWorker):
             n = len(cluster_embeds)
             cluster_center = np.sum(cluster_embeds, axis=0) / n
             
-            if self.debug:
-                print('Cluster {}, {} elements:'.format(c, n))
-            
             # Get distances between the center of the cluster and all its members            
             word_embed_distances = self.dist_func(cluster_embeds, cluster_center)
                         
@@ -261,19 +364,25 @@ class GetSumWorker(FlaskWorker):
             
             selected_words.extend(cluster_selected_words)
             
+        
+        # Get embeddings for tags
+        tag_embeds = self.encoder.encode_convert_unknown_words(
+            [selected_words[:(ENCODER_SEQ_DIM)]],
+            fixed_len=0
+        )
+        
+        
+        decoded_sentence = self.decode_sequenceOHE(self.encoder_model, self.decoder_model, tag_embeds)
               
-        return selected_words, n_hits
+        return decoded_sentence
 
     def _post_process(self, pred):
         
-        words, n_hits = pred
+        words = pred
         
         res = {}
         
-        if n_hits > 0:
-            res['results'] = words[:n_hits]
-        else:
-            res['results'] = words
+        res['results'] = words
         
         return res
 
@@ -304,45 +413,45 @@ if __name__ == '__main__':
 # Comisia Europeană a subliniat că acest plan va implica o tranziţie profundă, cu mari schimbări structurale în foarte puţin timp şi va conduce la transformarea economiei şi a societăţii UE în vederea atingerii obiectivelor ambiţioase în materie de climă.""",
 
 # Impozit pe profit
-        'DOCUMENT' : """Impozit pe profit
-Principalele modificări din perspectiva impozitului pe profit prevăzute de Ordonanță constau în:
-Se introduc clarificări cu privire perioada impozabilă pentru persoanele juridice străine care au
-locul de exercitare a conducerii și care se înregistrează în cursul unui an fiscal început.
-Se completează condițiile de aplicare a prevederilor Directivei 2011/96/UE a Consiliului din 30
-noiembrie 2011 privind regimul fiscal comun care se aplică societăților-mamă și filialelor
-acestora din diferite state membre, prin introducerea mențiunii „sau un alt impozit care
-substituie unul dintre acele impozite”.
-Se modifică formularea uneia dintre condiții de a fi considerată „filială dintr-un stat membru”
-prevăzute de către art. 24, în sensul înlocuirii mențiunii existente la condiția prevăzută la
-punctul 4 de a plăti în conformitate cu legislația fiscală a unui stat membru, fără posibilitatea
-unei opțiuni sau exceptări, unul dintre impozitele prevăzute în anexa nr. 2 care face parte
-integrantă din prezentul titlu sau un impozit similar impozitului pe profit reglementat de titlul de
-impozit pe profit cu mențiunea de mai sus (sau un alt impozit care substituie impozitul pe
-profit/unul dintre aceste impozite).
-Se modifică limita de deductibilitate pentru ajustările pentru deprecierea creanțelor (dacă sunt
-îndeplinite condițiile) de la 30% la 50%, începând cu data de 1 ianuarie 2022.
-În ceea ce privește regimul fiscal de impozitare la ieșire, prin derogare de la prevederile art.
-184 alin. (1) din Codul de procedură fiscală, contribuabilul care aplică regulile de la alin. (1)-(3)
-beneficiază de dreptul de eșalonare la plată pentru acest impozit, prin achitarea în rate egale
-pe parcursul a cinci ani, dacă se află în oricare dintre anumite situații specificate în Codul fiscal.
-De asemenea, se introduc și condiții detaliate în care se acordă dreptul la eșalonare mai sus
-menționat.
-Se modifică art. 43 din Codul fiscal cu privire la declararea, reținerea și plata impozitului pe
-dividende prin eliminarea referinței la situațiile financiare anuale, în contextul în care
-dividendele pot fi distribuite și în alte perioade contabile (de ex. trimestrial), prin înlocuirea
-sintagmei „până la sfârșitul anului în care s-au aprobat situațiile financiare anuale” în „până la
-sfârșitul anului în care s-a aprobat distribuirea acestora”.
-Se introduc două noi reguli specifice la art. 45 din Codul fiscal:
-o Pentru contribuabilii care aplică sistemul anticipat de declarare și plată a impozitului pe
-profit și care vor beneficia de Ordonanța de urgență a Guvernului nr. 153/2020 pentru
-instituirea unor măsuri fiscale de stimulare a menținerii/creșterii capitalurilor proprii –
-aceștia vor efectua plata anticipată pentru trimestrul I al fiecărui an fiscal/an fiscal modificat
-la nivelul sumei rezultate din aplicarea cotei de impozit asupra profitului contabil al
-perioadei pentru care se efectuează plata anticipată, până la data de 25 inclusiv a lunii
-următoare trimestrului I.
-o Sumele care se scad din impozitul pe profit anual (prevăzute la art. I alin. (12) lit. a) din
-Ordonanța de urgență a Guvernului nr. 153/2020) se completează cu „alte sume care se
-scad din impozitul pe profit, potrivit legislației în vigoare”.""",
+#         'DOCUMENT' : """Impozit pe profit
+# Principalele modificări din perspectiva impozitului pe profit prevăzute de Ordonanță constau în:
+# Se introduc clarificări cu privire perioada impozabilă pentru persoanele juridice străine care au
+# locul de exercitare a conducerii și care se înregistrează în cursul unui an fiscal început.
+# Se completează condițiile de aplicare a prevederilor Directivei 2011/96/UE a Consiliului din 30
+# noiembrie 2011 privind regimul fiscal comun care se aplică societăților-mamă și filialelor
+# acestora din diferite state membre, prin introducerea mențiunii „sau un alt impozit care
+# substituie unul dintre acele impozite”.
+# Se modifică formularea uneia dintre condiții de a fi considerată „filială dintr-un stat membru”
+# prevăzute de către art. 24, în sensul înlocuirii mențiunii existente la condiția prevăzută la
+# punctul 4 de a plăti în conformitate cu legislația fiscală a unui stat membru, fără posibilitatea
+# unei opțiuni sau exceptări, unul dintre impozitele prevăzute în anexa nr. 2 care face parte
+# integrantă din prezentul titlu sau un impozit similar impozitului pe profit reglementat de titlul de
+# impozit pe profit cu mențiunea de mai sus (sau un alt impozit care substituie impozitul pe
+# profit/unul dintre aceste impozite).
+# Se modifică limita de deductibilitate pentru ajustările pentru deprecierea creanțelor (dacă sunt
+# îndeplinite condițiile) de la 30% la 50%, începând cu data de 1 ianuarie 2022.
+# În ceea ce privește regimul fiscal de impozitare la ieșire, prin derogare de la prevederile art.
+# 184 alin. (1) din Codul de procedură fiscală, contribuabilul care aplică regulile de la alin. (1)-(3)
+# beneficiază de dreptul de eșalonare la plată pentru acest impozit, prin achitarea în rate egale
+# pe parcursul a cinci ani, dacă se află în oricare dintre anumite situații specificate în Codul fiscal.
+# De asemenea, se introduc și condiții detaliate în care se acordă dreptul la eșalonare mai sus
+# menționat.
+# Se modifică art. 43 din Codul fiscal cu privire la declararea, reținerea și plata impozitului pe
+# dividende prin eliminarea referinței la situațiile financiare anuale, în contextul în care
+# dividendele pot fi distribuite și în alte perioade contabile (de ex. trimestrial), prin înlocuirea
+# sintagmei „până la sfârșitul anului în care s-au aprobat situațiile financiare anuale” în „până la
+# sfârșitul anului în care s-a aprobat distribuirea acestora”.
+# Se introduc două noi reguli specifice la art. 45 din Codul fiscal:
+# o Pentru contribuabilii care aplică sistemul anticipat de declarare și plată a impozitului pe
+# profit și care vor beneficia de Ordonanța de urgență a Guvernului nr. 153/2020 pentru
+# instituirea unor măsuri fiscale de stimulare a menținerii/creșterii capitalurilor proprii –
+# aceștia vor efectua plata anticipată pentru trimestrul I al fiecărui an fiscal/an fiscal modificat
+# la nivelul sumei rezultate din aplicarea cotei de impozit asupra profitului contabil al
+# perioadei pentru care se efectuează plata anticipată, până la data de 25 inclusiv a lunii
+# următoare trimestrului I.
+# o Sumele care se scad din impozitul pe profit anual (prevăzute la art. I alin. (12) lit. a) din
+# Ordonanța de urgență a Guvernului nr. 153/2020) se completează cu „alte sume care se
+# scad din impozitul pe profit, potrivit legislației în vigoare”.""",
 
 #Articolul 6 - Dreptul la libertate și la siguranță
 #         'DOCUMENT' : """Drepturile prevăzute la articolul 6 corespund drepturilor garantate la articolul 5 din CEDO şi au, în conformitate cu articolul 52 alineatul (3) din cartă, acelaşi înţeles şi acelaşi domeniu de aplicare. Prin urmare, restrângerile la care pot fi supuse în mod legal nu le pot depăşi pe cele permise de articolul 5 din CEDO, care este redactat după cum urmează:
@@ -360,23 +469,23 @@ scad din impozitul pe profit, potrivit legislației în vigoare”.""",
 # Drepturile prevăzute la articolul 6 trebuie respectate în special la adoptarea de către Parlamentul European şi de către Consiliu a actelor legislative în domeniul cooperării judiciare în materie penală, în temeiul articolelor 82, 83 şi 85 din Tratatul privind funcţionarea Uniunii Europene, mai ales pentru a defini dispoziţiile comune minime privind calificarea infracţiunilor şi pedepsele, precum şi anumite aspecte de drept procedural.""",
 
 # Definiţia sediului permanent
-#         'DOCUMENT' : """În înţelesul prezentului cod, sediul permanent este un loc prin care se desfăşoară integral sau parţial activitatea unui nerezident, fie direct, fie printr-un agent dependent.
-# (2) Un sediu permanent presupune un loc de conducere, sucursală, birou, fabrică, magazin, atelier, precum şi o mină, un puţ de ţiţei sau gaze, o carieră sau alte locuri de extracţie a resurselor naturale.
-# (3) Un sediu permanent presupune un şantier de construcţii, un proiect de construcţie, ansamblu sau montaj sau activităţi de supervizare legate de acestea, numai dacă şantierul, proiectul sau activităţile durează mai mult de 6 luni.
-# (4) Prin derogare de la prevederile alin. (1)-(3), un sediu permanent nu presupune următoarele:
-# a) folosirea unei instalaţii numai în scopul depozitării sau al expunerii produselor ori bunurilor ce aparţin nerezidentului;
-# b) menţinerea unui stoc de produse sau bunuri ce aparţin unui nerezident numai în scopul de a fi depozitate sau expuse;
-# c) menţinerea unui stoc de produse sau bunuri ce aparţin unui nerezident numai în scopul de a fi procesate de către o altă persoană;
-# d) vânzarea de produse sau bunuri ce aparţin unui nerezident, care au fost expuse în cadrul unor expoziţii sau târguri fără caracter permanent ori ocazionale, dacă produsele ori bunurile sunt vândute nu mai târziu de o lună după încheierea târgului sau a expoziţiei;
-# e) păstrarea unui loc fix de activitate numai în scopul achiziţionării de produse sau bunuri ori culegerii de informaţii pentru un nerezident;
-# f) păstrarea unui loc fix de activitate numai în scopul desfăşurării de activităţi cu caracter pregătitor sau auxiliar de către un nerezident;
-# g) păstrarea unui loc fix de activitate numai pentru o combinaţie a activităţilor prevăzute la lit. a)-f), cu condiţia ca întreaga activitate desfăşurată în locul fix să fie de natură preparatorie sau auxiliară.
-# (5) Prin derogare de la prevederile alin. (1) şi (2), un nerezident este considerat a avea un sediu permanent în România, în ceea ce priveşte activităţile pe care o persoană, alta decât un agent cu statut independent, le întreprinde în numele nerezidentului, dacă persoana acţionează în România în numele nerezidentului şi dacă este îndeplinită una din următoarele condiţii:
-# a) persoana este autorizată şi exercită în România autoritatea de a încheia contracte în numele nerezidentului, cu excepţia cazurilor în care activităţile respective sunt limitate la cele prevăzute la alin. (4) lit. a)-f);
-# b) persoana menţine în România un stoc de produse sau bunuri din care livrează produse sau bunuri în numele nerezidentului.
-# (6) Un nerezident nu se consideră că are un sediu permanent în România dacă doar desfăşoară activitate în România prin intermediul unui broker, agent, comisionar general sau al unui agent intermediar având un statut independent, în cazul în care această activitate este activitatea obişnuită a agentului, conform descrierii din documentele constitutive. Dacă activităţile unui astfel de agent sunt desfăşurate integral sau aproape integral în numele nerezidentului, iar în relaţiile comerciale şi financiare dintre nerezident şi agent există condiţii diferite de acelea care ar exista între persoane independente, agentul nu se consideră ca fiind agent cu statut independent.
-# (7) Un nerezident nu se consideră că are un sediu permanent în România numai dacă acesta controlează sau este controlat de un rezident ori de o persoană ce desfăşoară o activitate în România prin intermediul unui sediu permanent sau altfel.
-# (8) În înţelesul prezentului cod, sediul permanent al unei persoane fizice se consideră a fi baza fixă.""",
+        'DOCUMENT' : """În înţelesul prezentului cod, sediul permanent este un loc prin care se desfăşoară integral sau parţial activitatea unui nerezident, fie direct, fie printr-un agent dependent.
+(2) Un sediu permanent presupune un loc de conducere, sucursală, birou, fabrică, magazin, atelier, precum şi o mină, un puţ de ţiţei sau gaze, o carieră sau alte locuri de extracţie a resurselor naturale.
+(3) Un sediu permanent presupune un şantier de construcţii, un proiect de construcţie, ansamblu sau montaj sau activităţi de supervizare legate de acestea, numai dacă şantierul, proiectul sau activităţile durează mai mult de 6 luni.
+(4) Prin derogare de la prevederile alin. (1)-(3), un sediu permanent nu presupune următoarele:
+a) folosirea unei instalaţii numai în scopul depozitării sau al expunerii produselor ori bunurilor ce aparţin nerezidentului;
+b) menţinerea unui stoc de produse sau bunuri ce aparţin unui nerezident numai în scopul de a fi depozitate sau expuse;
+c) menţinerea unui stoc de produse sau bunuri ce aparţin unui nerezident numai în scopul de a fi procesate de către o altă persoană;
+d) vânzarea de produse sau bunuri ce aparţin unui nerezident, care au fost expuse în cadrul unor expoziţii sau târguri fără caracter permanent ori ocazionale, dacă produsele ori bunurile sunt vândute nu mai târziu de o lună după încheierea târgului sau a expoziţiei;
+e) păstrarea unui loc fix de activitate numai în scopul achiziţionării de produse sau bunuri ori culegerii de informaţii pentru un nerezident;
+f) păstrarea unui loc fix de activitate numai în scopul desfăşurării de activităţi cu caracter pregătitor sau auxiliar de către un nerezident;
+g) păstrarea unui loc fix de activitate numai pentru o combinaţie a activităţilor prevăzute la lit. a)-f), cu condiţia ca întreaga activitate desfăşurată în locul fix să fie de natură preparatorie sau auxiliară.
+(5) Prin derogare de la prevederile alin. (1) şi (2), un nerezident este considerat a avea un sediu permanent în România, în ceea ce priveşte activităţile pe care o persoană, alta decât un agent cu statut independent, le întreprinde în numele nerezidentului, dacă persoana acţionează în România în numele nerezidentului şi dacă este îndeplinită una din următoarele condiţii:
+a) persoana este autorizată şi exercită în România autoritatea de a încheia contracte în numele nerezidentului, cu excepţia cazurilor în care activităţile respective sunt limitate la cele prevăzute la alin. (4) lit. a)-f);
+b) persoana menţine în România un stoc de produse sau bunuri din care livrează produse sau bunuri în numele nerezidentului.
+(6) Un nerezident nu se consideră că are un sediu permanent în România dacă doar desfăşoară activitate în România prin intermediul unui broker, agent, comisionar general sau al unui agent intermediar având un statut independent, în cazul în care această activitate este activitatea obişnuită a agentului, conform descrierii din documentele constitutive. Dacă activităţile unui astfel de agent sunt desfăşurate integral sau aproape integral în numele nerezidentului, iar în relaţiile comerciale şi financiare dintre nerezident şi agent există condiţii diferite de acelea care ar exista între persoane independente, agentul nu se consideră ca fiind agent cu statut independent.
+(7) Un nerezident nu se consideră că are un sediu permanent în România numai dacă acesta controlează sau este controlat de un rezident ori de o persoană ce desfăşoară o activitate în România prin intermediul unui sediu permanent sau altfel.
+(8) În înţelesul prezentului cod, sediul permanent al unei persoane fizice se consideră a fi baza fixă.""",
     
         # 'TOP_N': 0,
         
@@ -385,6 +494,6 @@ scad din impozitul pe profit, potrivit legislației în vigoare”.""",
         'DEBUG': True
       }
   
-res = eng.execute(inputs=test, counter=1)
-print(res)
+  res = eng.execute(inputs=test, counter=1)
+  print(res)
   
