@@ -92,7 +92,7 @@ class GetSumWorker(FlaskWorker):
             - eliminate more distant words which are included in others
             - select the closest words
         '''
-            
+                    
         # Sort words    
         if tfs is None:
             word_scores = word_embed_distances
@@ -101,7 +101,7 @@ class GetSumWorker(FlaskWorker):
             
         else:
             # If TF and IDF were provided for the words
-            word_scores = [t * i * (1/d) for (t, i, d) in zip(tfs, idfs, word_embed_distances)]
+            word_scores = [t * i * (1/(d + 0.00001)) for (t, i, d) in zip(tfs, idfs, word_embed_distances)]
             zip_list = zip(cluster_words, word_scores, tfs, idfs, word_embed_distances)
             reverse = True
         
@@ -375,28 +375,34 @@ scad din impozitul pe profit, potrivit legislației în vigoare”.""",
         'DEBUG': True
       }
   
-res = eng.execute(inputs=test, counter=1)
-print(res)
+# res = eng.execute(inputs=test, counter=1)
+# print(res)
   
 
-# import pandas as pd
+import pandas as pd
+import time
 
-# PATH = 'C:\\allan_data\\2022.04.05\\'
-# PATH = 'C:\\Proiecte\\LegeAI\\Date\\'
+PATH = 'C:\\allan_data\\2022.04.05\\'
+PATH = 'C:\\Proiecte\\LegeAI\\Date\\'
 
-# df_texts = pd.read_csv(PATH + 'sample_titlu_para.csv')
+df_texts = pd.read_csv(PATH + 'paragrafe_all_cat.csv')
 
-# for i, row in df_texts.iterrows():
+
+start = time.time()
+for i, row in df_texts[:10].iterrows():
       
-#     text = {'DOCUMENT' : row.continut}
-#     res = eng.execute(inputs=text, counter=i)
-#     tags = ' '.join(res['results'])
-#     df_texts.loc[i, 'tags'] = tags
+    text = {'DOCUMENT' : row.continut}
+    res = eng.execute(inputs=text, counter=i)
+    tags = ' '.join(res['results'])
+    df_texts.loc[i, 'tags'] = tags
        
-#     if i % 10 == 0:
-#         print(i)
+    if i % 10 == 0:
+        print(i)
       
-#     if i == 100:
-#         break
+    if i == 100:
+        break
+        
+end = time.time()
+print(end - start)
     
-# df_texts.to_csv(PATH + 'sample_cu_tags.csv')
+df_texts.to_csv(PATH + 'sample_cu_tags.csv')
