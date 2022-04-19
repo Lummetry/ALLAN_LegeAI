@@ -16,10 +16,16 @@ _CONFIG = {
   'WORD_EMBEDS': 'lai_embeddings_191K.pkl',
   'IDX2WORD': 'lai_ro_i2w_191K.pkl',
   'MODEL' : '20211124_082955_e128_v191K_final',
-  'SPACY_MODEL' : 'ro_core_news_md'
+  'SPACY_MODEL' : 'ro_core_news_md',
  }
 
-__VER__='0.1.0.2'
+# File paths
+# Debug
+SUM_MODEL_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\nomenclator institutii publice.txt'
+# Prod
+SUM_MODEL_PROD = 'C:\\Proiecte\\LegeAI\\Date\\nomenclator institutii publice.txt'
+
+__VER__='0.0.0.0'
 class GetSumWorker(FlaskWorker):
     """
     Implementation of the worker for GET_SUMMARY endpoint
@@ -142,12 +148,19 @@ class GetSumWorker(FlaskWorker):
     
     
     def _pre_process(self, inputs):
+        
+        self.debug = bool(inputs.get('DEBUG', False))
+        
+        # Read files
+        if self.debug:
+            sum_model_path = SUM_MODEL_DEBUG
+        else:
+            sum_model_path = SUM_MODEL_PROD
                 
         doc = inputs['DOCUMENT']
         if len(doc) < ct.MODELS.TAG_MIN_INPUT:
           raise ValueError("Document: '{}' is below the minimum of {} words".format(
-            doc, ct.MODELS.TAG_MIN_INPUT))
-          
+            doc, ct.MODELS.TAG_MIN_INPUT))          
         
         nlp_doc = self.nlp_model(doc)
         # Keep only nouns and verb lemmas
@@ -168,13 +181,10 @@ class GetSumWorker(FlaskWorker):
             fixed_len=0
         )[0]             
         
-        n_hits = int(inputs.get('TOP_N', 0))
+        n_hits = 0        
+        multi_cluster = True
         
         lemmas = np.array(lemmas)
-        
-        multi_cluster = inputs.get('MULTI_CLUSTER', 'true')
-        
-        self.debug = bool(inputs.get('DEBUG', False))
     
         return embeds, lemmas, n_hits, multi_cluster
 
@@ -375,34 +385,6 @@ scad din impozitul pe profit, potrivit legislației în vigoare”.""",
         'DEBUG': True
       }
   
-# res = eng.execute(inputs=test, counter=1)
-# print(res)
+res = eng.execute(inputs=test, counter=1)
+print(res)
   
-
-import pandas as pd
-import time
-
-PATH = 'C:\\allan_data\\2022.04.05\\'
-PATH = 'C:\\Proiecte\\LegeAI\\Date\\'
-
-df_texts = pd.read_csv(PATH + 'paragrafe_all_cat.csv')
-
-
-start = time.time()
-for i, row in df_texts[:10].iterrows():
-      
-    text = {'DOCUMENT' : row.continut}
-    res = eng.execute(inputs=text, counter=i)
-    tags = ' '.join(res['results'])
-    df_texts.loc[i, 'tags'] = tags
-       
-    if i % 10 == 0:
-        print(i)
-      
-    if i == 100:
-        break
-        
-end = time.time()
-print(end - start)
-    
-df_texts.to_csv(PATH + 'sample_cu_tags.csv')
