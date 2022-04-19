@@ -109,7 +109,7 @@ REMOVE_ENTITIES = 6
 
 TITLE_STOPWORDS = ['nr', 'nr.', 'art', 'art.', 'lit', 'lit.']
 TITLE_PREFIX = ['sentinţă', 'sentinta', 'decizia', 'decizie', 'decretul', 'decret', 'ordinul',
-               'hotărârea', 'hotararea', 'actul', 'cauza']
+               'hotărârea', 'hotararea', 'actul', 'cauza', 'regulamentul', 'regulament', 'ordonanta']
 
 def preprocess_title(title, nlp=None, 
                      proc=[REMOVE_PARAN, REMOVE_PREFIX, REMOVE_POS, REMOVE_STOPWORDS,
@@ -125,6 +125,7 @@ def preprocess_title(title, nlp=None,
         except OSError:
             spacy.cli.download(SPACY_MODEL)
             nlp = spacy.load(SPACY_MODEL) 
+            
     
     doc = nlp(title)
     remove_list = np.zeros(len(doc))
@@ -138,16 +139,17 @@ def preprocess_title(title, nlp=None,
             print(tok, tok.pos_, tok.dep_, tok.is_alpha)
         
         # Remove prefixes
-        if i == 0 and tok.text.lower() in TITLE_PREFIX:
-            prefix = True
-            remove_list[i] = 1
-        elif prefix == True:
-            if tok.pos_ == 'NUM' or tok.dep_ == 'nummod':
-                prefix = False
-            remove_list[i] = 1
+        if REMOVE_PREFIX in proc:
+            if i < 3 and tok.text.lower() in TITLE_PREFIX:
+                prefix = True
+                remove_list[i] = 1
+            elif prefix == True:
+                if tok.pos_ == 'NUM' or tok.dep_ == 'nummod' or re.match('.*\d', tok.text) or tok.text in ["nr", "nr.", "numar", "număr"]:
+                    prefix = False
+                remove_list[i] = 1
         
         # Remove by POS
-        if (tok.pos_ in ['PUNCT', 'SPACE', 'SYM', 'X'] or
+        if REMOVE_POS in proc and (tok.pos_ in ['PUNCT', 'SPACE', 'SYM', 'X'] or
             # Remove punctuation, symbols, other
             
             tok.pos_ in ['ADP', 'CCONJ', 'SCONJ', 'DET'] or
@@ -161,30 +163,31 @@ def preprocess_title(title, nlp=None,
             
         # Remove parantheses
         if REMOVE_PARAN in proc:
-            
-            if tok.is_left_punct:
+                        
+            if tok.text in ['(', '[', '{']:
                 paran = True
                 remove_list[i] = 1
                 
             elif paran == True:
                 
-                if tok.is_right_punct:
+                if tok.text in [')', ']', '}']:
                     paran = False
                     
                 remove_list[i] = 1
             
         # Remove certain stopwords
-        if (tok.is_stop or 
+        if REMOVE_STOPWORDS in proc and (tok.is_stop or 
             tok.text in TITLE_STOPWORDS):
             remove_list[i] = 1
             
         # Remove by dependency
-        if tok.dep_ == 'nummod':
+        if REMOVE_DEP in proc and tok.dep_ == 'nummod':
             remove_list[i] = 1  
             
         # Remove non alphabetic
-        if tok.is_alpha == False:
+        if REMOVE_NONALPHA in proc and (re.match('.*\d', tok.text) or tok.is_alpha == False):
             remove_list[i] = 1
+            
             
     # Remove entities
     if REMOVE_ENTITIES in proc:
@@ -206,3 +209,9 @@ def preprocess_title(title, nlp=None,
     new_title = ' '.join(new_title)
                 
     return new_title
+
+if __name__ == '__main__':
+    text = """"Decizia privind contesta&#355;ia av&#226;nd ca obiect "ST&#194;LP METALIC 40 m Dr. Tr. Severin - proiectare FU (SF, PT, DDE) + execu&#355;ie", cod CPV 45223210-1, organizat&#259; de ..., &#238;n calitate de autoritate contractant&#259;, cu sediul &#238;n .
+"""
+    res = preprocess_title(text, debug=True)
+    print(res)
