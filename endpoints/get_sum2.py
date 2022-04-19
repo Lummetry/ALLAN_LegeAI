@@ -385,6 +385,6 @@ scad din impozitul pe profit, potrivit legislației în vigoare”.""",
         'DEBUG': True
       }
   
-res = eng.execute(inputs=test, counter=1)
-print(res)
+  res = eng.execute(inputs=test, counter=1)
+  print(res)
   
