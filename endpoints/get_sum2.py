@@ -39,15 +39,15 @@ MAX_OUTPUT_LEN = 10
 ENCODER_SEQ_DIM = 10
 DECODER_SEQ_DIM = 15
 
-__VER__='1.1.0.1'
-class GetSumWorker(FlaskWorker):
+__VER__='1.1.0.2'
+class GetSum2Worker(FlaskWorker):
     """
     Implementation of the worker for GET_SUMMARY endpoint
     """
     
     
     def __init__(self, **kwargs):
-      super(GetSumWorker, self).__init__(**kwargs)
+      super(GetSum2Worker, self).__init__(**kwargs)
       return
 
     def _load_model(self):
@@ -443,7 +443,7 @@ if __name__ == '__main__':
   from libraries import Logger
 
   l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
-  eng = GetSumWorker(log=l, default_config=_CONFIG, verbosity_level=1)
+  eng = GetSum2Worker(log=l, default_config=_CONFIG, verbosity_level=1)
   
   test = {
         # 'DOCUMENT': 'Aceasta situatie ridica semne de intrebare privind consolidarea bugetara, potrivit constructiei bugetare initiale. Desi proiectul de buget tintește un deficit cash de din PIB, apreciaza ca nu sunt suficiente masuri credibile de ajustare bugetara care sa conduca la atingerea acestei tinte, se arata in document.',
@@ -543,7 +543,7 @@ b) persoana menţine în România un stoc de produse sau bunuri din care livreaz
         
         # 'MULTI_CLUSTER': True,
         
-        'DEBUG': True
+        'DEBUG': False
       }
   
   res = eng.execute(inputs=test, counter=1)
