@@ -23,9 +23,12 @@ _CONFIG = {
 
 # File paths
 # Debug
-ENCODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\sum_enc.h5'
-DECODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\sum_dec.h5'
-DICT_ID2WORD_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\dictId2Word.pkl'
+# ENCODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\ohe_vocab10_e10_d15_l256_enc.h5'
+# DECODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\ohe_vocab10_e10_d15_l256_dec.h5'
+# DICT_ID2WORD_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\dictId2Word_min10.pkl'
+ENCODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\att_vocab5_e10_d15_l256_enc.h5'
+DECODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\att_vocab5_e10_d15_l256_dec.h5'
+DICT_ID2WORD_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\dictId2Word_min5.pkl'
 # Prod'
 ENCODER_PROD = 'C:\\allan_data\\2022.04.19\\sum_enc.h5'
 DECODER_PROD = 'C:\\allan_data\\2022.04.19\\sum_dec.h5'
@@ -33,10 +36,10 @@ DICT_ID2WORD_PROD = 'C:\\allan_data\\2022.04.19\\dictId2Word.pkl'
 
 EMBEDDING_DIM = 128 
 MAX_OUTPUT_LEN = 10
-ENCODER_SEQ_DIM = 7
+ENCODER_SEQ_DIM = 10
 DECODER_SEQ_DIM = 15
 
-__VER__='1.0.0.0'
+__VER__='1.1.0.0'
 class GetSumWorker(FlaskWorker):
     """
     Implementation of the worker for GET_SUMMARY endpoint
@@ -196,7 +199,6 @@ class GetSumWorker(FlaskWorker):
         
         res_seq = []    
         stop_condition = False
-        decoded_sentence = ""
         
         stopIdx = np.argmax(self.stop_ohe)
         unkIdx = self.vocab_length - 1
@@ -226,6 +228,55 @@ class GetSumWorker(FlaskWorker):
     
                 # Update states
                 states_value = [h, c]
+            
+        res_seq = np.array(res_seq)
+        
+        decodedRes = self.decodeIdSeq(res_seq)
+            
+        return decodedRes
+
+    def decode_sequenceOHEAttention(self, encoder_model, decoder_model, input_seq):
+        """ Inference loop for the Seq2Seq model with Attention and OHE output. """    
+        
+        # Encode the input as state vectors.
+        encoder_states, encoder_outputs = encoder_model.predict(input_seq)
+    
+        # Generate empty target sequence of length 1.
+        target_seq = np.copy(self.start_token)
+        target_seq.resize(1, 1, EMBEDDING_DIM)
+        
+        res_seq = []    
+        stop_condition = False
+        
+        stopIdx = np.argmax(self.stop_ohe)
+        unkIdx = self.vocab_length - 1
+        
+        i = 0
+        
+        # Sampling loop for a batch of sequences
+        # (to simplify, here we assume a batch of size 1).
+        while not stop_condition:
+            
+            output_tokens, h, c = decoder_model.predict([target_seq, encoder_outputs, encoder_states])
+    
+            # Sample a token
+            idx = np.argmax(output_tokens[0, -1, :])
+    
+            # Exit condition: either hit max length, find stop token or repeat last word
+            if idx == stopIdx or i > MAX_OUTPUT_LEN or (i > 1 and idx != unkIdx and idx == res_seq[-1]):
+                print(i)
+                stop_condition = True
+            else:
+                i += 1 
+                res_seq.append(idx)
+    
+                # Update the target sequence (of length 1).
+                word = self.getWordFromOHE(output_tokens[0, -1, :])
+                target_seq = self.getWordEmbedding(word)
+                target_seq = target_seq.reshape([1, 1, EMBEDDING_DIM])
+    
+                # Update states
+                encoder_states = [h, c]
             
         res_seq = np.array(res_seq)
         
@@ -372,7 +423,8 @@ class GetSumWorker(FlaskWorker):
         )
         
         
-        decoded_sentence = self.decode_sequenceOHE(self.encoder_model, self.decoder_model, tag_embeds)
+        # decoded_sentence = self.decode_sequenceOHE(self.encoder_model, self.decoder_model, tag_embeds)
+        decoded_sentence = self.decode_sequenceOHEAttention(self.encoder_model, self.decoder_model, tag_embeds)
               
         return decoded_sentence
 
