@@ -39,7 +39,7 @@ MAX_OUTPUT_LEN = 10
 ENCODER_SEQ_DIM = 10
 DECODER_SEQ_DIM = 15
 
-__VER__='1.1.0.0'
+__VER__='1.1.0.1'
 class GetSumWorker(FlaskWorker):
     """
     Implementation of the worker for GET_SUMMARY endpoint
@@ -419,7 +419,7 @@ class GetSumWorker(FlaskWorker):
         # Get embeddings for tags
         tag_embeds = self.encoder.encode_convert_unknown_words(
             [selected_words[:(ENCODER_SEQ_DIM)]],
-            fixed_len=0
+            fixed_len=ENCODER_SEQ_DIM
         )
         
         
