@@ -29,17 +29,19 @@ _CONFIG = {
 ENCODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\att_vocab5_e10_d15_l256_enc.h5'
 DECODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\att_vocab5_e10_d15_l256_dec.h5'
 DICT_ID2WORD_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\dictId2Word_min5.pkl'
-# Prod'
+SHUFFLER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\shuffle_decoder_newproc.h5'
+# Prod
 ENCODER_PROD = 'C:\\allan_data\\2022.04.19\\sum_enc.h5'
 DECODER_PROD = 'C:\\allan_data\\2022.04.19\\sum_dec.h5'
 DICT_ID2WORD_PROD = 'C:\\allan_data\\2022.04.19\\dictId2Word.pkl'
+SHUFFLER_PROD = 'C:\\allan_data\\2022.04.19\\shuffle_decoder_newproc.h5'
 
 EMBEDDING_DIM = 128 
 MAX_OUTPUT_LEN = 10
 ENCODER_SEQ_DIM = 10
 DECODER_SEQ_DIM = 15
 
-__VER__='1.1.0.2'
+__VER__='2.0.0.0'
 class GetSum2Worker(FlaskWorker):
     """
     Implementation of the worker for GET_SUMMARY endpoint
@@ -284,6 +286,32 @@ class GetSum2Worker(FlaskWorker):
             
         return decodedRes
     
+    def get_sort_regular_positions(self, pred):
+        """ Get the list of word positions for regular output model by sorting the outputs. """
+        
+        order = np.argsort(pred, axis=None)
+        
+        result = np.zeros(len(pred), dtype=int)
+        for o, idx in enumerate(order):
+            result[idx] = o
+            
+        return result
+    
+    
+    def build_ordered_sentence(self, order, words):
+        """ Form the final sentence, according to the predicted order of words. """
+        
+        ordered_words = []
+        
+        for idx in order:
+            if idx < len(words) and words[idx] != '<PAD>':
+                # If the word index exists and is not <PAD>
+                ordered_words.append(words[idx])
+        
+        sentence = ' '.join(ordered_words)
+        
+        return sentence
+    
     
     
     def _pre_process(self, inputs):
@@ -292,26 +320,29 @@ class GetSum2Worker(FlaskWorker):
         
         # Read files
         if self.debug:
-            encoder_model_file = ENCODER_DEBUG
-            decoder_model_file = DECODER_DEBUG
-            dict_id2word_file = DICT_ID2WORD_DEBUG
+            # encoder_model_file = ENCODER_DEBUG
+            # decoder_model_file = DECODER_DEBUG
+            # dict_id2word_file = DICT_ID2WORD_DEBUG
+            shuffle_model_file = SHUFFLER_DEBUG
         else:
-            encoder_model_file = ENCODER_PROD
-            decoder_model_file = DECODER_PROD
-            dict_id2word_file = DICT_ID2WORD_PROD
+            # encoder_model_file = ENCODER_PROD
+            # decoder_model_file = DECODER_PROD
+            # dict_id2word_file = DICT_ID2WORD_PROD
+            shuffle_model_file = SHUFFLER_PROD
             
-        self.encoder_model = tf.keras.models.load_model(encoder_model_file)
-        self.decoder_model = tf.keras.models.load_model(decoder_model_file) 
+        # self.encoder_model = tf.keras.models.load_model(encoder_model_file)
+        # self.decoder_model = tf.keras.models.load_model(decoder_model_file) 
+        self.shuffle_model = tf.keras.models.load_model(shuffle_model_file) 
         
-        dict_id2word_file = open(dict_id2word_file, "rb")
-        self.dict_id2word = pickle.load(dict_id2word_file)
-        dict_id2word_file.close() 
-        self.vocab_length = len(self.dict_id2word)     
+        # dict_id2word_file = open(dict_id2word_file, "rb")
+        # self.dict_id2word = pickle.load(dict_id2word_file)
+        # dict_id2word_file.close() 
+        # self.vocab_length = len(self.dict_id2word)     
         
         # Start and Stop tokens
-        self.start_token = np.zeros(EMBEDDING_DIM)
-        self.stop_ohe = np.zeros(self.vocab_length).astype(int)
-        self.stop_ohe[-2] = 1
+        # self.start_token = np.zeros(EMBEDDING_DIM)
+        # self.stop_ohe = np.zeros(self.vocab_length).astype(int)
+        # self.stop_ohe[-2] = 1
         
                             
         doc = inputs['DOCUMENT']
@@ -416,15 +447,28 @@ class GetSum2Worker(FlaskWorker):
             selected_words.extend(cluster_selected_words)
             
         
+        # Seq2Seq Model
+        
+        # Get embeddings for tags
+        # tag_embeds = self.encoder.encode_convert_unknown_words(
+        #     [selected_words[:(ENCODER_SEQ_DIM)]],
+        #     fixed_len=ENCODER_SEQ_DIM
+        # )  
+        # decoded_sentence = self.decode_sequenceOHE(self.encoder_model, self.decoder_model, tag_embeds)
+        # decoded_sentence = self.decode_sequenceOHEAttention(self.encoder_model, self.decoder_model, tag_embeds)
+        
+        # Shuffle model
+        
         # Get embeddings for tags
         tag_embeds = self.encoder.encode_convert_unknown_words(
-            [selected_words[:(ENCODER_SEQ_DIM)]],
-            fixed_len=ENCODER_SEQ_DIM
-        )
-        
-        
-        # decoded_sentence = self.decode_sequenceOHE(self.encoder_model, self.decoder_model, tag_embeds)
-        decoded_sentence = self.decode_sequenceOHEAttention(self.encoder_model, self.decoder_model, tag_embeds)
+            [selected_words[:(MAX_OUTPUT_LEN)]],
+            fixed_len=MAX_OUTPUT_LEN
+        )  
+                
+        # Get the predicted order
+        pred = self.shuffle_model.predict(tag_embeds)
+        order = self.get_sort_regular_positions(pred[0])
+        decoded_sentence = self.build_ordered_sentence(order, selected_words[:(MAX_OUTPUT_LEN)])
               
         return decoded_sentence
 
@@ -543,7 +587,7 @@ b) persoana menţine în România un stoc de produse sau bunuri din care livreaz
         
         # 'MULTI_CLUSTER': True,
         
-        'DEBUG': False
+        'DEBUG': True
       }
   
   res = eng.execute(inputs=test, counter=1)
