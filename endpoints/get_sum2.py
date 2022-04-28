@@ -41,7 +41,7 @@ MAX_OUTPUT_LEN = 10
 ENCODER_SEQ_DIM = 10
 DECODER_SEQ_DIM = 15
 
-__VER__='2.1.0.0'
+__VER__='2.2.0.0'
 class GetSum2Worker(FlaskWorker):
     """
     Implementation of the worker for GET_SUMMARY endpoint
@@ -329,6 +329,89 @@ class GetSum2Worker(FlaskWorker):
         
         return sentence
     
+    def try_next(self, current_idx, word_distances, visited_idxs):
+        # Recursive function to find the best path from all the neighbors
+        
+        min_path_length = np.Infinity
+        best_visited_idxs = None
+        
+        if all(visited_idxs) > 0:
+            # If all indexes have been visited, stop
+            return 0, visited_idxs
+        
+        
+        for idx in range(len(visited_idxs)):
+            if word_distances[current_idx, idx] > 0 and visited_idxs[idx] == 0:
+                # Visit new neighbor index
+                
+                # Update copy of visited indexes
+                new_visited_idxs = np.copy(visited_idxs)
+                new_visited_idxs[idx] = max(new_visited_idxs) + 1
+                
+                # Get the best path through the visited index
+                returned_path_length, returned_visited_idxs = self.try_next(idx, word_distances, new_visited_idxs)
+                path_length = word_distances[current_idx, idx] + returned_path_length
+                
+                if path_length < min_path_length:
+                    # Update the best path for the current index
+                    best_visited_idxs = returned_visited_idxs
+                    min_path_length = path_length 
+        
+        return min_path_length, best_visited_idxs
+    
+    
+    def order_shortest_path(self, text, selected_words):
+        """ Order the selected words by the shortest path the covers all of them, according to their
+            positions in the text.
+        """
+    
+        # Calculate word distance graph
+    
+        n = len(selected_words)
+        word_distances = np.zeros((n, n))
+    
+        prev_idx = -1
+        prev_pos = -1
+        for i, word in enumerate(text):
+            try:
+                idx = selected_words.index(word)
+                pos = i
+    
+                if prev_idx != -1 and prev_idx != idx:
+                    # If a different word was found
+                    if word_distances[prev_idx, idx] == 0 or word_distances[prev_idx, idx] > pos - prev_pos:
+                        # If the distance between the words is better than the previous
+                        word_distances[prev_idx, idx] = pos - prev_pos
+    
+                prev_idx = idx
+                prev_pos = pos
+    
+            except ValueError:
+                continue
+    
+        # Add a fake word / padding as the start token
+        pad_word_distances = np.insert(word_distances, 0, [np.ones(len(selected_words))], axis=0)
+        pad_word_distances = np.insert(pad_word_distances, 0, [np.ones(len(selected_words) + 1)], axis=1)
+        pad_word_distances[0, 0] = 0
+        pad_word_distances
+        
+        # Calculate shortest covering path
+    
+        # Add one element for the padding        
+        visited_idxs = np.zeros(len(selected_words) + 1, dtype=int)
+    
+        visited_idxs[0] = 1
+        length, order = self.try_next(0, pad_word_distances, visited_idxs)
+    
+        # Ignore the start pad
+        order = list(order[1:] - 2)
+    
+        ordered_words = [w for _, w in sorted(zip(order, selected_words))]
+    
+        sentence = ' '.join(ordered_words)
+        
+        return sentence
+    
     
     def _pre_process(self, inputs):
         
@@ -389,7 +472,6 @@ class GetSum2Worker(FlaskWorker):
         multi_cluster = True
         
         lemmas = np.array(lemmas)
-        print(lemmas)
     
         return embeds, lemmas, n_hits, multi_cluster
 
@@ -491,18 +573,23 @@ class GetSum2Worker(FlaskWorker):
         # V2 Text order
         decoded_sentence_v2 = self.order_first_appearance(words, selected_words[:(MAX_OUTPUT_LEN)])
         
+        
+        # V3 Shortest text path
+        decoded_sentence_v3 = self.order_shortest_path(words, selected_words[:(MAX_OUTPUT_LEN)])
+        
               
-        return selected_words, decoded_sentence_v1, decoded_sentence_v2
+        return selected_words, decoded_sentence_v1, decoded_sentence_v2, decoded_sentence_v3
 
     def _post_process(self, pred):
         
-        words, sentence_v1, sentence_v2 = pred
+        words, sentence_v1, sentence_v2, sentence_v3 = pred
         
         res = {}
         
         res['v0'] = words
         res['v1'] = sentence_v1
         res['v2'] = sentence_v2
+        res['v3'] = sentence_v3
         
         return res
 
