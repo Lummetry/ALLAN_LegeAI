@@ -41,7 +41,7 @@ MAX_OUTPUT_LEN = 10
 ENCODER_SEQ_DIM = 10
 DECODER_SEQ_DIM = 15
 
-__VER__='2.0.0.0'
+__VER__='2.1.0.0'
 class GetSum2Worker(FlaskWorker):
     """
     Implementation of the worker for GET_SUMMARY endpoint
@@ -312,6 +312,22 @@ class GetSum2Worker(FlaskWorker):
         
         return sentence
     
+    def order_first_appearance(self, text, selected_words):
+        """ Order the list of selected words by their first appearence in the text. """
+        
+        ordered_words = []
+        
+        for word in text:
+            try:
+                idx = selected_words.index(word)
+                ordered_words.append(word)
+                del selected_words[idx]
+            except ValueError:
+                continue
+            
+        sentence = ' '.join(ordered_words)
+        
+        return sentence
     
     
     def _pre_process(self, inputs):
@@ -373,6 +389,7 @@ class GetSum2Worker(FlaskWorker):
         multi_cluster = True
         
         lemmas = np.array(lemmas)
+        print(lemmas)
     
         return embeds, lemmas, n_hits, multi_cluster
 
@@ -457,7 +474,7 @@ class GetSum2Worker(FlaskWorker):
         # decoded_sentence = self.decode_sequenceOHE(self.encoder_model, self.decoder_model, tag_embeds)
         # decoded_sentence = self.decode_sequenceOHEAttention(self.encoder_model, self.decoder_model, tag_embeds)
         
-        # Shuffle model
+        # V1 Shuffle model
         
         # Get embeddings for tags
         tag_embeds = self.encoder.encode_convert_unknown_words(
@@ -468,17 +485,24 @@ class GetSum2Worker(FlaskWorker):
         # Get the predicted order
         pred = self.shuffle_model.predict(tag_embeds)
         order = self.get_sort_regular_positions(pred[0])
-        decoded_sentence = self.build_ordered_sentence(order, selected_words[:(MAX_OUTPUT_LEN)])
+        decoded_sentence_v1 = self.build_ordered_sentence(order, selected_words[:(MAX_OUTPUT_LEN)])
+        
+        
+        # V2 Text order
+        decoded_sentence_v2 = self.order_first_appearance(words, selected_words[:(MAX_OUTPUT_LEN)])
+        
               
-        return decoded_sentence
+        return selected_words, decoded_sentence_v1, decoded_sentence_v2
 
     def _post_process(self, pred):
         
-        words = pred
+        words, sentence_v1, sentence_v2 = pred
         
         res = {}
         
-        res['results'] = words
+        res['v0'] = words
+        res['v1'] = sentence_v1
+        res['v2'] = sentence_v2
         
         return res
 
