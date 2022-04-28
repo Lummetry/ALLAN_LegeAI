@@ -29,17 +29,19 @@ _CONFIG = {
 ENCODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\att_vocab5_e10_d15_l256_enc.h5'
 DECODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\att_vocab5_e10_d15_l256_dec.h5'
 DICT_ID2WORD_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\dictId2Word_min5.pkl'
-# Prod'
+SHUFFLER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\shuffle_decoder_newproc.h5'
+# Prod
 ENCODER_PROD = 'C:\\allan_data\\2022.04.19\\sum_enc.h5'
 DECODER_PROD = 'C:\\allan_data\\2022.04.19\\sum_dec.h5'
 DICT_ID2WORD_PROD = 'C:\\allan_data\\2022.04.19\\dictId2Word.pkl'
+SHUFFLER_PROD = 'C:\\allan_data\\2022.04.19\\shuffle_decoder_newproc.h5'
 
 EMBEDDING_DIM = 128 
 MAX_OUTPUT_LEN = 10
 ENCODER_SEQ_DIM = 10
 DECODER_SEQ_DIM = 15
 
-__VER__='1.1.0.2'
+__VER__='2.2.0.0'
 class GetSum2Worker(FlaskWorker):
     """
     Implementation of the worker for GET_SUMMARY endpoint
@@ -284,6 +286,131 @@ class GetSum2Worker(FlaskWorker):
             
         return decodedRes
     
+    def get_sort_regular_positions(self, pred):
+        """ Get the list of word positions for regular output model by sorting the outputs. """
+        
+        order = np.argsort(pred, axis=None)
+        
+        result = np.zeros(len(pred), dtype=int)
+        for o, idx in enumerate(order):
+            result[idx] = o
+            
+        return result
+    
+    
+    def build_ordered_sentence(self, order, words):
+        """ Form the final sentence, according to the predicted order of words. """
+        
+        ordered_words = []
+        
+        for idx in order:
+            if idx < len(words) and words[idx] != '<PAD>':
+                # If the word index exists and is not <PAD>
+                ordered_words.append(words[idx])
+        
+        sentence = ' '.join(ordered_words)
+        
+        return sentence
+    
+    def order_first_appearance(self, text, selected_words):
+        """ Order the list of selected words by their first appearence in the text. """
+        
+        ordered_words = []
+        
+        for word in text:
+            try:
+                idx = selected_words.index(word)
+                ordered_words.append(word)
+                del selected_words[idx]
+            except ValueError:
+                continue
+            
+        sentence = ' '.join(ordered_words)
+        
+        return sentence
+    
+    def try_next(self, current_idx, word_distances, visited_idxs):
+        # Recursive function to find the best path from all the neighbors
+        
+        min_path_length = np.Infinity
+        best_visited_idxs = None
+        
+        if all(visited_idxs) > 0:
+            # If all indexes have been visited, stop
+            return 0, visited_idxs
+        
+        
+        for idx in range(len(visited_idxs)):
+            if word_distances[current_idx, idx] > 0 and visited_idxs[idx] == 0:
+                # Visit new neighbor index
+                
+                # Update copy of visited indexes
+                new_visited_idxs = np.copy(visited_idxs)
+                new_visited_idxs[idx] = max(new_visited_idxs) + 1
+                
+                # Get the best path through the visited index
+                returned_path_length, returned_visited_idxs = self.try_next(idx, word_distances, new_visited_idxs)
+                path_length = word_distances[current_idx, idx] + returned_path_length
+                
+                if path_length < min_path_length:
+                    # Update the best path for the current index
+                    best_visited_idxs = returned_visited_idxs
+                    min_path_length = path_length 
+        
+        return min_path_length, best_visited_idxs
+    
+    
+    def order_shortest_path(self, text, selected_words):
+        """ Order the selected words by the shortest path the covers all of them, according to their
+            positions in the text.
+        """
+    
+        # Calculate word distance graph
+    
+        n = len(selected_words)
+        word_distances = np.zeros((n, n))
+    
+        prev_idx = -1
+        prev_pos = -1
+        for i, word in enumerate(text):
+            try:
+                idx = selected_words.index(word)
+                pos = i
+    
+                if prev_idx != -1 and prev_idx != idx:
+                    # If a different word was found
+                    if word_distances[prev_idx, idx] == 0 or word_distances[prev_idx, idx] > pos - prev_pos:
+                        # If the distance between the words is better than the previous
+                        word_distances[prev_idx, idx] = pos - prev_pos
+    
+                prev_idx = idx
+                prev_pos = pos
+    
+            except ValueError:
+                continue
+    
+        # Add a fake word / padding as the start token
+        pad_word_distances = np.insert(word_distances, 0, [np.ones(len(selected_words))], axis=0)
+        pad_word_distances = np.insert(pad_word_distances, 0, [np.ones(len(selected_words) + 1)], axis=1)
+        pad_word_distances[0, 0] = 0
+        pad_word_distances
+        
+        # Calculate shortest covering path
+    
+        # Add one element for the padding        
+        visited_idxs = np.zeros(len(selected_words) + 1, dtype=int)
+    
+        visited_idxs[0] = 1
+        length, order = self.try_next(0, pad_word_distances, visited_idxs)
+    
+        # Ignore the start pad
+        order = list(order[1:] - 2)
+    
+        ordered_words = [w for _, w in sorted(zip(order, selected_words))]
+    
+        sentence = ' '.join(ordered_words)
+        
+        return sentence
     
     
     def _pre_process(self, inputs):
@@ -292,26 +419,29 @@ class GetSum2Worker(FlaskWorker):
         
         # Read files
         if self.debug:
-            encoder_model_file = ENCODER_DEBUG
-            decoder_model_file = DECODER_DEBUG
-            dict_id2word_file = DICT_ID2WORD_DEBUG
+            # encoder_model_file = ENCODER_DEBUG
+            # decoder_model_file = DECODER_DEBUG
+            # dict_id2word_file = DICT_ID2WORD_DEBUG
+            shuffle_model_file = SHUFFLER_DEBUG
         else:
-            encoder_model_file = ENCODER_PROD
-            decoder_model_file = DECODER_PROD
-            dict_id2word_file = DICT_ID2WORD_PROD
+            # encoder_model_file = ENCODER_PROD
+            # decoder_model_file = DECODER_PROD
+            # dict_id2word_file = DICT_ID2WORD_PROD
+            shuffle_model_file = SHUFFLER_PROD
             
-        self.encoder_model = tf.keras.models.load_model(encoder_model_file)
-        self.decoder_model = tf.keras.models.load_model(decoder_model_file) 
+        # self.encoder_model = tf.keras.models.load_model(encoder_model_file)
+        # self.decoder_model = tf.keras.models.load_model(decoder_model_file) 
+        self.shuffle_model = tf.keras.models.load_model(shuffle_model_file) 
         
-        dict_id2word_file = open(dict_id2word_file, "rb")
-        self.dict_id2word = pickle.load(dict_id2word_file)
-        dict_id2word_file.close() 
-        self.vocab_length = len(self.dict_id2word)     
+        # dict_id2word_file = open(dict_id2word_file, "rb")
+        # self.dict_id2word = pickle.load(dict_id2word_file)
+        # dict_id2word_file.close() 
+        # self.vocab_length = len(self.dict_id2word)     
         
         # Start and Stop tokens
-        self.start_token = np.zeros(EMBEDDING_DIM)
-        self.stop_ohe = np.zeros(self.vocab_length).astype(int)
-        self.stop_ohe[-2] = 1
+        # self.start_token = np.zeros(EMBEDDING_DIM)
+        # self.stop_ohe = np.zeros(self.vocab_length).astype(int)
+        # self.stop_ohe[-2] = 1
         
                             
         doc = inputs['DOCUMENT']
@@ -416,25 +546,50 @@ class GetSum2Worker(FlaskWorker):
             selected_words.extend(cluster_selected_words)
             
         
+        # Seq2Seq Model
+        
+        # Get embeddings for tags
+        # tag_embeds = self.encoder.encode_convert_unknown_words(
+        #     [selected_words[:(ENCODER_SEQ_DIM)]],
+        #     fixed_len=ENCODER_SEQ_DIM
+        # )  
+        # decoded_sentence = self.decode_sequenceOHE(self.encoder_model, self.decoder_model, tag_embeds)
+        # decoded_sentence = self.decode_sequenceOHEAttention(self.encoder_model, self.decoder_model, tag_embeds)
+        
+        # V1 Shuffle model
+        
         # Get embeddings for tags
         tag_embeds = self.encoder.encode_convert_unknown_words(
-            [selected_words[:(ENCODER_SEQ_DIM)]],
-            fixed_len=ENCODER_SEQ_DIM
-        )
+            [selected_words[:(MAX_OUTPUT_LEN)]],
+            fixed_len=MAX_OUTPUT_LEN
+        )  
+                
+        # Get the predicted order
+        pred = self.shuffle_model.predict(tag_embeds)
+        order = self.get_sort_regular_positions(pred[0])
+        decoded_sentence_v1 = self.build_ordered_sentence(order, selected_words[:(MAX_OUTPUT_LEN)])
         
         
-        # decoded_sentence = self.decode_sequenceOHE(self.encoder_model, self.decoder_model, tag_embeds)
-        decoded_sentence = self.decode_sequenceOHEAttention(self.encoder_model, self.decoder_model, tag_embeds)
+        # V2 Text order
+        decoded_sentence_v2 = self.order_first_appearance(words, selected_words[:(MAX_OUTPUT_LEN)])
+        
+        
+        # V3 Shortest text path
+        decoded_sentence_v3 = self.order_shortest_path(words, selected_words[:(MAX_OUTPUT_LEN)])
+        
               
-        return decoded_sentence
+        return selected_words, decoded_sentence_v1, decoded_sentence_v2, decoded_sentence_v3
 
     def _post_process(self, pred):
         
-        words = pred
+        words, sentence_v1, sentence_v2, sentence_v3 = pred
         
         res = {}
         
-        res['results'] = words
+        res['v0'] = words
+        res['v1'] = sentence_v1
+        res['v2'] = sentence_v2
+        res['v3'] = sentence_v3
         
         return res
 
@@ -543,7 +698,7 @@ b) persoana menţine în România un stoc de produse sau bunuri din care livreaz
         
         # 'MULTI_CLUSTER': True,
         
-        'DEBUG': False
+        'DEBUG': True
       }
   
   res = eng.execute(inputs=test, counter=1)
