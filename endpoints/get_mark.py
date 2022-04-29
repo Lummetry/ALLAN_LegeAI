@@ -28,7 +28,7 @@ MAX_QUERY_WORDS = 350
 MAX_COS_DISTANCE = 0.5
 
 
-__VER__='0.1.1.2'
+__VER__='0.1.1.3'
 class GetMarkWorker(FlaskWorker):
   def __init__(self, **kwargs):
     super(GetMarkWorker, self).__init__(**kwargs)
@@ -118,7 +118,7 @@ class GetMarkWorker(FlaskWorker):
         docs_embeds.append(doc_embeds)
         
         
-    n_hits = inputs.get('TOP_N', None)
+    n_hits = inputs.get('TOP_N', 3)
 
     return query_embeds, docs_embeds, n_hits    
 
@@ -177,19 +177,19 @@ if __name__ == '__main__':
     #       ]
     # },
     
-    {
-      'QUERY' : 'Operaţiunea întocmirii referatului de necesitate se situează în interiorul procedurii de achiziţie publică?',
-      'TOP_N' : 0,
-      'DOCUMENTS': [
-          """Etapa de planificare/pregătire a unui proces de achiziţie publică se iniţiază prin identificarea necesităţilor şi elaborarea referatelor de necesitate şi se încheie cu aprobarea de către conducătorul autorităţii contractante/unităţii de achiziţii centralizate a documentaţiei de atribuire, inclusiv a documentelor-suport, precum şi a strategiei de contractare pentru procedura respectivă.""",
-          """Referatul de necesitate reprezintă un document intern emis de fiecare compartiment din cadrul autorităţii contractante în ultimul trimestru al anului în curs pentru anul viitor, care cuprinde necesităţile de produse, servicii şi lucrări identificate, precum şi preţul unitar/total al necesităţilor.""",
-          """documentaţia de atribuire - documentul achiziţiei care cuprinde cerinţele, criteriile, regulile şi alte informaţii necesare pentru a asigura operatorilor economici o informare completă, corectă şi explicită cu privire la cerinţe sau elemente ale achiziţiei, obiectul contractului şi modul de desfăşurare a procedurii de atribuire, inclusiv specificaţiile tehnice ori documentul descriptiv, condiţiile contractuale propuse, formatele de prezentare a documentelor de către candidaţi/ofertanţi, informaţiile privind obligaţiile generale aplicabile;""",
-          """Etapa de organizare a procedurii de atribuire a contractului/acordului-cadru începe prin transmiterea documentaţiei de atribuire în SEAP şi se finalizează odată cu încheierea contractului de achiziţie publică/acordului-cadru.""",
-          """(1) Autoritatea contractantă poate iniţia aplicarea procedurii de atribuire numai după ce au fost elaborate şi aprobate documentaţia de atribuire şi documentele suport.""",
-          """(1) Procedurile de atribuire reglementate de prezenta lege, aplicabile pentru atribuirea contractelor de achiziţie publică/acordurilor-cadru sau organizarea concursurilor de soluţii cu o valoare estimată egală sau mai mare decât valorile prevăzute la art. 7 alin. (5), sunt următoarele:"""
-          ],
-      'DEBUG' : True,
-    },
+    # {
+    #   'QUERY' : 'Operaţiunea întocmirii referatului de necesitate se situează în interiorul procedurii de achiziţie publică?',
+    #   'TOP_N' : 0,
+    #   'DOCUMENTS': [
+    #       """Etapa de planificare/pregătire a unui proces de achiziţie publică se iniţiază prin identificarea necesităţilor şi elaborarea referatelor de necesitate şi se încheie cu aprobarea de către conducătorul autorităţii contractante/unităţii de achiziţii centralizate a documentaţiei de atribuire, inclusiv a documentelor-suport, precum şi a strategiei de contractare pentru procedura respectivă.""",
+    #       """Referatul de necesitate reprezintă un document intern emis de fiecare compartiment din cadrul autorităţii contractante în ultimul trimestru al anului în curs pentru anul viitor, care cuprinde necesităţile de produse, servicii şi lucrări identificate, precum şi preţul unitar/total al necesităţilor.""",
+    #       """documentaţia de atribuire - documentul achiziţiei care cuprinde cerinţele, criteriile, regulile şi alte informaţii necesare pentru a asigura operatorilor economici o informare completă, corectă şi explicită cu privire la cerinţe sau elemente ale achiziţiei, obiectul contractului şi modul de desfăşurare a procedurii de atribuire, inclusiv specificaţiile tehnice ori documentul descriptiv, condiţiile contractuale propuse, formatele de prezentare a documentelor de către candidaţi/ofertanţi, informaţiile privind obligaţiile generale aplicabile;""",
+    #       """Etapa de organizare a procedurii de atribuire a contractului/acordului-cadru începe prin transmiterea documentaţiei de atribuire în SEAP şi se finalizează odată cu încheierea contractului de achiziţie publică/acordului-cadru.""",
+    #       """(1) Autoritatea contractantă poate iniţia aplicarea procedurii de atribuire numai după ce au fost elaborate şi aprobate documentaţia de atribuire şi documentele suport.""",
+    #       """(1) Procedurile de atribuire reglementate de prezenta lege, aplicabile pentru atribuirea contractelor de achiziţie publică/acordurilor-cadru sau organizarea concursurilor de soluţii cu o valoare estimată egală sau mai mare decât valorile prevăzute la art. 7 alin. (5), sunt următoarele:"""
+    #       ],
+    #   'DEBUG' : True,
+    # },
     
     # {
     #   'QUERY' : 'Cum se concretizează sprijinul acordat, conform legii, de celelalte compartimente interne din cadrul entității contractante, compartimentului intern specializat în domeniul achizițiilor, în funcție de specificul și complexitatea obiectului achiziției?',
@@ -304,22 +304,55 @@ if __name__ == '__main__':
     #   'DEBUG' : True,
     # },
     
-    # {
-    #   'QUERY' : 'Există posibilitatea înlocuirii unui membru al unei asocieri temporare de operatori economici, căreia i-a fost atribuit un contract/acord-cadru, cu un alt operator economic care îndeplineşte criteriile de calificare şi selecţie stabilite iniţial, ca urmare a unei succesiuni cu titlu universal în cadrul unui proces de divizare?',
-    #   'TOP_N' : 0,
-    #   'DOCUMENTS': [
-    #       """(2) Contractele subsecvente încheiate după intrarea în vigoare a prezentei ordonanţe de urgenţă, pe perioada de derulare a acordului-cadru, se supun legii în vigoare de la data încheierii acestora. """,
-    #       """(1) Contractele de achiziţie publică/Acordurile- cadru pot fi modificate, fără organizarea unei noi proceduri de atribuire, în următoarele situaţii:""",
-    #       """d) atunci când contractantul cu care autoritatea contractantă a încheiat iniţial contractul de achiziţie publică este înlocuit de un nou contractant, în una dintre următoarele situaţii:""",
-    #       """(i) ca urmare a unei clauze de revizuire sau a unei opţiuni stabilite de autoritatea contractantă potrivit lit. a) şi alin. (2);""",
-    #       """(ii) drepturile şi obligaţiile contractantului iniţial rezultate din contractul de achiziţie publică sunt preluate, ca urmare a unei succesiuni universale sau cu titlu universal în cadrul unui proces de reorganizare, inclusiv prin fuziune, divizare, achiziţie sau insolvenţă, de către un alt operator economic care îndeplineşte criteriile de calificare şi selecţie stabilite iniţial, cu condiţia ca această modificare să nu presupună alte modificări substanţiale ale contractului de achiziţie publică şi să nu se realizeze cu scopul de a eluda aplicarea procedurilor de atribuire prevăzute de prezenta lege;""",
-    #       """(iii) în cazul în care autoritatea contractantă îşi asumă obligaţiile contractantului principal faţă de subcontractanţii acestuia, respectiv aceştia faţă de autoritatea contractantă;""",
-    #       """jj) operator economic - orice persoană fizică sau juridică, de drept public ori de drept privat, sau grup ori asociere de astfel de persoane, inclusiv orice asociere temporară formată între două ori mai multe dintre aceste entităţi, care oferă în mod licit pe piaţă executarea de lucrări, furnizarea de produse ori prestarea de servicii, şi care este/sunt stabilită/stabilite în: """
-    #       ],
-    #   'DEBUG' : True,
-    # },
+    {
+      'QUERY' : 'Există posibilitatea înlocuirii unui membru al unei asocieri temporare de operatori economici, căreia i-a fost atribuit un contract/acord-cadru, cu un alt operator economic care îndeplineşte criteriile de calificare şi selecţie stabilite iniţial, ca urmare a unei succesiuni cu titlu universal în cadrul unui proces de divizare?',
+      'TOP_N' : 0,
+      'DOCUMENTS': [
+          """(2) Contractele subsecvente încheiate după intrarea în vigoare a prezentei ordonanţe de urgenţă, pe perioada de derulare a acordului-cadru, se supun legii în vigoare de la data încheierii acestora. """,
+          """(1) Contractele de achiziţie publică/Acordurile- cadru pot fi modificate, fără organizarea unei noi proceduri de atribuire, în următoarele situaţii:""",
+          """d) atunci când contractantul cu care autoritatea contractantă a încheiat iniţial contractul de achiziţie publică este înlocuit de un nou contractant, în una dintre următoarele situaţii:""",
+          """(i) ca urmare a unei clauze de revizuire sau a unei opţiuni stabilite de autoritatea contractantă potrivit lit. a) şi alin. (2);""",
+          """(ii) drepturile şi obligaţiile contractantului iniţial rezultate din contractul de achiziţie publică sunt preluate, ca urmare a unei succesiuni universale sau cu titlu universal în cadrul unui proces de reorganizare, inclusiv prin fuziune, divizare, achiziţie sau insolvenţă, de către un alt operator economic care îndeplineşte criteriile de calificare şi selecţie stabilite iniţial, cu condiţia ca această modificare să nu presupună alte modificări substanţiale ale contractului de achiziţie publică şi să nu se realizeze cu scopul de a eluda aplicarea procedurilor de atribuire prevăzute de prezenta lege;""",
+          """(iii) în cazul în care autoritatea contractantă îşi asumă obligaţiile contractantului principal faţă de subcontractanţii acestuia, respectiv aceştia faţă de autoritatea contractantă;""",
+          """jj) operator economic - orice persoană fizică sau juridică, de drept public ori de drept privat, sau grup ori asociere de astfel de persoane, inclusiv orice asociere temporară formată între două ori mai multe dintre aceste entităţi, care oferă în mod licit pe piaţă executarea de lucrări, furnizarea de produse ori prestarea de servicii, şi care este/sunt stabilită/stabilite în: """
+          ],
+      'DEBUG' : True,
+    },
   ]
+  
+  # import pandas as pd
+  
+  # xls = pd.ExcelFile("C:\Proiecte\LegeAI\Date\Task8\get_mark-2.xlsx")
+  # num_tests = 10
+  # for i in range(num_tests):
+        
+  #       sheet = 't' + str(i+1)    
+  #       df = pd.read_excel(xls, sheet)
+  #       query = df.columns[1]
+  #       df.columns = ['idx', 'text']
+        
+  #       documents = df.query('idx.str.contains("doc", na=False) and text != "…"', engine='python').text
+  #       documents = list(documents)[:3]
+        
+  #       test_dict = {
+  #           'QUERY' : query,
+  #           'TOP_N' : 0,
+  #           'DOCUMENTS' : documents,
+  #           'DEBUG' : True
+  #           }
+        
+  #       inputs_to_test.append(test_dict)
+        
+  # for i, inp in enumerate(inputs_to_test):
+      
+  #     j = i + 1
+  #     while len(inp['DOCUMENTS']) < 6:
+  #         if j == len(inputs_to_test):
+  #             j = 0
+          
+  #         inp['DOCUMENTS'].append(inputs_to_test[j]['DOCUMENTS'][0])
+  #         j = j + 1
 
   for i,_input in enumerate(inputs_to_test):
-    result = w.execute(inputs=_input, counter=i)
-    print(result)
+      result = w.execute(inputs=_input, counter=i)
+      print(result)
