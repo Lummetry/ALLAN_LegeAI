@@ -344,6 +344,52 @@ The single communication point is the gateway which can be accessed via `HTTP RE
             "signature": "GetConfWorker:1"
         }
         ```
+     * #### 2.6\. get_sum2 - system functionality
+        Given a natural language written document, performs summarization.
+        
+        **Input parameters:**
+        ```python
+        {
+            "SIGNATURE" : "get_sum2",
+            "DOCUMENT" : <String: mandatory>, # document to be summarized
+        }
+        ```
+
+        **Output:**
+        ```python
+        {
+            "call_id" : <Integer>, # counter - the number of requests processed so far
+            "signature" : <String>, # worker signature - which worker resolved the input,
+            "output" : <String> # the input document having confidentialized the sensible information,
+            "v0" : <List[String]>, # summarization v0 (January version)
+            "v1" : <String>, # summarization v1
+            "v2" : <String>, # summarization v2
+            "v3" : <String>  # summarization v3
+        }
+        ```
+        
+     * #### 2.7\. get_mark - system functionality
+        Given a natural language written query and a list of documents, chooses top documents that match with the query
+        
+        **Input parameters:**
+        ```python
+        {
+            "SIGNATURE" : "get_mark",
+            "QUERY" : <String: mandatory>, # natural language query
+            "DOCUMENTS" : <List[String] : mandatory>, # list of documents
+            "TOP_N" : <Integer : mandatory> # controlls the number of top results (top documents). if "TOP_N"=0, then all documents in the input will be sorted
+        }
+        ```
+       
+        **Output:**
+        ```python
+        {
+            "call_id" : <Integer>, # counter - the number of requests processed so far
+            "signature" : <String>, # worker signature - which worker resolved the input,
+            "results" : <List[Integer]> # list with input documents indexes that match with the query (the length of this list is controlled by the "TOP_N" parameter; if it is 0, then it sorts all documents in input)
+        }
+        ```
+        
         
 * ### 3\. Microservices configuration
 
