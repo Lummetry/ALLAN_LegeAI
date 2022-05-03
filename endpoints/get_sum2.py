@@ -9,7 +9,6 @@ from sklearn.cluster import AgglomerativeClustering
 import spacy
 from gensim.models import Word2Vec
 import tensorflow as tf
-import pickle
 
 _CONFIG = {
   'LABEL2ID': 'dict_lbl_37.pkl',
@@ -21,7 +20,9 @@ _CONFIG = {
   'SPACY_MODEL' : 'ro_core_news_md',
  }
 
+
 # File paths
+
 # Debug
 # ENCODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\ohe_vocab10_e10_d15_l256_enc.h5'
 # DECODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\ohe_vocab10_e10_d15_l256_dec.h5'
@@ -30,6 +31,7 @@ ENCODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\att_vocab5_e10_d15_l
 DECODER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\att_vocab5_e10_d15_l256_dec.h5'
 DICT_ID2WORD_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\dictId2Word_min5.pkl'
 SHUFFLER_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task5\\models\\shuffle_decoder_newproc.h5'
+
 # Prod
 ENCODER_PROD = 'C:\\allan_data\\2022.04.19\\sum_enc.h5'
 DECODER_PROD = 'C:\\allan_data\\2022.04.19\\sum_dec.h5'
@@ -41,7 +43,7 @@ MAX_OUTPUT_LEN = 10
 ENCODER_SEQ_DIM = 10
 DECODER_SEQ_DIM = 15
 
-__VER__='2.2.0.0'
+__VER__='2.2.1.0'
 class GetSum2Worker(FlaskWorker):
     """
     Implementation of the worker for GET_SUMMARY endpoint
@@ -334,7 +336,7 @@ class GetSum2Worker(FlaskWorker):
         
         min_path_length = np.Infinity
         best_visited_idxs = None
-        
+                
         if all(visited_idxs) > 0:
             # If all indexes have been visited, stop
             return 0, visited_idxs
@@ -370,22 +372,29 @@ class GetSum2Worker(FlaskWorker):
         n = len(selected_words)
         word_distances = np.zeros((n, n))
     
-        prev_idx = -1
-        prev_pos = -1
-        for i, word in enumerate(text):
+        for i in range(len(text) - 1):
             try:
-                idx = selected_words.index(word)
-                pos = i
-    
-                if prev_idx != -1 and prev_idx != idx:
-                    # If a different word was found
-                    if word_distances[prev_idx, idx] == 0 or word_distances[prev_idx, idx] > pos - prev_pos:
-                        # If the distance between the words is better than the previous
-                        word_distances[prev_idx, idx] = pos - prev_pos
-    
-                prev_idx = idx
-                prev_pos = pos
-    
+                idx1 = selected_words.index(text[i])
+                pos1 = i
+            
+                # Only consider distances of at most 15 words
+                end = int(min(len(text), i + 16))
+                    
+                for j in range(i + 1, end):
+                    # Check the net words in the text
+                    try:
+                        idx2 = selected_words.index(text[j])
+                        pos2 = j
+                        
+                        if idx1 != idx2:
+                            # If a different word was found
+                            if word_distances[idx1, idx2] == 0 or word_distances[idx1, idx2] > pos2 - pos1:
+                                # If the distance between the words is better than the previous
+                                word_distances[idx1, idx2] = pos2 - pos1  
+                                
+                    except ValueError:
+                        continue
+                        
             except ValueError:
                 continue
     
@@ -393,7 +402,6 @@ class GetSum2Worker(FlaskWorker):
         pad_word_distances = np.insert(word_distances, 0, [np.ones(len(selected_words))], axis=0)
         pad_word_distances = np.insert(pad_word_distances, 0, [np.ones(len(selected_words) + 1)], axis=1)
         pad_word_distances[0, 0] = 0
-        pad_word_distances
         
         # Calculate shortest covering path
     
@@ -402,6 +410,9 @@ class GetSum2Worker(FlaskWorker):
     
         visited_idxs[0] = 1
         length, order = self.try_next(0, pad_word_distances, visited_idxs)
+        
+        if order is None:
+            return ''
     
         # Ignore the start pad
         order = list(order[1:] - 2)
@@ -569,10 +580,8 @@ class GetSum2Worker(FlaskWorker):
         order = self.get_sort_regular_positions(pred[0])
         decoded_sentence_v1 = self.build_ordered_sentence(order, selected_words[:(MAX_OUTPUT_LEN)])
         
-        
         # V2 Text order
         decoded_sentence_v2 = self.order_first_appearance(words, selected_words[:(MAX_OUTPUT_LEN)])
-        
         
         # V3 Shortest text path
         decoded_sentence_v3 = self.order_shortest_path(words, selected_words[:(MAX_OUTPUT_LEN)])
@@ -676,23 +685,45 @@ if __name__ == '__main__':
 # Drepturile prevăzute la articolul 6 trebuie respectate în special la adoptarea de către Parlamentul European şi de către Consiliu a actelor legislative în domeniul cooperării judiciare în materie penală, în temeiul articolelor 82, 83 şi 85 din Tratatul privind funcţionarea Uniunii Europene, mai ales pentru a defini dispoziţiile comune minime privind calificarea infracţiunilor şi pedepsele, precum şi anumite aspecte de drept procedural.""",
 
 # Definiţia sediului permanent
-        'DOCUMENT' : """În înţelesul prezentului cod, sediul permanent este un loc prin care se desfăşoară integral sau parţial activitatea unui nerezident, fie direct, fie printr-un agent dependent.
-(2) Un sediu permanent presupune un loc de conducere, sucursală, birou, fabrică, magazin, atelier, precum şi o mină, un puţ de ţiţei sau gaze, o carieră sau alte locuri de extracţie a resurselor naturale.
-(3) Un sediu permanent presupune un şantier de construcţii, un proiect de construcţie, ansamblu sau montaj sau activităţi de supervizare legate de acestea, numai dacă şantierul, proiectul sau activităţile durează mai mult de 6 luni.
-(4) Prin derogare de la prevederile alin. (1)-(3), un sediu permanent nu presupune următoarele:
-a) folosirea unei instalaţii numai în scopul depozitării sau al expunerii produselor ori bunurilor ce aparţin nerezidentului;
-b) menţinerea unui stoc de produse sau bunuri ce aparţin unui nerezident numai în scopul de a fi depozitate sau expuse;
-c) menţinerea unui stoc de produse sau bunuri ce aparţin unui nerezident numai în scopul de a fi procesate de către o altă persoană;
-d) vânzarea de produse sau bunuri ce aparţin unui nerezident, care au fost expuse în cadrul unor expoziţii sau târguri fără caracter permanent ori ocazionale, dacă produsele ori bunurile sunt vândute nu mai târziu de o lună după încheierea târgului sau a expoziţiei;
-e) păstrarea unui loc fix de activitate numai în scopul achiziţionării de produse sau bunuri ori culegerii de informaţii pentru un nerezident;
-f) păstrarea unui loc fix de activitate numai în scopul desfăşurării de activităţi cu caracter pregătitor sau auxiliar de către un nerezident;
-g) păstrarea unui loc fix de activitate numai pentru o combinaţie a activităţilor prevăzute la lit. a)-f), cu condiţia ca întreaga activitate desfăşurată în locul fix să fie de natură preparatorie sau auxiliară.
-(5) Prin derogare de la prevederile alin. (1) şi (2), un nerezident este considerat a avea un sediu permanent în România, în ceea ce priveşte activităţile pe care o persoană, alta decât un agent cu statut independent, le întreprinde în numele nerezidentului, dacă persoana acţionează în România în numele nerezidentului şi dacă este îndeplinită una din următoarele condiţii:
-a) persoana este autorizată şi exercită în România autoritatea de a încheia contracte în numele nerezidentului, cu excepţia cazurilor în care activităţile respective sunt limitate la cele prevăzute la alin. (4) lit. a)-f);
-b) persoana menţine în România un stoc de produse sau bunuri din care livrează produse sau bunuri în numele nerezidentului.
-(6) Un nerezident nu se consideră că are un sediu permanent în România dacă doar desfăşoară activitate în România prin intermediul unui broker, agent, comisionar general sau al unui agent intermediar având un statut independent, în cazul în care această activitate este activitatea obişnuită a agentului, conform descrierii din documentele constitutive. Dacă activităţile unui astfel de agent sunt desfăşurate integral sau aproape integral în numele nerezidentului, iar în relaţiile comerciale şi financiare dintre nerezident şi agent există condiţii diferite de acelea care ar exista între persoane independente, agentul nu se consideră ca fiind agent cu statut independent.
-(7) Un nerezident nu se consideră că are un sediu permanent în România numai dacă acesta controlează sau este controlat de un rezident ori de o persoană ce desfăşoară o activitate în România prin intermediul unui sediu permanent sau altfel.
-(8) În înţelesul prezentului cod, sediul permanent al unei persoane fizice se consideră a fi baza fixă.""",
+#         'DOCUMENT' : """În înţelesul prezentului cod, sediul permanent este un loc prin care se desfăşoară integral sau parţial activitatea unui nerezident, fie direct, fie printr-un agent dependent.
+# (2) Un sediu permanent presupune un loc de conducere, sucursală, birou, fabrică, magazin, atelier, precum şi o mină, un puţ de ţiţei sau gaze, o carieră sau alte locuri de extracţie a resurselor naturale.
+# (3) Un sediu permanent presupune un şantier de construcţii, un proiect de construcţie, ansamblu sau montaj sau activităţi de supervizare legate de acestea, numai dacă şantierul, proiectul sau activităţile durează mai mult de 6 luni.
+# (4) Prin derogare de la prevederile alin. (1)-(3), un sediu permanent nu presupune următoarele:
+# a) folosirea unei instalaţii numai în scopul depozitării sau al expunerii produselor ori bunurilor ce aparţin nerezidentului;
+# b) menţinerea unui stoc de produse sau bunuri ce aparţin unui nerezident numai în scopul de a fi depozitate sau expuse;
+# c) menţinerea unui stoc de produse sau bunuri ce aparţin unui nerezident numai în scopul de a fi procesate de către o altă persoană;
+# d) vânzarea de produse sau bunuri ce aparţin unui nerezident, care au fost expuse în cadrul unor expoziţii sau târguri fără caracter permanent ori ocazionale, dacă produsele ori bunurile sunt vândute nu mai târziu de o lună după încheierea târgului sau a expoziţiei;
+# e) păstrarea unui loc fix de activitate numai în scopul achiziţionării de produse sau bunuri ori culegerii de informaţii pentru un nerezident;
+# f) păstrarea unui loc fix de activitate numai în scopul desfăşurării de activităţi cu caracter pregătitor sau auxiliar de către un nerezident;
+# g) păstrarea unui loc fix de activitate numai pentru o combinaţie a activităţilor prevăzute la lit. a)-f), cu condiţia ca întreaga activitate desfăşurată în locul fix să fie de natură preparatorie sau auxiliară.
+# (5) Prin derogare de la prevederile alin. (1) şi (2), un nerezident este considerat a avea un sediu permanent în România, în ceea ce priveşte activităţile pe care o persoană, alta decât un agent cu statut independent, le întreprinde în numele nerezidentului, dacă persoana acţionează în România în numele nerezidentului şi dacă este îndeplinită una din următoarele condiţii:
+# a) persoana este autorizată şi exercită în România autoritatea de a încheia contracte în numele nerezidentului, cu excepţia cazurilor în care activităţile respective sunt limitate la cele prevăzute la alin. (4) lit. a)-f);
+# b) persoana menţine în România un stoc de produse sau bunuri din care livrează produse sau bunuri în numele nerezidentului.
+# (6) Un nerezident nu se consideră că are un sediu permanent în România dacă doar desfăşoară activitate în România prin intermediul unui broker, agent, comisionar general sau al unui agent intermediar având un statut independent, în cazul în care această activitate este activitatea obişnuită a agentului, conform descrierii din documentele constitutive. Dacă activităţile unui astfel de agent sunt desfăşurate integral sau aproape integral în numele nerezidentului, iar în relaţiile comerciale şi financiare dintre nerezident şi agent există condiţii diferite de acelea care ar exista între persoane independente, agentul nu se consideră ca fiind agent cu statut independent.
+# (7) Un nerezident nu se consideră că are un sediu permanent în România numai dacă acesta controlează sau este controlat de un rezident ori de o persoană ce desfăşoară o activitate în România prin intermediul unui sediu permanent sau altfel.
+# (8) În înţelesul prezentului cod, sediul permanent al unei persoane fizice se consideră a fi baza fixă.""",
+
+
+        'DOCUMENT' : """Atribuţiile de stare civilă se îndeplinesc în cadrul:
+a) serviciilor publice comunitare judeţene de evidenţă a persoanelor, respectiv al Direcţiei Generale de Evidenţă a Persoanelor a municipiului Bucureşti, denumită în continuare D.G.E.P.M.B.;
+b) serviciilor publice comunitare locale de evidenţă a persoanelor;
+c) primăriilor unităţilor administrativ-teritoriale unde nu sunt constituite servicii publice comunitare locale de evidenţă a persoanelor;
+d) misiunilor diplomatice şi oficiilor consulare de carieră ale României.
+(2) Sunt ofiţeri de stare civilă:
+a) la nivelul unităţilor administrativ-teritoriale din cadrul judeţelor: primarii municipiilor, oraşelor şi comunelor, precum şi persoanele care au atribuţii de stare civilă;
+b) la nivelul municipiului Bucureşti: primarul general al municipiului Bucureşti, primarii sectoarelor şi persoanele care au atribuţii de stare civilă din cadrul sectoarelor municipiului Bucureşti;
+c) la nivelul misiunilor diplomatice şi al oficiilor consulare de carieră ale României: şefii acestora.
+(3) Sunt ofiţeri de stare civilă cu atribuţii restrânse:
+a) comandanţii de nave şi aeronave;
+b) ofiţerii de stare civilă desemnaţi prin ordin al ministrului apărării naţionale sau, după caz, al ministrului afacerilor interne, potrivit prevederilor art. 7 alin. (7).
+(4) Activităţile de stare civilă se realizează de către:
+a) funcţionarii cu atribuţii de stare civilă din cadrul instituţiilor prevăzute la alin. (1) lit. a);
+b) ofiţerii de stare civilă din cadrul instituţiilor prevăzute la alin. (1) lit. b) - d).
+(5) Primarii şi şefii misiunilor diplomatice şi ai oficiilor consulare de carieră ale României pot delega sau retrage, după caz, exercitarea atribuţiilor de ofiţer de stare civilă viceprimarului sau secretarului unităţii administrativ-teritoriale ori altor funcţionari publici din aparatul propriu, respectiv diplomatului care îndeplineşte funcţii consulare ori unuia dintre funcţionarii consulari.
+(6) Prin excepţie de la prevederile alin. (5), şefii misiunilor diplomatice şi ai oficiilor consulare de carieră ale României pot delega sau retrage, după caz, exercitarea atribuţiilor de ofiţer de stare civilă personalului angajat al Ministerului Afacerilor Externe trimis în misiune permanentă sau temporară pe funcţii tehnico-administrative, care prestează activitate consulară, în situaţiile în care diplomatul care îndeplineşte funcţii consulare sau funcţionarul consular se află în imposibilitatea legală de a întocmi actul de stare civilă.
+(7) Ofiţerul de stare civilă nu poate întocmi acte de stare civilă când este parte sau declarant.""",
+
+
     
         # 'TOP_N': 0,
         
