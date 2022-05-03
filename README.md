@@ -404,7 +404,7 @@ Each microservice can be configured in `config_gateway.txt`. The number of worke
 * ### 1\. Deployment
    ```
    conda create -n allan_prod python=3.8 pip
-   pip install tensorflow==2.5 pandas matplotlib psutil tqdm shapely seaborn scikit-learn scikit-image dropbox gensim transformers flask unidecode phonenumbers
+   pip install tensorflow==2.5 pandas matplotlib psutil tqdm shapely seaborn scikit-learn scikit-image dropbox gensim transformers flask unidecode phonenumbers pyodbc
    pip install -U pip setuptools wheel
    pip install -U spacy
    ```
@@ -414,5 +414,5 @@ Each microservice can be configured in `config_gateway.txt`. The number of worke
    ```
    conda create -n allan_dev python=3.8 pip
    conda install -c anaconda tensorflow-gpu=2.5
-   pip install pandas matplotlib psutil tqdm shapely seaborn scikit-learn scikit-image dropbox gensim transformers flask
+   pip install pandas matplotlib psutil tqdm shapely seaborn scikit-learn scikit-image dropbox gensim transformers flask pyodbc
    ```
