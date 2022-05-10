@@ -32,7 +32,7 @@ DELTA_QUOTES = 6
 LINK_PATTERN = "~id_link=[^;]*;([^~]*)~"
 
 
-__VER__='0.0.0.1'
+__VER__='0.0.0.2'
 
 
 class GetMergeWorker(FlaskWorker):
@@ -165,12 +165,12 @@ class GetMergeWorker(FlaskWorker):
                     # Check if the match is surrounded in quotes
                     start_quote = False
                     for p in range(max(0, start_activ - DELTA_QUOTES), start_activ):
-                        if activ[p] == '"':
+                        if activ[p] in '\'"':
                             start_quote = True
                             break
                     end_quote = False
-                    for p in range(min(end_activ, len(activ)), end_activ + DELTA_QUOTES):
-                        if activ[p] == '"':
+                    for p in range(end_activ, min(len(activ), end_activ + DELTA_QUOTES)):
+                        if activ[p] in '\'"':
                             end_quote = True
                             break
                             
@@ -461,7 +461,7 @@ if __name__ == '__main__':
   
     test = {
         'PASIV' : """stabileşte repertoriul cinematografic al filmelor din producţia naţională şi străine destinate exploatării în reţeaua cinematografică; asigură fondul de copii de filme şi distribuirea lor în reţeaua cinematografică în vederea realizării programelor de activitate ale acesteia, în condiţiile utilizării şi gospodăririi raţionale şi eficiente a mijloacelor economice pe care le are la dispoziţie. Distribuţia filmelor în premieră în Bucureşti se va face concomitent în cinematografele proprii ale regiei şi cele ale Centrului Naţional al Cinematografiei, iar în oraşele Constanţa şi Piteşti, alternativ;""",        
-        'ACTIV' : """la art. 4 pct. 4.1. se elimină ultima frază: "Distribuţia filmelor în premieră în Bucureşti se va face concomitent în cinematografele proprii ale regiei şi cele ale Centrului Naţional al Cinematografiei, iar în oraşele Constanţa şi Piteşti, alternativ;"  """,
+        'ACTIV' : """la art. 4 pct. 4.1. se elimină ultima frază: Distribuţia filmelor în premieră în Bucureşti se va face concomitent în cinematografele proprii ale regiei şi cele ale Centrului Naţional al Cinematografiei, iar în oraşele Constanţa şi Piteşti, alternativ;""",
         
         # 'PASIV' : """Carne şi preparate din carne""",
         # 'ACTIV' : """Cu aceeaşi dată se abrogă alin. 2 al art. 1, poziţia 1. "Bovine (tineret şi adulte)" din anexa nr. 1, precum şi anexa nr. 2 la Hotărârea Guvernului nr. 197 bis din 30 aprilie 1993, iar poziţia "Carne şi preparate din carne" din anexa la Hotărârea Guvernului nr. 206/1993 se înlocuieşte cu poziţia "Carne de porcine şi de pasăre. Preparate din carne".""",
