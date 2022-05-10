@@ -54,14 +54,6 @@
             "NR_WORKERS" : 2,
             "HOST" : "127.0.0.1"
         },
-<<<<<<< HEAD
-
-        "get_mark" : {
-            "NR_WORKERS" : 2,
-            "HOST" : "127.0.0.1"
-        }
-=======
->>>>>>> develop
 
         "get_merge" : {
             "NR_WORKERS" : 2,
