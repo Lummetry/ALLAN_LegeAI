@@ -304,54 +304,55 @@ if __name__ == '__main__':
     #   'DEBUG' : True,
     # },
     
-    {
-      'QUERY' : 'Există posibilitatea înlocuirii unui membru al unei asocieri temporare de operatori economici, căreia i-a fost atribuit un contract/acord-cadru, cu un alt operator economic care îndeplineşte criteriile de calificare şi selecţie stabilite iniţial, ca urmare a unei succesiuni cu titlu universal în cadrul unui proces de divizare?',
-      'TOP_N' : 0,
-      'DOCUMENTS': [
-          """(2) Contractele subsecvente încheiate după intrarea în vigoare a prezentei ordonanţe de urgenţă, pe perioada de derulare a acordului-cadru, se supun legii în vigoare de la data încheierii acestora. """,
-          """(1) Contractele de achiziţie publică/Acordurile- cadru pot fi modificate, fără organizarea unei noi proceduri de atribuire, în următoarele situaţii:""",
-          """d) atunci când contractantul cu care autoritatea contractantă a încheiat iniţial contractul de achiziţie publică este înlocuit de un nou contractant, în una dintre următoarele situaţii:""",
-          """(i) ca urmare a unei clauze de revizuire sau a unei opţiuni stabilite de autoritatea contractantă potrivit lit. a) şi alin. (2);""",
-          """(ii) drepturile şi obligaţiile contractantului iniţial rezultate din contractul de achiziţie publică sunt preluate, ca urmare a unei succesiuni universale sau cu titlu universal în cadrul unui proces de reorganizare, inclusiv prin fuziune, divizare, achiziţie sau insolvenţă, de către un alt operator economic care îndeplineşte criteriile de calificare şi selecţie stabilite iniţial, cu condiţia ca această modificare să nu presupună alte modificări substanţiale ale contractului de achiziţie publică şi să nu se realizeze cu scopul de a eluda aplicarea procedurilor de atribuire prevăzute de prezenta lege;""",
-          """(iii) în cazul în care autoritatea contractantă îşi asumă obligaţiile contractantului principal faţă de subcontractanţii acestuia, respectiv aceştia faţă de autoritatea contractantă;""",
-          """jj) operator economic - orice persoană fizică sau juridică, de drept public ori de drept privat, sau grup ori asociere de astfel de persoane, inclusiv orice asociere temporară formată între două ori mai multe dintre aceste entităţi, care oferă în mod licit pe piaţă executarea de lucrări, furnizarea de produse ori prestarea de servicii, şi care este/sunt stabilită/stabilite în: """
-          ],
-      'DEBUG' : True,
-    },
+    # {
+    #   'QUERY' : 'Există posibilitatea înlocuirii unui membru al unei asocieri temporare de operatori economici, căreia i-a fost atribuit un contract/acord-cadru, cu un alt operator economic care îndeplineşte criteriile de calificare şi selecţie stabilite iniţial, ca urmare a unei succesiuni cu titlu universal în cadrul unui proces de divizare?',
+    #   'TOP_N' : 0,
+    #   'DOCUMENTS': [
+    #       """(2) Contractele subsecvente încheiate după intrarea în vigoare a prezentei ordonanţe de urgenţă, pe perioada de derulare a acordului-cadru, se supun legii în vigoare de la data încheierii acestora. """,
+    #       """(1) Contractele de achiziţie publică/Acordurile- cadru pot fi modificate, fără organizarea unei noi proceduri de atribuire, în următoarele situaţii:""",
+    #       """d) atunci când contractantul cu care autoritatea contractantă a încheiat iniţial contractul de achiziţie publică este înlocuit de un nou contractant, în una dintre următoarele situaţii:""",
+    #       """(i) ca urmare a unei clauze de revizuire sau a unei opţiuni stabilite de autoritatea contractantă potrivit lit. a) şi alin. (2);""",
+    #       """(ii) drepturile şi obligaţiile contractantului iniţial rezultate din contractul de achiziţie publică sunt preluate, ca urmare a unei succesiuni universale sau cu titlu universal în cadrul unui proces de reorganizare, inclusiv prin fuziune, divizare, achiziţie sau insolvenţă, de către un alt operator economic care îndeplineşte criteriile de calificare şi selecţie stabilite iniţial, cu condiţia ca această modificare să nu presupună alte modificări substanţiale ale contractului de achiziţie publică şi să nu se realizeze cu scopul de a eluda aplicarea procedurilor de atribuire prevăzute de prezenta lege;""",
+    #       """(iii) în cazul în care autoritatea contractantă îşi asumă obligaţiile contractantului principal faţă de subcontractanţii acestuia, respectiv aceştia faţă de autoritatea contractantă;""",
+    #       """jj) operator economic - orice persoană fizică sau juridică, de drept public ori de drept privat, sau grup ori asociere de astfel de persoane, inclusiv orice asociere temporară formată între două ori mai multe dintre aceste entităţi, care oferă în mod licit pe piaţă executarea de lucrări, furnizarea de produse ori prestarea de servicii, şi care este/sunt stabilită/stabilite în: """
+    #       ],
+    #   'DEBUG' : True,
+    # },
   ]
   
-  # import pandas as pd
+  import pandas as pd
   
-  # xls = pd.ExcelFile("C:\Proiecte\LegeAI\Date\Task8\get_mark-2.xlsx")
-  # num_tests = 10
-  # for i in range(num_tests):
+  xls = pd.ExcelFile("C:\Proiecte\LegeAI\Date\Task8\get_mark-2.xlsx")
+  num_tests = 10
+  for i in range(1, num_tests):
         
-  #       sheet = 't' + str(i+1)    
-  #       df = pd.read_excel(xls, sheet)
-  #       query = df.columns[1]
-  #       df.columns = ['idx', 'text']
+         sheet = 't' + str(i+1)    
+         df = pd.read_excel(xls, sheet)
+         query = df.columns[1]
+         df.columns = ['idx', 'text']
         
-  #       documents = df.query('idx.str.contains("doc", na=False) and text != "…"', engine='python').text
-  #       documents = list(documents)[:3]
+         documents = df.query('idx.str.contains("doc", na=False) and text != "…"', engine='python').text
+         documents = list(documents)#[:3]
         
-  #       test_dict = {
-  #           'QUERY' : query,
-  #           'TOP_N' : 0,
-  #           'DOCUMENTS' : documents,
-  #           'DEBUG' : True
-  #           }
+         test_dict = {
+             'QUERY' : query,
+             'TOP_N' : 0,
+             'DOCUMENTS' : documents,
+             'DEBUG' : True
+             }
         
-  #       inputs_to_test.append(test_dict)
+         inputs_to_test.append(test_dict)
+         break
         
-  # for i, inp in enumerate(inputs_to_test):
+   # for i, inp in enumerate(inputs_to_test):
       
-  #     j = i + 1
-  #     while len(inp['DOCUMENTS']) < 6:
-  #         if j == len(inputs_to_test):
-  #             j = 0
+   #     j = i + 1
+   #     while len(inp['DOCUMENTS']) < 6:
+   #         if j == len(inputs_to_test):
+   #             j = 0
           
-  #         inp['DOCUMENTS'].append(inputs_to_test[j]['DOCUMENTS'][0])
-  #         j = j + 1
+   #         inp['DOCUMENTS'].append(inputs_to_test[j]['DOCUMENTS'][0])
+   #         j = j + 1
 
   for i,_input in enumerate(inputs_to_test):
       result = w.execute(inputs=_input, counter=i)
