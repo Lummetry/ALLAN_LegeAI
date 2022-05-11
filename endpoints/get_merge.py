@@ -32,9 +32,7 @@ DELTA_QUOTES = 6
 LINK_PATTERN = "~id_link=[^;]*;([^~]*)~"
 
 
-__VER__='0.0.1.0'
-
-
+__VER__='0.0.1.1'
 class GetMergeWorker(FlaskWorker):
     """
     Implementation of the worker for GET_MERGE endpoint
@@ -402,6 +400,8 @@ class GetMergeWorker(FlaskWorker):
         # Get action keywords in Activ
         keywords = self.match_keywords(activ, KEYWORDS)
         key_items = list(keywords.items())
+        # Sort ascending according to position
+        key_items.sort(key=lambda t: t[0])
         
         if self.debug:
             print(matches, keywords)
