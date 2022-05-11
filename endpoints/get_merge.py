@@ -32,7 +32,7 @@ DELTA_QUOTES = 6
 LINK_PATTERN = "~id_link=[^;]*;([^~]*)~"
 
 
-__VER__='0.0.0.2'
+__VER__='0.0.1.0'
 
 
 class GetMergeWorker(FlaskWorker):
@@ -222,30 +222,47 @@ class GetMergeWorker(FlaskWorker):
                 
         # Append last sequence
         new_seqs.append((start_seq, end_tok))
-            
-            
+        
+        print(activ_nlp[start_seq:end_tok])
+             
         if check_quotes:
             # Isolate only sequences containing quotes
+            
+            quote_seqs = []
             
             for i, seq in enumerate(new_seqs):
                 
                 new_start, new_end = None, None
-                for token in activ_nlp[seq[0] : seq[1]]:
+                j = seq[0]
+                while j < seq[1]:
+                    token = activ_nlp[j]
+                    
                     # Find first quote
                     if token.is_quote:
                         new_start = token.i + 1
                         
-                        for token2 in activ_nlp[new_start+1 : seq[1]]:
+                        k = new_start+1
+                        while k < seq[1]:
+                            token2 = activ_nlp[k]
+                            
                             # Find second quote
                             if token2.is_quote:
                                 new_end = token2.i
+                                quote_seqs.append((new_start, new_end))
+                                new_start = None
                                 break
-                                
-                        break
+                            else:
+                                k += 1
+                              
+                        j = k + 1
+                    else:
+                        j += 1
                         
                 if new_start and new_end:
                     # If a quote was found
                     new_seqs[i] = (new_start, new_end)
+                    
+            new_seqs = quote_seqs
                     
         if remove_common:
             # Remove some common words from the sequences
@@ -261,8 +278,25 @@ class GetMergeWorker(FlaskWorker):
                         
                 if new_start:
                     # If a quote was found
-                    new_seqs[i] = (new_start, seq[1])
+                    new_seqs[i] = (new_start, seq[1])   
+                    
+                    
+        # Remove sequences that are the same as the match
+        i = 0
+        while i < len(new_seqs):
+            is_match = False
             
+            seq_text = activ_nlp[new_seqs[i][0] : new_seqs[i][1]].text.lower()
+            for m in matches:
+                if seq_text == m[4]:
+                    # If the sequence is the same as a match
+                    is_match = True
+                    break
+                    
+            if is_match:
+                del new_seqs[i]
+            else:
+                i += 1
                     
         if new_seqs:
             
@@ -272,10 +306,19 @@ class GetMergeWorker(FlaskWorker):
                 end_idx = activ_nlp[new_seqs[i][1] - 1].idx + len(activ_nlp[new_seqs[i][1] - 1].text)          
                 to_replace = activ[start_idx:end_idx]
                 
-                # Find all occurances of phrase to be replace
-                for m in re.finditer(matches[i][4], pasiv.lower()):
-                    # Add replace action
-                    replaces.append(('replace', m.start(), m.end(), to_replace))
+                # If there are matches left
+                if len(matches) > i:
+                    
+                    # Replace the initial occurange of phrase to be replaced
+                    replaces.append(('replace', matches[i][0], matches[i][1], to_replace))
+    
+                    # Find all other occurances of phrase to be replaced
+                    for m in re.finditer(matches[i][4], pasiv.lower()):
+                        # Add replace action
+                        replaces.append(('replace', m.start(), m.end(), to_replace))
+                     
+                # TODO: Only does first replace
+                break
                     
         return replaces
     
@@ -460,11 +503,15 @@ if __name__ == '__main__':
     eng = GetMergeWorker(log=l, default_config=_CONFIG, verbosity_level=1)
   
     test = {
-        'PASIV' : """stabileşte repertoriul cinematografic al filmelor din producţia naţională şi străine destinate exploatării în reţeaua cinematografică; asigură fondul de copii de filme şi distribuirea lor în reţeaua cinematografică în vederea realizării programelor de activitate ale acesteia, în condiţiile utilizării şi gospodăririi raţionale şi eficiente a mijloacelor economice pe care le are la dispoziţie. Distribuţia filmelor în premieră în Bucureşti se va face concomitent în cinematografele proprii ale regiei şi cele ale Centrului Naţional al Cinematografiei, iar în oraşele Constanţa şi Piteşti, alternativ;""",        
-        'ACTIV' : """la art. 4 pct. 4.1. se elimină ultima frază: Distribuţia filmelor în premieră în Bucureşti se va face concomitent în cinematografele proprii ale regiei şi cele ale Centrului Naţional al Cinematografiei, iar în oraşele Constanţa şi Piteşti, alternativ;""",
+        # 'PASIV' : """stabileşte repertoriul cinematografic al filmelor din producţia naţională şi străine destinate exploatării în reţeaua cinematografică; asigură fondul de copii de filme şi distribuirea lor în reţeaua cinematografică în vederea realizării programelor de activitate ale acesteia, în condiţiile utilizării şi gospodăririi raţionale şi eficiente a mijloacelor economice pe care le are la dispoziţie. Distribuţia filmelor în premieră în Bucureşti se va face concomitent în cinematografele proprii ale regiei şi cele ale Centrului Naţional al Cinematografiei, iar în oraşele Constanţa şi Piteşti, alternativ;""",        
+        # 'ACTIV' : """la art. 4 pct. 4.1. se elimină ultima frază: Distribuţia filmelor în premieră în Bucureşti se va face concomitent în cinematografele proprii ale regiei şi cele ale Centrului Naţional al Cinematografiei, iar în oraşele Constanţa şi Piteşti, alternativ;""",
         
         # 'PASIV' : """Carne şi preparate din carne""",
         # 'ACTIV' : """Cu aceeaşi dată se abrogă alin. 2 al art. 1, poziţia 1. "Bovine (tineret şi adulte)" din anexa nr. 1, precum şi anexa nr. 2 la Hotărârea Guvernului nr. 197 bis din 30 aprilie 1993, iar poziţia "Carne şi preparate din carne" din anexa la Hotărârea Guvernului nr. 206/1993 se înlocuieşte cu poziţia "Carne de porcine şi de pasăre. Preparate din carne".""",
+        
+        'PASIV' : """în rezervaţiile istorice şi de arhitectură, stabilite potrivit legii, sau în cazul lucrărilor care modifică monumentele de orice natură, solicitantul va obţine avizul Comisiei naţionale pentru protecţia monumentelor, ansamblurilor şi siturilor istorice sau al Departamentului pentru urbanism şi amenajarea teritoriului, în zonele de protecţie ale acestora;""",
+        'ACTIV' : """La art. 7 lit. a) şi b), art. 27 alin. 3, art. 40 şi în anexa din Legea nr. 50/1991 se înlocuiesc denumirile: "Departamentul pentru urbanism şi amenajarea teritoriului" cu "Ministerul Lucrărilor Publice şi Amenajării Teritoriului"; "Ministerul Mediului" cu "Ministerul Apelor, Pădurilor şi Protecţiei Mediului" şi, respectiv, "Ministerul Comerţului şi Turismului" cu "Ministerul Turismului", iar la art. 38 se elimină "Departamentul pentru urbanism şi amenajarea teritoriului".""",
+
         
         'DEBUG': True
       }
