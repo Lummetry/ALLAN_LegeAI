@@ -32,7 +32,7 @@ DELTA_QUOTES = 6
 LINK_PATTERN = "~id_link=[^;]*;([^~]*)~"
 
 
-__VER__='0.1.0.1'
+__VER__='0.1.1.0'
 class GetMergeWorker(FlaskWorker):
     """
     Implementation of the worker for GET_MERGE endpoint
@@ -190,6 +190,24 @@ class GetMergeWorker(FlaskWorker):
         
         return removals
     
+    def clean_seq_to_replace(self, seq, activ_nlp):
+        """ Clean the sequence to replace. """
+        
+        start, end = seq
+        
+        # Remove surrounding punctuation
+        while activ_nlp[start].is_punct:
+            start += 1
+        while activ_nlp[end - 1].is_punct:
+            print('da')
+            end -= 1
+        
+        # Remove 'cu' from start
+        if activ_nlp[start].text == 'cu':
+            start += 1
+        
+        return start, end
+    
     def search_replaces(self, pasiv, activ, activ_nlp,
                         start_char, end_char,
                         matches,
@@ -303,9 +321,13 @@ class GetMergeWorker(FlaskWorker):
         if new_seqs:
             
             for i in range(len(new_seqs)):
+                
+                # Clean the phrase
+                seq_start, seq_end = self.clean_seq_to_replace(new_seqs[i], activ_nlp)
+                                
                 # Get the phrase to replace
-                start_idx = activ_nlp[new_seqs[i][0]].idx
-                end_idx = activ_nlp[new_seqs[i][1] - 1].idx + len(activ_nlp[new_seqs[i][1] - 1].text)          
+                start_idx = activ_nlp[seq_start].idx
+                end_idx = activ_nlp[seq_end - 1].idx + len(activ_nlp[seq_end - 1].text)          
                 to_replace = activ[start_idx:end_idx]
                 
                 # If there are matches left
@@ -570,12 +592,17 @@ if __name__ == '__main__':
         # 'PASIV' : """stabileşte repertoriul cinematografic al filmelor din producţia naţională şi străine destinate exploatării în reţeaua cinematografică; asigură fondul de copii de filme şi distribuirea lor în reţeaua cinematografică în vederea realizării programelor de activitate ale acesteia, în condiţiile utilizării şi gospodăririi raţionale şi eficiente a mijloacelor economice pe care le are la dispoziţie. Distribuţia filmelor în premieră în Bucureşti se va face concomitent în cinematografele proprii ale regiei şi cele ale Centrului Naţional al Cinematografiei, iar în oraşele Constanţa şi Piteşti, alternativ;""",        
         # 'ACTIV' : """la art. 4 pct. 4.1. se elimină ultima frază: Distribuţia filmelor în premieră în Bucureşti se va face concomitent în cinematografele proprii ale regiei şi cele ale Centrului Naţional al Cinematografiei, iar în oraşele Constanţa şi Piteşti, alternativ;""",
         
-        'PASIV' : """Carne şi preparate din carne""",
-        'ACTIV' : """Cu aceeaşi dată se abrogă alin. 2 al art. 1, poziţia 1. "Bovine (tineret şi adulte)" din anexa nr. 1, precum şi anexa nr. 2 la Hotărârea Guvernului nr. 197 bis din 30 aprilie 1993, iar poziţia "Carne şi preparate din carne" din anexa la Hotărârea Guvernului nr. 206/1993 se înlocuieşte cu poziţia "Carne de porcine şi de pasăre. Preparate din carne".""",
+        # 'PASIV' : """Carne şi preparate din carne""",
+        # 'ACTIV' : """Cu aceeaşi dată se abrogă alin. 2 al art. 1, poziţia 1. "Bovine (tineret şi adulte)" din anexa nr. 1, precum şi anexa nr. 2 la Hotărârea Guvernului nr. 197 bis din 30 aprilie 1993, iar poziţia "Carne şi preparate din carne" din anexa la Hotărârea Guvernului nr. 206/1993 se înlocuieşte cu poziţia "Carne de porcine şi de pasăre. Preparate din carne".""",
         
         # 'PASIV' : """în rezervaţiile istorice şi de arhitectură, stabilite potrivit legii, sau în cazul lucrărilor care modifică monumentele de orice natură, solicitantul va obţine avizul Comisiei naţionale pentru protecţia monumentelor, ansamblurilor şi siturilor istorice sau al Departamentului pentru urbanism şi amenajarea teritoriului, în zonele de protecţie ale acestora;""",
         # 'ACTIV' : """La art. 7 lit. a) şi b), art. 27 alin. 3, art. 40 şi în anexa din Legea nr. 50/1991 se înlocuiesc denumirile: "Departamentul pentru urbanism şi amenajarea teritoriului" cu "Ministerul Lucrărilor Publice şi Amenajării Teritoriului"; "Ministerul Mediului" cu "Ministerul Apelor, Pădurilor şi Protecţiei Mediului" şi, respectiv, "Ministerul Comerţului şi Turismului" cu "Ministerul Turismului", iar la art. 38 se elimină "Departamentul pentru urbanism şi amenajarea teritoriului".""",
 
+        # 'PASIV' : """Dacă, în urma admiterii acţiunii, autoritatea administrativă este obligată să înlocuiască sau să modifice actul administrativ, să elibereze un certificat, o adeverinţă sau orice alt înscris, executarea hotărârii definitive se va face în termenul prevăzut în cuprinsul ei, iar în lipsa unui astfel de termen, în cel mult 30 de zile de la data rămînerii definitive a hotărîrii.""",
+        # 'ACTIV' : """La articolul 16 alineatul 1, noţiunea "hotărâre definitivă" se înlocuieşte cu "hotărâre irevocabilă".""",
+        
+        'PASIV' : """Institutul Politehnic "Gheorghe Asachi" Iaşi""",
+        'ACTIV' : """La litera A punctul 1 liniuţa a 19-a, denumirea Institutul Politehnic "Gheorghe Asachi" Iaşi se înlocuieşte cu denumirea Universitatea Tehnică "Gheorghe Asachi" Iaşi.""",
         
         'DEBUG': True
       }
