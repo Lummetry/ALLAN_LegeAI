@@ -9,7 +9,7 @@ _CONFIG = {
  }
 
 
-MIN_PASIV_WORDS = 20
+MIN_PASIV_WORDS = 2
 MIN_ACTIV_WORDS = 5
 
 STRIP_CHARS = " .,:;\"\'()[]{}"
@@ -32,7 +32,7 @@ DELTA_QUOTES = 6
 LINK_PATTERN = "~id_link=[^;]*;([^~]*)~"
 
 
-__VER__='0.1.0.0'
+__VER__='0.1.0.1'
 class GetMergeWorker(FlaskWorker):
     """
     Implementation of the worker for GET_MERGE endpoint
@@ -258,9 +258,13 @@ class GetMergeWorker(FlaskWorker):
                         
                 if new_start and new_end:
                     # If a quote was found
-                    new_seqs[i] = (new_start, new_end)
-                    
-            new_seqs = quote_seqs
+                    new_seqs[i] = (new_start, new_end)                    
+            
+            if len(quote_seqs) == 0:
+                # If no quote sequences were found, stick to the initial ones
+                pass
+            else:
+                new_seqs = quote_seqs   
                     
         if remove_common:
             # Remove some common words from the sequences
@@ -313,7 +317,8 @@ class GetMergeWorker(FlaskWorker):
                     # Find all other occurances of phrase to be replaced
                     for m in re.finditer(matches[i][4], pasiv.lower()):
                         # Add replace action
-                        replaces.append(('replace', m.start(), m.end(), to_replace))
+                        if m.start() != matches[i][0] and m.end() != matches[i][1]:
+                            replaces.append(('replace', m.start(), m.end(), to_replace))
                      
                 # TODO: Only does first replace
                 break
@@ -474,7 +479,7 @@ class GetMergeWorker(FlaskWorker):
             if matches:
     
                 # Get the interval in Activ until the next keyword
-                start_seq = pos
+                start_seq = pos + 1
                 if i < len(key_items) - 1:
                     end_seq = key_items[i + 1][0]
                 else:
@@ -565,11 +570,11 @@ if __name__ == '__main__':
         # 'PASIV' : """stabileşte repertoriul cinematografic al filmelor din producţia naţională şi străine destinate exploatării în reţeaua cinematografică; asigură fondul de copii de filme şi distribuirea lor în reţeaua cinematografică în vederea realizării programelor de activitate ale acesteia, în condiţiile utilizării şi gospodăririi raţionale şi eficiente a mijloacelor economice pe care le are la dispoziţie. Distribuţia filmelor în premieră în Bucureşti se va face concomitent în cinematografele proprii ale regiei şi cele ale Centrului Naţional al Cinematografiei, iar în oraşele Constanţa şi Piteşti, alternativ;""",        
         # 'ACTIV' : """la art. 4 pct. 4.1. se elimină ultima frază: Distribuţia filmelor în premieră în Bucureşti se va face concomitent în cinematografele proprii ale regiei şi cele ale Centrului Naţional al Cinematografiei, iar în oraşele Constanţa şi Piteşti, alternativ;""",
         
-        # 'PASIV' : """Carne şi preparate din carne""",
-        # 'ACTIV' : """Cu aceeaşi dată se abrogă alin. 2 al art. 1, poziţia 1. "Bovine (tineret şi adulte)" din anexa nr. 1, precum şi anexa nr. 2 la Hotărârea Guvernului nr. 197 bis din 30 aprilie 1993, iar poziţia "Carne şi preparate din carne" din anexa la Hotărârea Guvernului nr. 206/1993 se înlocuieşte cu poziţia "Carne de porcine şi de pasăre. Preparate din carne".""",
+        'PASIV' : """Carne şi preparate din carne""",
+        'ACTIV' : """Cu aceeaşi dată se abrogă alin. 2 al art. 1, poziţia 1. "Bovine (tineret şi adulte)" din anexa nr. 1, precum şi anexa nr. 2 la Hotărârea Guvernului nr. 197 bis din 30 aprilie 1993, iar poziţia "Carne şi preparate din carne" din anexa la Hotărârea Guvernului nr. 206/1993 se înlocuieşte cu poziţia "Carne de porcine şi de pasăre. Preparate din carne".""",
         
-        'PASIV' : """în rezervaţiile istorice şi de arhitectură, stabilite potrivit legii, sau în cazul lucrărilor care modifică monumentele de orice natură, solicitantul va obţine avizul Comisiei naţionale pentru protecţia monumentelor, ansamblurilor şi siturilor istorice sau al Departamentului pentru urbanism şi amenajarea teritoriului, în zonele de protecţie ale acestora;""",
-        'ACTIV' : """La art. 7 lit. a) şi b), art. 27 alin. 3, art. 40 şi în anexa din Legea nr. 50/1991 se înlocuiesc denumirile: "Departamentul pentru urbanism şi amenajarea teritoriului" cu "Ministerul Lucrărilor Publice şi Amenajării Teritoriului"; "Ministerul Mediului" cu "Ministerul Apelor, Pădurilor şi Protecţiei Mediului" şi, respectiv, "Ministerul Comerţului şi Turismului" cu "Ministerul Turismului", iar la art. 38 se elimină "Departamentul pentru urbanism şi amenajarea teritoriului".""",
+        # 'PASIV' : """în rezervaţiile istorice şi de arhitectură, stabilite potrivit legii, sau în cazul lucrărilor care modifică monumentele de orice natură, solicitantul va obţine avizul Comisiei naţionale pentru protecţia monumentelor, ansamblurilor şi siturilor istorice sau al Departamentului pentru urbanism şi amenajarea teritoriului, în zonele de protecţie ale acestora;""",
+        # 'ACTIV' : """La art. 7 lit. a) şi b), art. 27 alin. 3, art. 40 şi în anexa din Legea nr. 50/1991 se înlocuiesc denumirile: "Departamentul pentru urbanism şi amenajarea teritoriului" cu "Ministerul Lucrărilor Publice şi Amenajării Teritoriului"; "Ministerul Mediului" cu "Ministerul Apelor, Pădurilor şi Protecţiei Mediului" şi, respectiv, "Ministerul Comerţului şi Turismului" cu "Ministerul Turismului", iar la art. 38 se elimină "Departamentul pentru urbanism şi amenajarea teritoriului".""",
 
         
         'DEBUG': True
