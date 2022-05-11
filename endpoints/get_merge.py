@@ -32,7 +32,7 @@ DELTA_QUOTES = 6
 LINK_PATTERN = "~id_link=[^;]*;([^~]*)~"
 
 
-__VER__='0.0.1.1'
+__VER__='0.1.0.0'
 class GetMergeWorker(FlaskWorker):
     """
     Implementation of the worker for GET_MERGE endpoint
@@ -388,6 +388,61 @@ class GetMergeWorker(FlaskWorker):
                 
         return subject_matches
     
+    def update_actions(self, actions, current_action):
+        """ Update the rest of the action positions according to the current action. """
+        
+        start_current = current_action[1]
+        end_current = current_action[2]
+        
+        i = 0
+        while i < len(actions):
+            action = actions[i]    
+            start = action[1]
+            end = action[2]
+            
+            if current_action[0] == 'remove':
+                
+                if min(start, start_current) <= max(end, end_current):
+                    # If the two actions intersect, drop the second one
+                    del actions[i]
+                    continue
+                            
+                # Update the sequence positions if they occur after the removed sequence
+                seq_len = end_current - start_current
+                if start > end_current:
+                    start = start - seq_len
+                if end > end_current:
+                    end = end - seq_len
+                    
+                   
+                new_action = list(actions[i])
+                new_action[1] = start
+                new_action[2] = end
+                actions[i] = tuple(new_action)
+                    
+                i += 1
+                
+            elif current_action[0] == 'replace':
+                            
+                # Update the sequence positions if they occur after the removed sequence
+                delta_len = len(current_action[3]) - (end_current - start_current)
+                if start > end_current:
+                    start = start + delta_len
+                if end > end_current:
+                    end = end + delta_len
+                   
+                new_action = list(actions[i])
+                new_action[1] = start
+                new_action[2] = end
+                actions[i] = tuple(new_action)
+                    
+                i += 1
+                
+            else:
+                i += 1
+                
+        return actions
+    
     def apply_transformations(self, pasiv, activ,
                               pasiv_nlp, activ_nlp,
                               check_subj=False
@@ -440,13 +495,17 @@ class GetMergeWorker(FlaskWorker):
                     
         # Apply remaining actions
         transf = pasiv
-        for action in actions:
+        for i, action in enumerate(actions):
                 
             if action[0] == 'remove':
                 transf = transf[:action[1]] + transf[action[2]:]
                 
             elif action[0] == 'replace':
-                transf = transf[:action[1]] + action[3] + transf[action[2]:]            
+                transf = transf[:action[1]] + action[3] + transf[action[2]:]   
+                
+            # Update the rest of the actions
+            new_actions = self.update_actions(actions[i+1:], action)
+            actions[i+1:] = new_actions          
                 
         return transf
 
