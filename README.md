@@ -389,6 +389,27 @@ The single communication point is the gateway which can be accessed via `HTTP RE
             "results" : <List[Integer]> # list with input documents indexes that match with the query (the length of this list is controlled by the "TOP_N" parameter; if it is 0, then it sorts all documents in input)
         }
         ```
+
+     * #### 2.8\. get_merge - system functionality
+        Given 2 paragraphs (passive and active) the endpoint merges them, returning the transformed paragraph
+        
+        **Input parameters:**
+        ```python
+        {
+            "SIGNATURE" : "get_merge",
+            "PASIV" : <String: mandatory>, # passive paragraph
+            "ACTIV" : <String: mandatory>  # active paragraph
+        }
+        ```
+       
+        **Output:**
+        ```python
+        {
+            "call_id" : <Integer>, # counter - the number of requests processed so far
+            "signature" : <String>, # worker signature - which worker resolved the input,
+            "results" : <String> # the transformed paragraph
+        }
+        ```
         
         
 * ### 3\. Microservices configuration
