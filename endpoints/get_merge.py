@@ -18,6 +18,11 @@ REMOVE_KEYS = ['elimină', 'eliminat', 'eliminăm']
 
 REPLACE_KEYS = ['înlocuieşte', 'înlocuiesc', 'înlocuim']
 
+ADD_COMMA_KEYS = ['se adaugă virgulă', 'se adauga virgula', 'adaugăm virgulă', 'adaugam virgula']
+
+BEFORE_WORD = -1
+AFTER_WORD = 1
+
 COMMON_REPLACE_WORDS = ['denumirea', 'denumirile',
                         'termenul', 'termenii',
                         'pozitia', 'pozitiile', 'poziția', 'pozițiile',
@@ -25,14 +30,14 @@ COMMON_REPLACE_WORDS = ['denumirea', 'denumirile',
                         'cuvântul', 'cuvantul', 'cuvintele'
                        ]
 
-KEYWORDS = REMOVE_KEYS + REPLACE_KEYS
+KEYWORDS = REMOVE_KEYS + REPLACE_KEYS + ADD_COMMA_KEYS
 
 DELTA_QUOTES = 6
 
 LINK_PATTERN = "~id_link=[^;]*;([^~]*)~"
 
 
-__VER__='0.1.1.0'
+__VER__='0.2.0.0'
 class GetMergeWorker(FlaskWorker):
     """
     Implementation of the worker for GET_MERGE endpoint
@@ -238,8 +243,6 @@ class GetMergeWorker(FlaskWorker):
                 
         # Append last sequence
         new_seqs.append((start_seq, end_tok))
-        
-        print(activ_nlp[start_seq:end_tok])
              
         if check_quotes:
             # Isolate only sequences containing quotes
@@ -265,6 +268,7 @@ class GetMergeWorker(FlaskWorker):
                             if token2.is_quote:
                                 new_end = token2.i
                                 quote_seqs.append((new_start, new_end))
+                                print(activ_nlp[new_start: new_end])
                                 new_start = None
                                 break
                             else:
@@ -277,6 +281,8 @@ class GetMergeWorker(FlaskWorker):
                 if new_start and new_end:
                     # If a quote was found
                     new_seqs[i] = (new_start, new_end)                    
+            
+            
             
             if len(quote_seqs) == 0:
                 # If no quote sequences were found, stick to the initial ones
@@ -346,6 +352,92 @@ class GetMergeWorker(FlaskWorker):
                 break
                     
         return replaces
+    
+    def search_add_comma(self, pasiv, activ, activ_nlp,
+                         start_char, end_char,
+                         
+                    ):
+        """ Search for comma additions. """
+                
+        # Get the token span corresponding to the character span
+        start_tok, end_tok = self.char_to_token_idx(activ_nlp, start_char, end_char)
+        
+        # Find position keyword
+        comma_position = 0
+        for i in range(start_tok, -1, -1):
+            tok = activ_nlp[i]
+            
+            if tok.text in ['după', 'dupa']:
+                comma_position = AFTER_WORD
+                start_tok_pos = i + 1
+                break
+                
+            elif tok.text in ['înainte', 'inainte', 'înaintea']:
+                comma_position = BEFORE_WORD
+                start_tok_pos = i + 1
+                if activ_nlp[i + 1].text == 'de':
+                    start_tok_pos += 1
+                break
+                
+        if comma_position:
+            
+            # First look for a sequence in quotes
+            start_quote, end_quote = None, None
+            for i, tok in enumerate(activ_nlp[start_tok_pos : start_tok]):
+                if tok.is_quote:
+                    if start_quote:
+                        end_quote = start_tok_pos + i
+                        # End of quote
+                        break
+                    else:
+                        # Start of quote
+                        start_quote = start_tok_pos + i + 1
+                     
+            if start_quote and end_quote:
+                # If a quote was found
+                quote_seq = activ_nlp[start_quote : end_quote].text
+                
+                return ('comma', comma_position, comma_position, quote_seq)
+            
+            else:
+                # No quote found, take entire sequence
+                start_seq = start_tok_pos + 1
+                end_seq = start_tok
+                
+                # Remove some common words from the start
+                if activ_nlp[start_seq].text in COMMON_REPLACE_WORDS:
+                    start_seq += 1
+                    
+                quote_seq = activ_nlp[start_seq : end_seq].text
+                
+                return ('comma', comma_position, comma_position, quote_seq)       
+            
+        return None
+    
+    
+    def add_comma(self, pasiv, action):
+        """ Apply an Add Comma action to the Pasiv text. """
+        
+        seq = action[3]
+        comma_pos = action[1]
+        
+        new_pasiv = pasiv    
+        text = pasiv
+        while True:
+            pos = text.find(seq)    
+            if pos == -1:
+                break
+                
+            if comma_pos == AFTER_WORD:
+                new_pasiv = new_pasiv[:pos + len(seq)] + ',' + new_pasiv[pos + len(seq) :]
+                
+            elif comma_pos == BEFORE_WORD:
+                new_pasiv = new_pasiv[:pos - 1] + ',' + new_pasiv[pos-1:]
+                
+            
+            text = pasiv[pos + 1:]
+        
+        return new_pasiv
     
     def char_to_token_idx(self, doc, start_char, end_char):
         """ Find the token indexes corresponding to a sequence expressed in character indexes. """
@@ -464,6 +556,21 @@ class GetMergeWorker(FlaskWorker):
                 actions[i] = tuple(new_action)
                     
                 i += 1
+            
+            elif current_action[0] == 'comma':
+                            
+                # Update the sequence positions if they occur after the removed sequence
+                if start > end_current:
+                    start = start + 1
+                if end > end_current:
+                    end = end + 1
+                   
+                new_action = list(actions[i])
+                new_action[1] = start
+                new_action[2] = end
+                actions[i] = tuple(new_action)
+                    
+                i += 1
                 
             else:
                 i += 1
@@ -516,6 +623,10 @@ class GetMergeWorker(FlaskWorker):
                 elif key in REPLACE_KEYS:
                     actions.extend(self.search_replaces(pasiv, activ, activ_nlp, start_seq, end_seq, matches, 
                                                         check_quotes=True, remove_common=True))
+                
+                # ADD COMMA
+                elif key in ADD_COMMA_KEYS:
+                    actions.append(self.search_add_comma(pasiv, activ, activ_nlp, start_seq - 1, end_seq))
                     
         if self.debug:
             print(actions)
@@ -528,7 +639,10 @@ class GetMergeWorker(FlaskWorker):
                 transf = transf[:action[1]] + transf[action[2]:]
                 
             elif action[0] == 'replace':
-                transf = transf[:action[1]] + action[3] + transf[action[2]:]   
+                transf = transf[:action[1]] + action[3] + transf[action[2]:] 
+            
+            elif action[0] == 'comma':
+                transf = self.add_comma(transf, action)  
                 
             # Update the rest of the actions
             new_actions = self.update_actions(actions[i+1:], action)
@@ -601,9 +715,18 @@ if __name__ == '__main__':
         # 'PASIV' : """Dacă, în urma admiterii acţiunii, autoritatea administrativă este obligată să înlocuiască sau să modifice actul administrativ, să elibereze un certificat, o adeverinţă sau orice alt înscris, executarea hotărârii definitive se va face în termenul prevăzut în cuprinsul ei, iar în lipsa unui astfel de termen, în cel mult 30 de zile de la data rămînerii definitive a hotărîrii.""",
         # 'ACTIV' : """La articolul 16 alineatul 1, noţiunea "hotărâre definitivă" se înlocuieşte cu "hotărâre irevocabilă".""",
         
-        'PASIV' : """Institutul Politehnic "Gheorghe Asachi" Iaşi""",
-        'ACTIV' : """La litera A punctul 1 liniuţa a 19-a, denumirea Institutul Politehnic "Gheorghe Asachi" Iaşi se înlocuieşte cu denumirea Universitatea Tehnică "Gheorghe Asachi" Iaşi.""",
+        # 'PASIV' : """Pentru organizarea de consfătuiri, analize anuale, întruniri cu caracter metodic, schimburi de experienţă, cursuri de perfecţionare, conferinţe de presă şi alte acţiuni similare, Ministerul Tineretului şi Sportului Departamentul sportului -, Comitetul Olimpic Român, federaţiile sau unităţile sportive, precum şi oficiile judeţene pentru tineret şi sport pot suporta cheltuieli de participare ale invitaţilor (transport, cazare şi scoateri din producţie, după caz), şi cheltuieli de întreţinere la nivelul diurnei legal stabilite, în funcţie de condiţiile în care se organizează activitatea respectivă, precum şi cheltuieli de organizare (chirie sală, amplificare, rechizite, aparatură video, casete video, transport materiale).""",
+        # 'ACTIV' : """Formulările "Departamentul sportului" şi "oficiile judeţene pentru tineret şi sport", cuprinse în ~normele~ aprobate prin Hotărârea Guvernului ~id_link=653732;nr. 280/1994~, se înlocuiesc cu "Ministerul Tineretului şi Sportului", respectiv "direcţiile judeţene pentru tineret şi sport".""",
         
+        # 'PASIV' : """Împrumutatul va proceda astfel: (i) va înainta Băncii, nu mai tîrziu de 31 decembrie 1992, pentru analiză şi comentariu, un plan de acţiune elaborat pe baza recomandărilor din studiul privind costul şi preţurile energiei la care se face referire în partea B (4), (b), (i) a proiectului, cu scopul, între altele, de a reconsidera structura preţurilor sectorului său energetic; şi (ii) imediat după aceea va aduce la îndeplinire planul respectiv cu atenţia şi eficacitatea cuvenite, luînd în considerare şi comentariile Băncii pe baza acestuia.""",
+        # 'ACTIV' : """în cadrul paragrafului (a) se înlocuieşte formularea: "studiul privind costul şi preţurile energiei la care se face referire în partea B (4), (b), (i) a proiectului", cu "un studiu privind costul şi preţurile energiei, bazat pe termeni de referinţă satisfăcători pentru Bancă";""",
+       
+        # 'PASIV' : """Se autorizează Ministerul Finanţelor să emită garanţii pentru credite "revolving", în valoare totală de 65 miliarde lei, pe care băncile comerciale le vor acorda regiilor autonome de interes local şi agenţilor economici sau serviciilor publice care furnizează energie termică la populaţie, în scopul constituirii stocurilor de păcură şi combustibil lichid uşor, prevăzute în Programul energetic pentru perioada 1 aprilie 1996 - 31 martie 1997, aprobat de Guvern.""",
+        # 'ACTIV' : """În cuprinsul articolului 1, sintagma "...în valoare totală de 65 miliarde lei..." se înlocuieşte cu sintagma "...în valoare totală de 200 miliarde lei...".""",
+       
+        'PASIV' : """Pentru creanţele bugetare ce urmează a fi stabilite de către instanţele judecătoreşti, organele prevăzute la art. 24, o dată cu introducerea acţiunii împotriva debitorului, precum şi persoanelor care, potrivit legii, răspund solidar cu acesta, pot cere instanţei să dispună, după caz, înfiinţarea popririi asiguratorii asupra veniturilor, a sechestrului asigurator asupra bunurilor mobile, a ipotecii asiguratoare asupra bunurilor imobile ce aparţin celor chemaţi în judecată, precum şi orice altă măsură de indisponibilizare a veniturilor şi bunurilor urmăribile, prevăzută de lege, pentru asigurarea realizării creanţelor bugetare.""",
+        'ACTIV' : """la art. 16 alin. 1, dupa cuvântul imobile se adaugă virgulă;""",
+      
         'DEBUG': True
       }
           
