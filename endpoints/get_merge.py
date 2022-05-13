@@ -23,6 +23,8 @@ ADD_COMMA_KEYS = ['se adaugă virgulă', 'se adauga virgula', 'adaugăm virgulă
 BEFORE_WORD = -1
 AFTER_WORD = 1
 
+DEVINE_KEYS = ['devine', 'va deveni']
+
 COMMON_REPLACE_WORDS = ['denumirea', 'denumirile',
                         'termenul', 'termenii',
                         'pozitia', 'pozitiile', 'poziția', 'pozițiile',
@@ -30,14 +32,14 @@ COMMON_REPLACE_WORDS = ['denumirea', 'denumirile',
                         'cuvântul', 'cuvantul', 'cuvintele'
                        ]
 
-KEYWORDS = REMOVE_KEYS + REPLACE_KEYS + ADD_COMMA_KEYS
+KEYWORDS = REMOVE_KEYS + REPLACE_KEYS + ADD_COMMA_KEYS + DEVINE_KEYS
 
 DELTA_QUOTES = 6
 
 LINK_PATTERN = "~id_link=[^;]*;([^~]*)~"
 
 
-__VER__='0.2.0.0'
+__VER__='0.3.0.0'
 class GetMergeWorker(FlaskWorker):
     """
     Implementation of the worker for GET_MERGE endpoint
@@ -204,7 +206,6 @@ class GetMergeWorker(FlaskWorker):
         while activ_nlp[start].is_punct:
             start += 1
         while activ_nlp[end - 1].is_punct:
-            print('da')
             end -= 1
         
         # Remove 'cu' from start
@@ -268,7 +269,6 @@ class GetMergeWorker(FlaskWorker):
                             if token2.is_quote:
                                 new_end = token2.i
                                 quote_seqs.append((new_start, new_end))
-                                print(activ_nlp[new_start: new_end])
                                 new_start = None
                                 break
                             else:
@@ -412,8 +412,7 @@ class GetMergeWorker(FlaskWorker):
                 
                 return ('comma', comma_position, comma_position, quote_seq)       
             
-        return None
-    
+        return None    
     
     def add_comma(self, pasiv, action):
         """ Apply an Add Comma action to the Pasiv text. """
@@ -438,6 +437,54 @@ class GetMergeWorker(FlaskWorker):
             text = pasiv[pos + 1:]
         
         return new_pasiv
+    
+    def is_date(self, ent):
+        """ Check if an entity represents a date. """
+        
+        if ent.label_ == 'DATETIME':
+            digit_count = len([c for c in ent.text if c.isdigit()])
+            if digit_count >= 4 and digit_count <= 8:
+                return True
+            
+        return False
+    
+    def search_devine(self, pasiv, activ, pasiv_nlp, activ_nlp
+                    ):
+        """ Search for replaces. """
+        
+        date_ents = []
+        money_ents = []
+        for ent in activ_nlp.ents:
+            if self.is_date(ent):
+                date_ents.append(ent)
+            elif ent.label_ == 'MONEY':
+                money_ents.append(ent)
+            
+        # Handle only the basic case, just one date or money entity
+        activ_ent = None
+        if len(date_ents) == 1 and len(money_ents) == 0:
+            activ_ent = date_ents[0]
+            ent_type = 'DATETIME'
+        
+        elif len(date_ents) == 0 and len(money_ents) == 1:
+            activ_ent = money_ents[0]
+            ent_type = 'MONEY'
+            
+        if activ_ent is None:
+            return None
+            
+        # Search for same entity in Pasiv
+        pasiv_ents = []
+        for ent in pasiv_nlp.ents:
+            if ent_type == ent.label_ and ((ent_type == 'DATETIME' and self.is_date(ent)) or ent_type == 'MONEY'):
+                pasiv_ents.append(ent)
+                
+        # If only one similar entity was found
+        if len(pasiv_ents) == 1:
+            pasiv_ent = pasiv_ents[0]        
+            return ('devine', pasiv_ent.start_char, pasiv_ent.end_char, activ_ent.text) 
+        
+        return None
     
     def char_to_token_idx(self, doc, start_char, end_char):
         """ Find the token indexes corresponding to a sequence expressed in character indexes. """
@@ -541,7 +588,7 @@ class GetMergeWorker(FlaskWorker):
                     
                 i += 1
                 
-            elif current_action[0] == 'replace':
+            elif current_action[0] == 'replace' or current_action[0] == 'devine':
                             
                 # Update the sequence positions if they occur after the removed sequence
                 delta_len = len(current_action[3]) - (end_current - start_current)
@@ -626,7 +673,15 @@ class GetMergeWorker(FlaskWorker):
                 
                 # ADD COMMA
                 elif key in ADD_COMMA_KEYS:
-                    actions.append(self.search_add_comma(pasiv, activ, activ_nlp, start_seq - 1, end_seq))
+                    action = self.search_add_comma(pasiv, activ, activ_nlp, start_seq - 1, end_seq)
+                    if action:
+                        actions.append(action)
+                
+                # DEVINE
+                elif key in DEVINE_KEYS:
+                    action = self.search_devine(pasiv, activ, pasiv_nlp, activ_nlp)
+                    if action:
+                        actions.append(action)  
                     
         if self.debug:
             print(actions)
@@ -643,6 +698,9 @@ class GetMergeWorker(FlaskWorker):
             
             elif action[0] == 'comma':
                 transf = self.add_comma(transf, action)  
+            
+            elif action[0] == 'devine':
+                transf = transf[:action[1]] + action[3] + transf[action[2]:]  
                 
             # Update the rest of the actions
             new_actions = self.update_actions(actions[i+1:], action)
@@ -724,9 +782,15 @@ if __name__ == '__main__':
         # 'PASIV' : """Se autorizează Ministerul Finanţelor să emită garanţii pentru credite "revolving", în valoare totală de 65 miliarde lei, pe care băncile comerciale le vor acorda regiilor autonome de interes local şi agenţilor economici sau serviciilor publice care furnizează energie termică la populaţie, în scopul constituirii stocurilor de păcură şi combustibil lichid uşor, prevăzute în Programul energetic pentru perioada 1 aprilie 1996 - 31 martie 1997, aprobat de Guvern.""",
         # 'ACTIV' : """În cuprinsul articolului 1, sintagma "...în valoare totală de 65 miliarde lei..." se înlocuieşte cu sintagma "...în valoare totală de 200 miliarde lei...".""",
        
-        'PASIV' : """Pentru creanţele bugetare ce urmează a fi stabilite de către instanţele judecătoreşti, organele prevăzute la art. 24, o dată cu introducerea acţiunii împotriva debitorului, precum şi persoanelor care, potrivit legii, răspund solidar cu acesta, pot cere instanţei să dispună, după caz, înfiinţarea popririi asiguratorii asupra veniturilor, a sechestrului asigurator asupra bunurilor mobile, a ipotecii asiguratoare asupra bunurilor imobile ce aparţin celor chemaţi în judecată, precum şi orice altă măsură de indisponibilizare a veniturilor şi bunurilor urmăribile, prevăzută de lege, pentru asigurarea realizării creanţelor bugetare.""",
-        'ACTIV' : """la art. 16 alin. 1, dupa cuvântul imobile se adaugă virgulă;""",
+        # 'PASIV' : """Pentru creanţele bugetare ce urmează a fi stabilite de către instanţele judecătoreşti, organele prevăzute la art. 24, o dată cu introducerea acţiunii împotriva debitorului, precum şi persoanelor care, potrivit legii, răspund solidar cu acesta, pot cere instanţei să dispună, după caz, înfiinţarea popririi asiguratorii asupra veniturilor, a sechestrului asigurator asupra bunurilor mobile, a ipotecii asiguratoare asupra bunurilor imobile ce aparţin celor chemaţi în judecată, precum şi orice altă măsură de indisponibilizare a veniturilor şi bunurilor urmăribile, prevăzută de lege, pentru asigurarea realizării creanţelor bugetare.""",
+        # 'ACTIV' : """la art. 16 alin. 1, dupa cuvântul imobile se adaugă virgulă;""",
       
+        # 'PASIV' : """Obligaţiunile de tezaur exprimate în dolari S.U.A. cu dobândă sunt scadente la data de 13 august 1997.""",
+        # 'ACTIV' : """La punctul 3 - data scadenţei devine 15 august 1997.""",
+      
+        'PASIV' : """Veniturile nete lunare prevăzute la alin. (1) şi (2) se majorează cu 5.000 lei pentru fiecare membru din familie care face dovada că lucrează în baza unui contract individual de muncă, a unei convenţii civile sau că realizează venituri din activităţi pe cont propriu.""",
+        'ACTIV' : """Suma prevăzută la art. 3 alin. (3), la art. 4 alin. (2) şi la art. 12 alin. (2) din Legea nr. 67/1995 devine 5.300 lei.""",
+        
         'DEBUG': True
       }
           
