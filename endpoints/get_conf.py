@@ -46,6 +46,8 @@ PERSON_PROPN = 2
 PERSON_TWO_WORDS = 3
 MAX_LEV_DIST = 3
 SAME_NAME_THRESHOLD = 70
+CHECK_SON_OF_INTERVAL = 40
+SON_OF_PHRASES = ["fiul lui", "fiica lui"]
 
 # ADDRESS
 MIN_LOC_LENGTH = 10
@@ -138,7 +140,7 @@ INCLUDED_2IN1 = 3
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='0.5.0.0'
+__VER__='0.5.1.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -259,41 +261,59 @@ class GetConfWorker(FlaskWorker):
             
         return next_code
     
-    def unite_same_names(self):
-        """ Search the name list for names that refer to the same entitiy and unite them. """
+    def check_son_of_phrases(self, start, text):
+        """ Check if phrases related to the Son Of construct appear in the prefix. """
         
+        prefix = text[max(0, start - CHECK_SON_OF_INTERVAL) : start].lower()
+        
+        for phrase in SON_OF_PHRASES:
+            if phrase.lower() in prefix:
+                return True
+            
+        return False
+    
+    def unite_same_names(self, text):
+        """ Search the name list for names that refer to the same entitiy and unite them. """
+    
         different_ents = list(range(len(self.name_list)))
         
-        for i, name1 in enumerate(self.name_list):
+        for i in range(len(self.name_list)):
+            start1 = self.name_list[i][0]
+            name1 = self.name_list[i][1]
+            
             for j in range(i+1, len(self.name_list)):
-                name2 = self.name_list[j]
-                
+                start2 = self.name_list[j][0]
+                name2 = self.name_list[j][1]
+                            
                 # Get the similarity between the names
                 ratio = fuzz.partial_token_set_ratio(name1, name2)            
                 
                 if ratio > SAME_NAME_THRESHOLD:
-                    # Get the two corresponding entities
-                    ent1 = different_ents[i]
-                    ent2 = different_ents[j]
                     
-                    # The common new entity will be the minimum between them
-                    min_ent = min(ent1, ent2)
-                    
-                    # Set all occurances of the two entities to the minimum entity between them
-                    for k in range(len(different_ents)):
-                        if different_ents[k] == ent1 or different_ents[k] == ent2:
-                            different_ents[k] = min_ent
+                    if not self.check_son_of_phrases(start1, text) and not self.check_son_of_phrases(start2, text):
+    
+                        # Get the two corresponding entities
+                        ent1 = different_ents[i]
+                        ent2 = different_ents[j]
+    
+                        # The common new entity will be the minimum between them
+                        min_ent = min(ent1, ent2)
+    
+                        # Set all occurances of the two entities to the minimum entity between them
+                        for k in range(len(different_ents)):
+                            if different_ents[k] == ent1 or different_ents[k] == ent2:
+                                different_ents[k] = min_ent
         
         return different_ents
     
-    def set_name_codes(self):
+    def set_name_codes(self, text):
         """ Form the dictionary of names and codes. """
         
         # Sort the names according to their first position in the text
         self.name_list.sort(key=lambda tup: tup[0])
     
         # Unite names that refer to the same entity
-        different_ents = self.unite_same_names() 
+        different_ents = self.unite_same_names(text) 
         
         codes = [''] * len(different_ents)        
         current_code = 'A'
@@ -1343,7 +1363,8 @@ class GetConfWorker(FlaskWorker):
                 hidden_doc = hidden_doc[:start] + 'x' + hidden_doc[end:]
                 
         # Set the codes for the names
-        name_code_dict = self.set_name_codes()  
+        name_code_dict = self.set_name_codes(text)  
+        print(text)
             
         if self.debug:
             print(name_code_dict)
