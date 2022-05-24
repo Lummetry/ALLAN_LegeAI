@@ -11,6 +11,7 @@ from string import punctuation
 from utils.utils import simple_levenshtein_distance
 import unidecode
 import json
+from fuzzywuzzy import fuzz
 
 
 _CONFIG = {
@@ -44,6 +45,7 @@ PERSON_UPPERCASE = 1
 PERSON_PROPN = 2
 PERSON_TWO_WORDS = 3
 MAX_LEV_DIST = 3
+SAME_NAME_THRESHOLD = 70
 
 # ADDRESS
 MIN_LOC_LENGTH = 10
@@ -136,7 +138,7 @@ INCLUDED_2IN1 = 3
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='0.4.3.1'
+__VER__='0.5.0.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -257,20 +259,60 @@ class GetConfWorker(FlaskWorker):
             
         return next_code
     
+    def unite_same_names(self):
+        """ Search the name list for names that refer to the same entitiy and unite them. """
+        
+        different_ents = list(range(len(self.name_list)))
+        
+        for i, name1 in enumerate(self.name_list):
+            for j in range(i+1, len(self.name_list)):
+                name2 = self.name_list[j]
+                
+                # Get the similarity between the names
+                ratio = fuzz.partial_token_set_ratio(name1, name2)            
+                
+                if ratio > SAME_NAME_THRESHOLD:
+                    # Get the two corresponding entities
+                    ent1 = different_ents[i]
+                    ent2 = different_ents[j]
+                    
+                    # The common new entity will be the minimum between them
+                    min_ent = min(ent1, ent2)
+                    
+                    # Set all occurances of the two entities to the minimum entity between them
+                    for k in range(len(different_ents)):
+                        if different_ents[k] == ent1 or different_ents[k] == ent2:
+                            different_ents[k] = min_ent
+        
+        return different_ents
+    
     def set_name_codes(self):
         """ Form the dictionary of names and codes. """
         
         # Sort the names according to their first position in the text
         self.name_list.sort(key=lambda tup: tup[0])
+    
+        # Unite names that refer to the same entity
+        different_ents = self.unite_same_names() 
         
+        codes = [''] * len(different_ents)        
         current_code = 'A'
+    
+        # Get a code for each of the entities
+        for i, ent in enumerate(different_ents):
+            # If no code was alreay set
+            if codes[i] == '':
+                
+                # Set the current code for all occurances of the entity
+                for j in range(i, len(different_ents)):
+                    if different_ents[j] == ent:
+                        codes[j] = current_code + '.'
+                        
+                # Get the next code
+                current_code = self.next_name_code(current_code)
         
-        name_code_dict = {}
-        for (pos, name) in self.name_list:
-            # Add the name to the dictionary
-            name_code_dict[name] = current_code + '.'
-            # Get the next code
-            current_code = self.next_name_code(current_code)
+        # Set the name - code dictionary
+        name_code_dict = {self.name_list[i][1] : codes[i] for i in range(len(self.name_list))}
         
         return name_code_dict
         
