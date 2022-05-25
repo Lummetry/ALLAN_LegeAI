@@ -48,6 +48,7 @@ MAX_LEV_DIST = 3
 SAME_NAME_THRESHOLD = 70
 CHECK_SON_OF_INTERVAL = 40
 SON_OF_PHRASES = ["fiul lui", "fiica lui"]
+NEE_PHRASES = ['fostă', 'fosta', 'fost', 'nascuta', 'nascut', 'născut']
 
 # ADDRESS
 MIN_LOC_LENGTH = 10
@@ -140,7 +141,7 @@ INCLUDED_2IN1 = 3
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='0.5.1.0'
+__VER__='0.5.2.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -446,7 +447,10 @@ class GetConfWorker(FlaskWorker):
             # Check words to the right    
             new_end = end
             while new_end < len(doc):
-                if doc[new_end].text[0].isupper() or doc[new_end].text in ['(', ')', '-']:
+                if (doc[new_end].text[0].isupper() or 
+                    doc[new_end].text in ['(', ')', '-'] or 
+                    # If next word is a Nee phrase and the following word is a potential name (uppercase first letter)
+                    (new_end + 1 < len(doc) and doc[new_end].text in NEE_PHRASES and doc[new_end + 1].text[0].isupper())):
                     # Add capitalized words to the right
                     new_end += 1
                 else:
@@ -456,11 +460,13 @@ class GetConfWorker(FlaskWorker):
             new_start = start
             while new_start > 0:
                 if (doc[new_start - 1].text[0].isupper() or 
-                    doc[new_start - 1].text in ['(', ')', '-']) and not doc[new_start - 1].is_sent_start:
+                    doc[new_start - 1].text in ['(', ')', '-'] or
+                    doc[new_start - 1].text in NEE_PHRASES) and not doc[new_start - 1].is_sent_start:
                     # Add capitalized words to the left, except if they are at the start of a sentence 
                     new_start -= 1               
                 else:
                     break
+                
            
             # Check and cleand the new match
             new_start, new_end = self.clean_match(doc, new_start, new_end)
@@ -479,11 +485,12 @@ class GetConfWorker(FlaskWorker):
             if is_match:
                 start_idx = doc[new_start].idx
                 end_idx = doc[new_end - 1].idx + len(doc[new_end - 1])
+                print(text[start_idx:end_idx])
                 
-                # Ignore leading and trailing punctuation
-                while text[start_idx] in punctuation:
+                # Ignore leading and trailing punctuation (apart for paranthesis)
+                while text[start_idx] in punctuation.replace('()', ''):
                     start_idx += 1
-                while text[end_idx - 1] in punctuation:
+                while text[end_idx - 1] in punctuation.replace('()', ''):
                     end_idx -= 1
                     
                 # Check if similar to previous match
@@ -1364,7 +1371,6 @@ class GetConfWorker(FlaskWorker):
                 
         # Set the codes for the names
         name_code_dict = self.set_name_codes(text)  
-        print(text)
             
         if self.debug:
             print(name_code_dict)
@@ -1452,7 +1458,7 @@ if __name__ == '__main__':
     
     # DE LA CLIENT
     
-    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
     
@@ -1500,6 +1506,9 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
         
+    'DOCUMENT' : """În privinţa infracţiunii de instigare la abuz în serviciu în relaţia cu Bunciu Mihaela nascuta la 19.03.2004, a solicitat în principal achitarea inculpatei Schutz Maria în temeiul art.16 lit.a) Cod procedură penală - fapta nu există, iar în subsidiar, achitarea în temeiul dispoziţiilor art.16 lit.c) Cod procedură penală - nu există probe că inculpata a săvârşit faptele ce i se impută, cu consecinţa respingerii acţiunii civile formulată în cauză faţă de inculpata Schutz Maria.
+Prin decizia penală nr.1428 din data de 25 octombrie 2018 pronunţată de Curtea de Apel Craiova – Secţia penală şi pentru cauze cu minori, în majoritate, s-a respins apelul Parchetului de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia Naţională Anticorupţie – Serviciul Teritorial Craiova, formulat împotriva sentinţei penale nr. 637 din data de 15.11.2016, pronunţată de Tribunalul Dolj, în dosarul nr.11810/63/2014, ca nefondat.
+S-au admis apelurile declarate de inculpaţii Schutz Maria, Bunciu (fostă Pîrvănuşi) Mihaela şi Cercel Dan Alexandru, s-a desfiinţat în parte sentinţa atacată, astfel:"""
       }
   
   res = eng.execute(inputs=test, counter=1)
