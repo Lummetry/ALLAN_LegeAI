@@ -141,7 +141,7 @@ INCLUDED_2IN1 = 3
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='0.5.2.0'
+__VER__='0.5.2.1'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -338,14 +338,18 @@ class GetConfWorker(FlaskWorker):
         return name_code_dict
         
     
-    def find_name(self, name):
+    def find_name(self, name, match='levenshtein'):
         """ Find a name in the list of names. """
         
         low_name = name.lower()
         
         for i, (pos, name) in enumerate(self.name_list):
-            lev_dist = simple_levenshtein_distance(name.lower(), low_name, 
+            if match == 'levenshtein':
+                lev_dist = simple_levenshtein_distance(name.lower(), low_name, 
                                                    normalize=False)
+            elif match == 'perfect':
+                lev_dist = MAX_LEV_DIST
+                
             if name.lower() == low_name or lev_dist < MAX_LEV_DIST:
                 return i
             
@@ -515,7 +519,7 @@ class GetConfWorker(FlaskWorker):
             if self.debug:
                 print('Nume:', person)
                 
-            if self.find_name(person) == -1:
+            if self.find_name(person, match='perfect') == -1:
                 self.name_list.append((start, person))
                 
         return match_dict      
@@ -1506,9 +1510,7 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
         
-    'DOCUMENT' : """În privinţa infracţiunii de instigare la abuz în serviciu în relaţia cu Bunciu Mihaela nascuta la 19.03.2004, a solicitat în principal achitarea inculpatei Schutz Maria în temeiul art.16 lit.a) Cod procedură penală - fapta nu există, iar în subsidiar, achitarea în temeiul dispoziţiilor art.16 lit.c) Cod procedură penală - nu există probe că inculpata a săvârşit faptele ce i se impută, cu consecinţa respingerii acţiunii civile formulată în cauză faţă de inculpata Schutz Maria.
-Prin decizia penală nr.1428 din data de 25 octombrie 2018 pronunţată de Curtea de Apel Craiova – Secţia penală şi pentru cauze cu minori, în majoritate, s-a respins apelul Parchetului de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia Naţională Anticorupţie – Serviciul Teritorial Craiova, formulat împotriva sentinţei penale nr. 637 din data de 15.11.2016, pronunţată de Tribunalul Dolj, în dosarul nr.11810/63/2014, ca nefondat.
-S-au admis apelurile declarate de inculpaţii Schutz Maria, Bunciu (fostă Pîrvănuşi) Mihaela şi Cercel Dan Alexandru, s-a desfiinţat în parte sentinţa atacată, astfel:"""
+    'DOCUMENT' : """Silviu Mihai si Silviu Mihail au facut ceva ce nu poate fi descris in cuvinte"""
       }
   
   res = eng.execute(inputs=test, counter=1)
