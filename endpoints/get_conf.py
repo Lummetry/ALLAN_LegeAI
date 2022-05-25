@@ -141,7 +141,7 @@ INCLUDED_2IN1 = 3
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='0.5.2.1'
+__VER__='0.5.2.2'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -327,7 +327,7 @@ class GetConfWorker(FlaskWorker):
                 # Set the current code for all occurances of the entity
                 for j in range(i, len(different_ents)):
                     if different_ents[j] == ent:
-                        codes[j] = current_code + '.'
+                        codes[j] = current_code
                         
                 # Get the next code
                 current_code = self.next_name_code(current_code)
@@ -1390,6 +1390,9 @@ class GetConfWorker(FlaskWorker):
                 
                 if name_match:
                     start, end = name_match.span()
+                    if hidden_doc[end] != '.':
+                        # Add dot after the code if it's not before a dot
+                        code += '.'
                     hidden_doc = hidden_doc[:start] + code + hidden_doc[end:]
                 else:
                     break
@@ -1510,7 +1513,8 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
         
-    'DOCUMENT' : """Silviu Mihai si Silviu Mihail au facut ceva ce nu poate fi descris in cuvinte"""
+    'DOCUMENT' : """Vasile Ion l-a lovit cu masina pe Silviu Mihai.
+Silviu Mihail l-a dat in judecata pe Vasile Ioan."""
       }
   
   res = eng.execute(inputs=test, counter=1)
