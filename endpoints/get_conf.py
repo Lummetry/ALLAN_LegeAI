@@ -45,7 +45,7 @@ PERSON_UPPERCASE = 1
 PERSON_PROPN = 2
 PERSON_TWO_WORDS = 3
 MAX_LEV_DIST = 3
-SAME_NAME_THRESHOLD = 70
+SAME_NAME_THRESHOLD = 75
 CHECK_SON_OF_INTERVAL = 40
 SON_OF_PHRASES = ["fiul lui", "fiica lui"]
 NEE_PHRASES = ['fostă', 'fosta', 'fost', 'nascuta', 'nascut', 'născut']
@@ -147,7 +147,7 @@ PAIR_PUNCTUATION = r'\(.+\)|\[.+\]|\{.+\}|\".+\"|\'.+\''
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='0.6.0.0'
+__VER__='0.6.0.1'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -293,7 +293,7 @@ class GetConfWorker(FlaskWorker):
                 name2 = self.name_list[j][1]
                             
                 # Get the similarity between the names
-                ratio = fuzz.partial_token_set_ratio(name1, name2)            
+                ratio = fuzz.token_set_ratio(name1, name2)            
                 
                 if ratio > SAME_NAME_THRESHOLD:
                     
@@ -315,6 +315,7 @@ class GetConfWorker(FlaskWorker):
     
     def set_name_codes(self, text):
         """ Form the dictionary of names and codes. """
+        print(self.name_list)
         
         # Sort the names according to their first position in the text
         self.name_list.sort(key=lambda tup: tup[0])
