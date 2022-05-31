@@ -24,10 +24,12 @@ _CONFIG = {
 INSTITUTION_LIST_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\nomenclator institutii publice.txt'
 ORGANIZATION_LIST_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\organizatii.txt'
 CONF_REGEX_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\conf_regex.json'
+PREFIX_INSTITUTION_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\prefix_institutii.txt'
 # Prod
 INSTITUTION_LIST_PROD = 'C:\\allan_data\\2022.01.26\\nomenclator institutii publice.txt'
 ORGANIZATION_LIST_PROD = 'C:\\allan_data\\2022.01.26\\organizatii.txt'
 CONF_REGEX_PROD = 'C:\\allan_data\\2022.03.07\\conf_regex.json'
+PREFIX_INSTITUTION_PROD = 'C:\\allan_data\\2022.01.26\\prefix_institutii.txt'
 
 
 # CNP 
@@ -49,6 +51,9 @@ SAME_NAME_THRESHOLD = 75
 CHECK_SON_OF_INTERVAL = 40
 SON_OF_PHRASES = ["fiul lui", "fiica lui"]
 NEE_PHRASES = ['fostă', 'fosta', 'fost', 'nascuta', 'nascut', 'născut']
+
+# PUBLIC INSTITUTIONS
+MIN_PREFIX_FUZZY = 90
 
 # ADDRESS
 MIN_LOC_LENGTH = 10
@@ -147,7 +152,7 @@ PAIR_PUNCTUATION = r'\(.+\)|\[.+\]|\{.+\}|\".+\"|\'.+\''
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='0.6.0.1'
+__VER__='0.7.0.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -315,7 +320,6 @@ class GetConfWorker(FlaskWorker):
     
     def set_name_codes(self, text):
         """ Form the dictionary of names and codes. """
-        print(self.name_list)
         
         # Sort the names according to their first position in the text
         self.name_list.sort(key=lambda tup: tup[0])
@@ -687,6 +691,25 @@ class GetConfWorker(FlaskWorker):
                     print('Telefon:', text[start:end])
             
         return res
+    
+    def text_to_lemmas(self, text, nlp):
+        """ Transform the words in a text to the equivalent lemmas. """
+        
+        nlp_lower = nlp(text.lower())
+        
+        lemmas = []
+        
+        for token in nlp_lower:
+            start_pos = token.idx
+            
+            lemma = token.lemma_        
+            if text[start_pos].isupper():
+                # Check if the original is capitalized
+                lemma = lemma.capitalize()
+                
+            lemmas.append(lemma)
+            
+        return ' '.join(lemmas)
     
     def match_noconf_institution(self, text, public_insts):
         """ Match public institutions which should not be confidential. """
@@ -1097,7 +1120,7 @@ class GetConfWorker(FlaskWorker):
                 
         return new_matches
     
-    def filter_noconf_matches(self, matches, noconf_matches):
+    def filter_noconf_matches(self, text, matches, noconf_matches):
         """ Eliminate the matches which intersect with non confidential matches. """
         
         filtered_matches = []
@@ -1115,8 +1138,51 @@ class GetConfWorker(FlaskWorker):
                     
             if add_match:
                 filtered_matches.append(match)
+            
+            else:
+                
+                # If the match is in the name list, also remove it from there
+                idx = self.find_name(text[start_match : end_match])
+                if idx > -1:
+                    del self.name_list[idx]
                 
         return filtered_matches
+    
+    def filter_institution_matches_by_prefix(self, text, matches):
+        """ Filter public institution (which should be confidential) from the matches using a list of prefixes. """
+    
+        filtered_matches = []
+        noconf_matches = []
+        
+        for match in matches:
+            filter_out = False
+            
+            if match[2] == 'INSTITUTIE':
+                match_text = text[match[0] : match[1]]
+                
+                # Get the lemmas of the match
+                match_lemmas = self.text_to_lemmas(match_text, self.nlp_model)
+                
+                for prefix in self.prefix_institution_list:
+                    
+                    # Fuzzy match between a prefix from the list and the prefix of the match
+                    if fuzz.ratio(prefix, match_lemmas[:len(prefix)]) >= MIN_PREFIX_FUZZY:
+                        
+                        # Also remove the match from the name list  
+                        idx = self.find_name(match_text)
+                        if idx > -1:
+                            del self.name_list[idx]
+                           
+                        filter_out = True
+                        break
+                        
+            if not filter_out:
+                filtered_matches.append(match)
+            else:
+                # Add the match as a public institution
+                noconf_matches.append((match[0], match[1]))
+        
+        return filtered_matches, noconf_matches
     
     def select_matches(self, matches_dict, noconf_matches, text):
         """ Select the final matches. 
@@ -1125,12 +1191,16 @@ class GetConfWorker(FlaskWorker):
     
         matches = list(matches_dict.values())
         
-        
         # 1. Eliminate matches which are not confidential
-        matches = self.filter_noconf_matches(matches, noconf_matches)
+        matches = self.filter_noconf_matches(text, matches, noconf_matches)
+        
+        
+        # 2. Eliminate public institutions which should not be confidential using a list of prefixes
+        matches, new_noconf = self.filter_institution_matches_by_prefix(text, matches)
+        noconf_matches.extend(new_noconf)
         
                 
-        # 2. Select matches which overlap
+        # 3. Select matches which overlap
         
         # Sort matches ascending by start position
         sorted_matches = sorted(matches, key=lambda tup: tup[0])        
@@ -1169,7 +1239,6 @@ class GetConfWorker(FlaskWorker):
                     
                 # Otherwise check overlap type
                 else:
-                    print(overlap)
                     if overlap == INTERSECTION:
                         start = min(start1, start2)
                         end = max(end1, end2)
@@ -1203,7 +1272,7 @@ class GetConfWorker(FlaskWorker):
         for (start, end, label) in final_matches:
             final_dict[start] = (start, end, label)
     
-        return final_dict
+        return final_dict, noconf_matches
     
     def replace_abbreviations(self, text):
         """ Use the abbreviations dictionary to set abbreviations. """
@@ -1345,15 +1414,23 @@ class GetConfWorker(FlaskWorker):
         if self.debug:
             institution_path = INSTITUTION_LIST_DEBUG
             organization_path = ORGANIZATION_LIST_DEBUG
+            prefix_institution_path = PREFIX_INSTITUTION_DEBUG
             regex_path = CONF_REGEX_DEBUG
         else:
             institution_path = INSTITUTION_LIST_PROD
             organization_path = ORGANIZATION_LIST_PROD
+            prefix_institution_path = PREFIX_INSTITUTION_PROD
             regex_path = CONF_REGEX_PROD
         
         # Read list of public institutions
         institution_file = open(institution_path, 'r', encoding='utf-8')
         self.institution_list = institution_file.read().splitlines()
+        
+        # Read list of prefixes for public institutions
+        prefix_file = open(prefix_institution_path, 'r', encoding='utf-8')
+        self.prefix_institution_list = prefix_file.read().splitlines()
+        # Replace with lemmas
+        self.prefix_institution_list = [self.text_to_lemmas(prefix, self.nlp_model) for prefix in self.prefix_institution_list]
     
         # Read list of organizations
         organization_file = open(organization_path, 'r', encoding='utf-8')
@@ -1457,7 +1534,7 @@ class GetConfWorker(FlaskWorker):
         text, matches, noconf_matches = pred
         
         # Select final matches
-        matches = self.select_matches(matches, noconf_matches, text)
+        matches, noconf_matches = self.select_matches(matches, noconf_matches, text)
         
         # Order matches 
         match_tuples = list(matches.values())
@@ -1493,7 +1570,7 @@ class GetConfWorker(FlaskWorker):
                     hidden_doc = hidden_doc[:start] + code + hidden_doc[end:]
                 else:
                     break
-                
+            
         # Add non confidential matches to result
         for (start, end) in noconf_matches:
             match_tuples.append((start, end, "ORGANIZATIE_PUBLICA"))
@@ -1522,13 +1599,13 @@ if __name__ == '__main__':
   test = {
       'DEBUG' : True,
       
-#       'DOCUMENT': """S-au luat în examinare ADPP apelurile declarate de Parchetul de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia naţională Anticorupţie şi de inculpatul Popa Vasile Constantin împotriva sentinţei penale nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală.
-# Dezbaterile au fost consemnate în încheierea de şedinţă din data de 09 ianuarie 2020,  ce face parte integrantă din prezenta decizie şi având nevoie de timp pentru a delibera, în baza art. 391 din Codul de procedură penală a amânat pronunţarea pentru azi 22 ianuarie 2020, când în aceeaşi compunere a pronunţat următoarea decizie:
-# ÎNALA CURTE
-#  	Asupra apelurilor penale de faţă;
-# În baza lucrărilor din dosar, constată următoarele:
-# Prin sentinţa penală nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală, pronunţată în dosarul nr.490/35/2014, în baza art. 386 din Codul de procedură penală a respins cererea de schimbare a încadrării juridice a faptei de sustragere sau distrugere de înscrisuri, prev. de art. 242 al. 1 şi 3 din Codul penal, cu aplic. art. 5 din Codul penal, în cea de sustragere sau distrugere de probe ori de înscrisuri, prev. de art. 275 al. 1 şi 2 din Codul penal, formulată de inculpatul POPA VASILE CONSTANTIN
-# """,
+      'DOCUMENT': """S-au luat în examinare ADPP apelurile declarate de Parchetul de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia naţională Anticorupţie şi de inculpatul Popa Vasile Constantin împotriva sentinţei penale nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală.
+Dezbaterile au fost consemnate în încheierea de şedinţă din data de 09 ianuarie 2020,  ce face parte integrantă din prezenta decizie şi având nevoie de timp pentru a delibera, în baza art. 391 din Codul de procedură penală a amânat pronunţarea pentru azi 22 ianuarie 2020, când în aceeaşi compunere a pronunţat următoarea decizie:
+ÎNALA CURTE
+ 	Asupra apelurilor penale de faţă;
+În baza lucrărilor din dosar, constată următoarele:
+Prin sentinţa penală nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală, pronunţată în dosarul nr.490/35/2014, în baza art. 386 din Codul de procedură penală a respins cererea de schimbare a încadrării juridice a faptei de sustragere sau distrugere de înscrisuri, prev. de art. 242 al. 1 şi 3 din Codul penal, cu aplic. art. 5 din Codul penal, în cea de sustragere sau distrugere de probe ori de înscrisuri, prev. de art. 275 al. 1 şi 2 din Codul penal, formulată de inculpatul POPA VASILE CONSTANTIN
+""",
        
         # 'DOCUMENT': """Se desemnează domnul Cocea Radu, avocat, cocea@gmail.com, 0216667896 domiciliat în municipiul Bucureşti, Bd. Laminorului nr. 84, sectorul 1, legitimat cu C.I. Seria RD Nr. 040958, eliberată la data de 16 septembrie 1998 de Secţia 5 Poliţie Bucureşti, CNP 1561119034963, în calitate de administrator special. Se desemneaza si doamna Alice Munteanu cu telefon 0216654343, domiciliata in Bd. Timisoara nr. 107 """, 
         
@@ -1568,7 +1645,7 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
-    'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
+    # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
     
     # 'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
     
