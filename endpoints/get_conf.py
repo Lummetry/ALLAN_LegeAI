@@ -137,6 +137,11 @@ EU_CASE_REGS = [REG_START + r + REG_END for r in EU_CASE_REGS]
 ALL_EU_CASE_REGS = '|'.join(EU_CASE_REGS)
 MIN_CASE_DISTANCE = 20
 
+# ABBREVIATIONS
+ALIN_REG =  r'(?<=\balin)( |si|sau|și|şi|\d|,|\.|_|-|\))*\d\b'
+# Positive lookaround for word boundary but negative lookaround for paranthesis
+ALIN_NUMBER_REG = r'\b\d+(?=\b)(?!\))'
+
 # Overlap
 NO_OVERLAP = 0
 INTERSECTION = 1
@@ -152,7 +157,7 @@ PAIR_PUNCTUATION = r'\(.+\)|\[.+\]|\{.+\}|\".+\"|\'.+\''
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='0.7.0.0'
+__VER__='0.7.1.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1308,6 +1313,32 @@ class GetConfWorker(FlaskWorker):
                 
         return text
     
+    def replace_alin(self, text):
+        """ Replace 'alin' in text """
+            
+        replace_list = []
+        
+        for match in re.finditer(ALIN_REG, text):
+            alin_text = match.group()
+            span_start, span_end = match.span()
+            print('alin', alin_text)
+            
+            for number in re.finditer(ALIN_NUMBER_REG, alin_text):
+                number_text = number.group()
+                number_start, number_end = number.span()
+                
+                replace_list.append((span_start + number_start, span_start + number_end, number_text))
+                
+                    
+        # Sort replace list descending by start position
+        replace_list.sort(key=lambda tup : tup[0], reverse=True)
+                
+        # Add paranthesis to numbers
+        for (start, end, number) in replace_list:
+            text = text[:start] + number + ')' + text[end:]
+                
+        return text
+    
     def clean_punctuation(self, text):
         """ Clean punctuation """
         
@@ -1344,12 +1375,13 @@ class GetConfWorker(FlaskWorker):
                     end += 1       
             elif end < len(text) - 1 and text[end] != ' ':
                 # Check if a space should be added after
-                if text[end - 1] == '.' and ((text[end].isdigit() and start > 0 and text[start - 1].isdigit()) or 
+                if (text[end - 1] == '.' and ((text[end].isdigit() and start > 0 and text[start - 1].isdigit()) or 
                                              # If before and after dot there is a digit
-                                            (text[end].isupper() and start > 0 and text[start - 1].isupper())):
+                                            (text[end].isupper() and start > 0 and text[start - 1].isupper()))):
                                             # If before and after dot there is a uppercase letter
                     pass
-                elif text[end].isalpha():
+                    
+                elif text[end].isalnum():
                     # Otherwise, an extra space is needed after
                     char += ' '
             
@@ -1467,6 +1499,9 @@ class GetConfWorker(FlaskWorker):
                 
         # Replace with abbreviations
         text = self.replace_abbreviations(text)
+        
+        # Replace 'alin' sequences
+        text = self.replace_alin(text)
         
         # Apply spaCy analysis
         doc = self.nlp_model(text)
@@ -1599,13 +1634,13 @@ if __name__ == '__main__':
   test = {
       'DEBUG' : True,
       
-      'DOCUMENT': """S-au luat în examinare ADPP apelurile declarate de Parchetul de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia naţională Anticorupţie şi de inculpatul Popa Vasile Constantin împotriva sentinţei penale nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală.
-Dezbaterile au fost consemnate în încheierea de şedinţă din data de 09 ianuarie 2020,  ce face parte integrantă din prezenta decizie şi având nevoie de timp pentru a delibera, în baza art. 391 din Codul de procedură penală a amânat pronunţarea pentru azi 22 ianuarie 2020, când în aceeaşi compunere a pronunţat următoarea decizie:
-ÎNALA CURTE
- 	Asupra apelurilor penale de faţă;
-În baza lucrărilor din dosar, constată următoarele:
-Prin sentinţa penală nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală, pronunţată în dosarul nr.490/35/2014, în baza art. 386 din Codul de procedură penală a respins cererea de schimbare a încadrării juridice a faptei de sustragere sau distrugere de înscrisuri, prev. de art. 242 al. 1 şi 3 din Codul penal, cu aplic. art. 5 din Codul penal, în cea de sustragere sau distrugere de probe ori de înscrisuri, prev. de art. 275 al. 1 şi 2 din Codul penal, formulată de inculpatul POPA VASILE CONSTANTIN
-""",
+#       'DOCUMENT': """S-au luat în examinare ADPP apelurile declarate de Parchetul de pe lângă Înalta Curte de Casaţie şi Justiţie – Direcţia naţională Anticorupţie şi de inculpatul Popa Vasile Constantin împotriva sentinţei penale nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală.
+# Dezbaterile au fost consemnate în încheierea de şedinţă din data de 09 ianuarie 2020,  ce face parte integrantă din prezenta decizie şi având nevoie de timp pentru a delibera, în baza art. 391 din Codul de procedură penală a amânat pronunţarea pentru azi 22 ianuarie 2020, când în aceeaşi compunere a pronunţat următoarea decizie:
+# ÎNALA CURTE
+#  	Asupra apelurilor penale de faţă;
+# În baza lucrărilor din dosar, constată următoarele:
+# Prin sentinţa penală nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoara – Secţia Penală, pronunţată în dosarul nr.490/35/2014, în baza art. 386 din Codul de procedură penală a respins cererea de schimbare a încadrării juridice a faptei de sustragere sau distrugere de înscrisuri, prev. de art. 242 al. 1 şi 3 din Codul penal, cu aplic. art. 5 din Codul penal, în cea de sustragere sau distrugere de probe ori de înscrisuri, prev. de art. 275 al. 1 şi 2 din Codul penal, formulată de inculpatul POPA VASILE CONSTANTIN
+# """,
        
         # 'DOCUMENT': """Se desemnează domnul Cocea Radu, avocat, cocea@gmail.com, 0216667896 domiciliat în municipiul Bucureşti, Bd. Laminorului nr. 84, sectorul 1, legitimat cu C.I. Seria RD Nr. 040958, eliberată la data de 16 septembrie 1998 de Secţia 5 Poliţie Bucureşti, CNP 1561119034963, în calitate de administrator special. Se desemneaza si doamna Alice Munteanu cu telefon 0216654343, domiciliata in Bd. Timisoara nr. 107 """, 
         
@@ -1643,7 +1678,7 @@ Prin sentinţa penală nr. 194/PI din 13 martie 2018 a Curţii de Apel Timişoar
     
     # DE LA CLIENT
     
-    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
     
