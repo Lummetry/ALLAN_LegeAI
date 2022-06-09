@@ -141,6 +141,9 @@ MIN_CASE_DISTANCE = 20
 ALIN_REG =  r'(?<=\balin)( |si|sau|și|şi|\d|,|\.|_|-|\))*\d\b'
 # Positive lookaround for word boundary but negative lookaround for paranthesis
 ALIN_NUMBER_REG = r'\b\d+(?=\b)(?!\))'
+LIT_REG =  r'(?<=\blit)( |si|sau|și|şi|[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]\W|,|\.|_|-|\))+\b'
+# Positive lookaround for word boundary but negative lookaround for paranthesis
+LIT_LETTER_REG = r'(?<=\b)(?<![a-zA-Z\u00C0-\u024F\u1E00-\u1EFF])[A-Za-z](?=\b)(?!\))(?![a-zA-Z\u00C0-\u024F\u1E00-\u1EFF])'
 
 # Overlap
 NO_OVERLAP = 0
@@ -157,7 +160,7 @@ PAIR_PUNCTUATION = r'\(.+\)|\[.+\]|\{.+\}|\".+\"|\'.+\''
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='0.7.1.1'
+__VER__='0.7.2.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1313,29 +1316,40 @@ class GetConfWorker(FlaskWorker):
                 
         return text
     
-    def replace_alin(self, text):
-        """ Replace 'alin' in text """
+    def replace_alin_lit(self, text):
+        """ Replace 'alin' and 'lit' in text """
             
         replace_list = []
         
+        # Search for 'alin' sequences
         for match in re.finditer(ALIN_REG, text):
             alin_text = match.group()
             span_start, span_end = match.span()
-            print('alin', alin_text)
             
-            for number in re.finditer(ALIN_NUMBER_REG, alin_text):
-                number_text = number.group()
-                number_start, number_end = number.span()
+            print(alin_text)
+            for number_match in re.finditer(ALIN_NUMBER_REG, alin_text):
+                number_text = number_match.group()
+                number_start, number_end = number_match.span()
                 
                 replace_list.append((span_start + number_start, span_start + number_end, number_text))
+        
+        # Search for 'lit' sequences
+        for match in re.finditer(LIT_REG, text):
+            lit_text = match.group()
+            span_start, span_end = match.span()
+            
+            for letter_match in re.finditer(LIT_LETTER_REG, lit_text):
+                letter_text = letter_match.group()
+                letter_start, letter_end = letter_match.span()
                 
+                replace_list.append((span_start + letter_start, span_start + letter_end, letter_text))
                     
         # Sort replace list descending by start position
         replace_list.sort(key=lambda tup : tup[0], reverse=True)
                 
         # Add paranthesis to numbers
-        for (start, end, number) in replace_list:
-            text = text[:start] + number + ')' + text[end:]
+        for (start, end, match_text) in replace_list:
+            text = text[:start] + match_text + ')' + text[end:]
                 
         return text
     
@@ -1501,7 +1515,7 @@ class GetConfWorker(FlaskWorker):
         text = self.replace_abbreviations(text)
         
         # Replace 'alin' sequences
-        text = self.replace_alin(text)
+        text = self.replace_alin_lit(text)
         
         # Apply spaCy analysis
         doc = self.nlp_model(text)
@@ -1678,7 +1692,7 @@ if __name__ == '__main__':
     
     # DE LA CLIENT
     
-    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
     
@@ -1726,7 +1740,7 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
         
-    'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan"""
+    # 'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan"""
       }
   
   res = eng.execute(inputs=test, counter=1)
