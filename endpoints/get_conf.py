@@ -157,7 +157,7 @@ PAIR_PUNCTUATION = r'\(.+\)|\[.+\]|\{.+\}|\".+\"|\'.+\''
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='0.7.1.0'
+__VER__='0.7.1.1'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1530,7 +1530,7 @@ class GetConfWorker(FlaskWorker):
         
         # Match names
         matches.update(self.match_name(self.nlp_model, doc, text, 
-                                       person_checks=[PERSON_PROPN, PERSON_UPPERCASE]))
+                                       person_checks=[PERSON_PROPN, PERSON_UPPERCASE]))       
                     
         # Match addresses
         matches.update(self.match_address(self.nlp_model, doc, text, 
@@ -1553,7 +1553,7 @@ class GetConfWorker(FlaskWorker):
                                         brand_checks=[BRAND_EXCLUDE_COMMON, BRAND_INCLUDE_FACILITY]))
                         
         # Match user REGEX
-        matches.update(self.match_regex(text))
+        matches.update(self.match_regex(text)) 
         
         # Match EU case and ignore nearby matches
         cases = self.match_eu_case(text)
@@ -1564,16 +1564,16 @@ class GetConfWorker(FlaskWorker):
               
         return text, matches, noconf_matches
 
-    def _post_process(self, pred):
+    def _post_process(self, pred):      
         
         text, matches, noconf_matches = pred
         
         # Select final matches
-        matches, noconf_matches = self.select_matches(matches, noconf_matches, text)
+        matches, noconf_matches = self.select_matches(matches, noconf_matches, text)  
         
         # Order matches 
         match_tuples = list(matches.values())
-        match_starts = list(sorted(matches.keys(), reverse=True))
+        match_starts = list(sorted(matches.keys(), reverse=True))     
     
         # Replace all confidential information (except names) in text
         hidden_doc = text
@@ -1586,7 +1586,7 @@ class GetConfWorker(FlaskWorker):
         name_code_dict = self.set_name_codes(text)  
             
         if self.debug:
-            print(name_code_dict)
+            print(name_code_dict)   
         
         # Replace names with their codes, starting with longer names (which might include the shorter ones)
         for name in sorted(name_code_dict, key=len, reverse=True):
@@ -1599,12 +1599,12 @@ class GetConfWorker(FlaskWorker):
                 
                 if name_match:
                     start, end = name_match.span()
-                    if hidden_doc[end] != '.':
+                    if end < len(hidden_doc) and hidden_doc[end] != '.':
                         # Add dot after the code if it's not before a dot
                         code += '.'
                     hidden_doc = hidden_doc[:start] + code + hidden_doc[end:]
                 else:
-                    break
+                    break  
             
         # Add non confidential matches to result
         for (start, end) in noconf_matches:
@@ -1612,7 +1612,7 @@ class GetConfWorker(FlaskWorker):
             
     
         # Clean punctuation again, after the matches have been replaces
-        hidden_doc = self.clean_punctuation(hidden_doc)
+        hidden_doc = self.clean_punctuation(hidden_doc) 
             
             
         res = {}
@@ -1678,7 +1678,7 @@ if __name__ == '__main__':
     
     # DE LA CLIENT
     
-    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
     
@@ -1726,8 +1726,7 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
         
-#     'DOCUMENT' : """Vasile Ion l-a lovit cu masina pe Silviu Mihai.
-# Silviu Mihail l-a dat in judecata pe Vasile Ioan."""
+    'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan"""
       }
   
   res = eng.execute(inputs=test, counter=1)
