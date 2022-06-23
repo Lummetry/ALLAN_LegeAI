@@ -42,7 +42,7 @@ if __name__ == '__main__':
       'DRIVER' : '{ODBC Driver 17 for SQL Server}',
       'SERVER' : '195.60.78.50',
       'PORT' : 1433,
-      'DATABASE' : 'LegeV_New',
+      'DATABASE' : 'LegeV',
       'Uid' : 'damian',
       'Pwd' : '4Esoft1234!@#$2021',
     },
@@ -50,31 +50,50 @@ if __name__ == '__main__':
     'QUERY_PARAMS' : None
   }
   
+  config2 = {
+    'CONNECT_PARAMS' : {
+      'DRIVER' : '{ODBC Driver 17 for SQL Server}',
+      'SERVER' : '195.60.78.50',
+      'PORT' : 1433,
+      'DATABASE' : 'LegeV_New',
+      'Uid' : 'damian',
+      'Pwd' : '4Esoft1234!@#$2021',
+    },
+
+    'QUERY_PARAMS' : None
+  }
+
+  
   qry_docs = 'select distinct id_document  from vw_docs'
-  qry_pars = 'select distinct id_paragraf from paragraf_x_cuvant_cheie'
+  #qry_pars = 'select distinct id_paragraf from paragraf_x_cuvant_cheie'
+  qry_pars = 'SELECT DISTINCT [ID_PARAGRAF]  FROM [legeV].[dbo].[paragraf_x_cuvant_cheie] where ID_PARAGRAF in (select id from paragraf where id_document in (10941734, 11002879))'
   qry_txt = 'select continut from paragraf where id={}'
-  qry_lbl = """
-  select nume from 
-  tip_cuvantcheie, paragraf_x_cuvant_cheie
-  where uid = ID_CUVANT_CHEIE and ID_PARAGRAF={}  
-  """
+  qry_lbl = 'select id_cuvant_cheie from paragraf_x_cuvant_cheie where ID_PARAGRAF = {}'
+  qry_l   = 'select nume from tip_cuvantcheie where uid = {}'
 
   conn = ODBCConnector(log=log, verbose=False, config=config)
   conn.connect(nr_retries=5)
   
+  conn2 = ODBCConnector(log=log, verbose=False, config=config2)
+  conn2.connect(nr_retries=5)
+  
   df_pars = conn.get_data(sql_query=qry_pars)
-
+  #print(df_pars)
+  
   lst_X_pars = []
   lst_y_labels = []
   unique_labels = set()
   DEBUG = len(sys.argv) > 1 and sys.argv[1].upper() == 'DEBUG'
   log.P("Running params: {}. Debug mode {}".format(sys.argv, "ON" if DEBUG else "OFF"))
   n_iters = df_pars.shape[0]
+  print(n_iters)
   timings = deque(maxlen=10)
   for idx_par in range(n_iters):
     t0 = time.time()
     id_par = df_pars.iloc[idx_par,0]
-
+    #print(id_par)
+    #if id_par in [457353995, 457354006, 457354017, 457354028, 457354039, 457354050, 457354061, 457354072, 457354083, 457354094]:
+    #    continue
     
     # process text
     df_text = conn.get_data(sql_query=qry_txt.format(id_par))
@@ -84,14 +103,30 @@ if __name__ == '__main__':
     elif df_text.shape[0] == 0:
         continue
     txt = df_text.iloc[0, 0]
+    #print(txt)
     par_str = raw_text_to_words(txt, max_len=15)    
     if len(par_str) < 1:
         continue
-
+    #print(par_str)
     # process labels
-    df_labels = conn.get_data(sql_query=qry_lbl.format(id_par))
+   
+    lst_raw_labels = []
+    df_keyword_ids = conn.get_data(sql_query=qry_lbl.format(id_par))
+    
+    for idx_label in range(df_keyword_ids.shape[0]):
+        keyword_id = df_keyword_ids.iloc[idx_label,0]
+        #print(id_par, keyword_id)
+        keyword_label = conn2.get_data(sql_query=qry_l.format(keyword_id)).iloc[0,0]
+        lst_raw_labels.append(keyword_label)
+    #print(lst_raw_labels)
+   
+    if df_keyword_ids.shape[0] > 1:
+        print(id_par)
+        print(par_str)
+        print(lst_raw_labels)
+        sys.exit()
 
-    lst_raw_labels = [df_labels.iloc[iii, 0] for iii in range(df_labels.shape[0])]
+    #lst_raw_labels = [df_labels.iloc[iii, 0] for iii in range(df_labels.shape[0])]
     lst_labels = clean_words_list(lst_raw_labels)
 
     for lbl in lst_labels:
@@ -113,7 +148,7 @@ if __name__ == '__main__':
         mean_time
         ),
         end='', flush=True)    
-
+  
   lens = [len(x) for x in lst_X_pars]  
   log.P("Obtained {} documents:".format(len(lst_X_pars)))
   log.show_text_histogram(lens, show_both_ends=True, caption='Words per paragraph')
