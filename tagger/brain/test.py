@@ -329,8 +329,9 @@ def recover_text_from_xdata(x_data_file):
     import random
     docs = pickle.load(open(x_data_file, "rb"))
     indexes = set(range(len(docs)))
+    
     train_indexes =  set(random.sample(indexes, int(0.9*len(indexes))))
-
+    print(len(indexes), len(train_indexes))
     with open("texts_train.txt", "w", encoding="utf-8") as train_file:
         with open("texts_test.txt", "w", encoding="utf-8") as test_file:
             for doc_index, doc in enumerate(docs):
