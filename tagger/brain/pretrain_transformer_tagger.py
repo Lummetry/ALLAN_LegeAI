@@ -17,12 +17,11 @@ import argparse
 import pandas as pd
 from transformers import DataCollatorForLanguageModeling
 from transformers import AdamWeightDecay
+from datasets import load_dataset
 
 
 
-
-parser = argparse.ArgumentParser(description='Training and evaluation file for transformer-based document-level multilabel classifier')
-parser.add_argument('-args_path', help='path to config file')
+parser = argparse.ArgumentParser(description='Pre-training for transformer-based document-level multilabel classifier')
 parser.add_argument('-data_path', help='path + files desciptor (i.e. _cache/_data/20220209_211238)')
 parser.add_argument('-model_path', help='path where to save model (in train mode) or path from where to load the model (in eval mode)')
 parser.add_argument('-bert_model', help='path (local) of huggingface name of bert backbone')
@@ -30,9 +29,6 @@ parser.add_argument('-bert_max_seq_len', type=int, help='Bert maximum sequence l
 parser.add_argument('-batch_size', type=int, help='training batch size', default=4)
 parser.add_argument('-learning_rate', type=float, help='Learning rate use for training the model', default=1e-5)
 parser.add_argument('-epochs', type=int, help='number of training epochs', default=5)
-parser.add_argument('-bert_frozen', default=False, action='store_true', help='flag to mark if the bert backbone if trainable or not')
-parser.add_argument('-use_generator', default=False, action='store_true', help='flag to mark the usage of generators rather than loading all data in tf.data.Dataset')
-parser.add_argument('-k', nargs='+', help='List of k\'s to use for evaluating metrics @k', default=[1, 3, 5])
 parser.add_argument('-run_type', default="train", help='train or eval run')
 args = parser.parse_args()
 
@@ -48,42 +44,8 @@ def load_data(data_path, tokenizer):
     print(train_files)
     print(test_files)
 
-    dataset = {}
-    train_dataset = []
-    test_dataset = []
-
-    for train_file in train_files:
-        with open(train_file, "r") as f:
-            inner_entry = {}
-            inner_entry["text"] = []
-            text = f.readlines()
-            for line in text:
-                if line == "\n":
-                    inner_entry["text"] = " ".join(inner_entry["text"])
-                    train_dataset.append(inner_entry)
-                    inner_entry = {}
-                    inner_entry["text"] = []                   
-                else:
-                    inner_entry["text"].append(line)
-
-    for test_file in test_files:
-        with open(test_file, "r") as f:
-            inner_entry = {}
-            inner_entry["text"] = []
-            text = f.readlines()
-            for line in text:
-                if line == "\n":
-                    inner_entry["text"] = " ".join(inner_entry["text"])
-                    test_dataset.append(inner_entry)
-                    inner_entry = {}
-                    inner_entry["text"] = []                   
-                else:
-                    inner_entry["text"].append(line)
-
-
-    from datasets import load_dataset
     dataset = load_dataset('text', data_files={'train': train_files, 'test': test_files}, encoding="unicode_escape")
-
+    
 
     def tokenize_and_chunk(examples):
         all_input_ids = []
@@ -110,7 +72,7 @@ def load_data(data_path, tokenizer):
 
         return result
 
-    lm_dataset = dataset.map(tokenize_and_chunk, batched=True, num_proc=1, remove_columns=dataset["train"].column_names)
+    lm_dataset = dataset.map(tokenize_and_chunk, batched=True, num_proc=4, remove_columns=dataset["train"].column_names)
 
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm_probability=0.15, return_tensors="tf")
 
@@ -131,16 +93,27 @@ def load_data(data_path, tokenizer):
 if __name__ == "__main__":
 
     bert_model = TFBertForMaskedLM.from_pretrained(args.bert_model)
-    tokenizer = AutoTokenizer.from_pretrained(args.bert_model, use_fast=False)
+
+    if args.run_type == "train":
+        # load and save tokenizer due to bug (loading tokenizer and saving it lead to different indexes)
+        tokenizer = AutoTokenizer.from_pretrained(args.bert_model, use_fast=False)
+        tokenizer.save_pretrained("test_save_model")
+        tokenizer = AutoTokenizer.from_pretrained("test_save_model", use_fast=False)
+
+    elif args.run_type == "eval":
+        tokenizer = AutoTokenizer.from_pretrained(args.bert_model, use_fast=False)
+
 
     train_dataset, test_dataset = load_data(args.data_path, tokenizer)
 
     
-    optimizer = AdamWeightDecay(learning_rate=5e-6, weight_decay_rate=0.01)
+    optimizer = AdamWeightDecay(learning_rate=args.learning_rate, weight_decay_rate=0.01)
     bert_model.compile(optimizer=optimizer)
-    bert_model.fit(x=train_dataset, validation_data=test_dataset, epochs=3)
 
+    if args.run_type == "train":
+        bert_model.fit(x=train_dataset, validation_data=test_dataset, epochs=args.epochs)
+        bert_model.evaluate(test_dataset)
+        bert_model.save_pretrained("test_save_model")
 
-
-
-    sys.exit()
+    elif args.run_type == "eval":
+        bert_model.evaluate(test_dataset)
