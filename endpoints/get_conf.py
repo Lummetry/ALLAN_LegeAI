@@ -156,11 +156,12 @@ DOUBLE_PUNCTUATION = r'\({2}|,{2}|\/{2}|"{2}|:{2}|;{2}|\){2}|\\{2}|(?<!\.)\.{2}(
 TOO_MANY_DOTS = r'\.{4,}'
 SOLO_PUNCTUATION = r'(\.{3})|[\.,\:;\?\!]'
 PAIR_PUNCTUATION = r'\(.+\)|\[.+\]|\{.+\}|\".+\"|\'.+\''
+MULTIPLE_SPACES = r' {2,}'
 
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='0.7.2.1'
+__VER__='0.7.2.2'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1439,6 +1440,14 @@ class GetConfWorker(FlaskWorker):
             start, end = re_match.span()
             # Remove extra dots
             text = text[:start] + '...' + text[end:]
+        
+        # 5. Reduce many spaces to just one
+        re_matches = list(re.finditer(MULTIPLE_SPACES, text))
+        re_matches.reverse()
+        for re_match in re_matches:
+            start, end = re_match.span()
+            # Remove extra dots
+            text = text[:start] + ' ' + text[end:]
           
         return text    
     
