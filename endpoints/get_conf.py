@@ -160,7 +160,7 @@ PAIR_PUNCTUATION = r'\(.+\)|\[.+\]|\{.+\}|\".+\"|\'.+\''
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='0.7.2.0'
+__VER__='0.7.2.1'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1356,53 +1356,7 @@ class GetConfWorker(FlaskWorker):
     def clean_punctuation(self, text):
         """ Clean punctuation """
         
-        # Remove double punctuation marks sequences
-        re_matches = list(re.finditer(DOUBLE_PUNCTUATION, text))
-        re_matches.reverse()
-        for re_match in re_matches:
-            pos = re_match.span()[0]
-            # Remove initial dot
-            text = text[:pos] + text[pos + 1:]
-            
-        # Reduce many dots to just 3
-        re_matches = list(re.finditer(TOO_MANY_DOTS, text))
-        re_matches.reverse()
-        for re_match in re_matches:
-            start, end = re_match.span()
-            # Remove extra dots
-            text = text[:start] + '...' + text[end:]
-            
-        # Spaces around solo punctuation
-        re_matches = list(re.finditer(SOLO_PUNCTUATION, text))
-        re_matches.reverse()
-        for re_match in re_matches:
-            start, end = re_match.span()
-            char = text[start:end]
-            
-            # Skip spaces before
-            while start > 0 and text[start - 1] == ' ':
-                start -= 1
-              
-            if end < len(text) and text[end] == ' ':
-                # Skip extra spaces after first space
-                while end < len(text) - 1 and text[end + 1] == ' ':
-                    end += 1       
-            elif end < len(text) - 1 and text[end] != ' ':
-                # Check if a space should be added after
-                if (text[end - 1] == '.' and ((text[end].isdigit() and start > 0 and text[start - 1].isdigit()) or 
-                                             # If before and after dot there is a digit
-                                            (text[end].isupper() and start > 0 and text[start - 1].isupper()))):
-                                            # If before and after dot there is a uppercase letter
-                    pass
-                    
-                elif text[end].isalnum():
-                    # Otherwise, an extra space is needed after
-                    char += ' '
-            
-            # Remove extra spaces
-            text = text[:start] + char + text[end:]
-            
-        # Spaces around pair punctuation
+        # 1. Spaces around pair punctuation
         re_matches = list(re.finditer(PAIR_PUNCTUATION, text))
         re_matches.reverse()
         for re_match in re_matches:
@@ -1438,7 +1392,53 @@ class GetConfWorker(FlaskWorker):
                 suffix = ' '      
             
             # Remove extra spaces
-            text = text[:start] + prefix + seq + suffix + text[end:]    
+            text = text[:start] + prefix + seq + suffix + text[end:]  
+            
+        # 2. Spaces around solo punctuation
+        re_matches = list(re.finditer(SOLO_PUNCTUATION, text))
+        re_matches.reverse()
+        for re_match in re_matches:
+            start, end = re_match.span()
+            char = text[start:end]
+            
+            # Skip spaces before
+            while start > 0 and text[start - 1] == ' ':
+                start -= 1
+              
+            if end < len(text) and text[end] == ' ':
+                # Skip extra spaces after first space
+                while end < len(text) - 1 and text[end + 1] == ' ':
+                    end += 1       
+            elif end < len(text) - 1 and text[end] != ' ':
+                # Check if a space should be added after
+                if (text[end - 1] == '.' and ((text[end].isdigit() and start > 0 and text[start - 1].isdigit()) or 
+                                             # If before and after dot there is a digit
+                                            (text[end].isupper() and start > 0 and text[start - 1].isupper()))):
+                                            # If before and after dot there is a uppercase letter
+                    pass
+                    
+                elif text[end].isalnum():
+                    # Otherwise, an extra space is needed after
+                    char += ' '
+            
+            # Remove extra spaces
+            text = text[:start] + char + text[end:]  
+        
+        # 3. Remove double punctuation marks sequences
+        re_matches = list(re.finditer(DOUBLE_PUNCTUATION, text))
+        re_matches.reverse()
+        for re_match in re_matches:
+            pos = re_match.span()[0]
+            # Remove initial dot
+            text = text[:pos] + text[pos + 1:]
+            
+        # 4. Reduce many dots to just 3
+        re_matches = list(re.finditer(TOO_MANY_DOTS, text))
+        re_matches.reverse()
+        for re_match in re_matches:
+            start, end = re_match.span()
+            # Remove extra dots
+            text = text[:start] + '...' + text[end:]
           
         return text    
     
