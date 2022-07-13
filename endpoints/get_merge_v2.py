@@ -10,7 +10,7 @@ _CONFIG = {
 
 # File paths
 # Debug
-NER_MODEL_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best'
+NER_MODEL_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\prev-model-best'
 # Prod
 NER_MODEL_PROD = 'C:\\allan_data\\MergeNER\\model-best'
 
@@ -59,8 +59,15 @@ MULTIPLE_SPACES = r' {2,}'
 # Clean texts
 LINK_PATTERN = "~id_link=[^;]*;([^~]*)~"
 
+# Errors
+NO_ERROR = 0
+ERROR_NO_ACTION = 1
+ERROR_MANY_ACTIONS = 2
+ERROR_NUM_OLD_NEW = 3
+ERROR_ACTION_UKNOWN = 4
 
-__VER__='0.2.1.0'
+
+__VER__='0.3.0.0'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -293,13 +300,15 @@ class GetMergeV2Worker(FlaskWorker):
         entities = doc.ents
         olds = []
         news = []
-        action = None
+        actions = []
+        
+        error = NO_ERROR
         
         i = 0
         while i < len(entities):
             ent = entities[i]
             
-            if ent.label_ == 'action':
+            if ent.label_ == 'action':                
                 action = ent.text
                 
                 for j in range(i + 1, len(entities)):
@@ -307,15 +316,23 @@ class GetMergeV2Worker(FlaskWorker):
                     
                     if nextEnt.label_ == 'action':
                         # If there is another action                    
-                        if len(nextEnt) > 1:
-                            return -1, None, None
                         
-                        tok = doc[nextEnt.start]
-                        if tok.is_stop:
-                            action += " " + tok.text
-                            i += 1
+                        if len(nextEnt) > 1:
+                            # If the action contains several words
+                            error = ERROR_MANY_ACTIONS
+                        
                         else:
-                            return -1, None, None
+                            tok = doc[nextEnt.start]
+                            
+                            if tok.is_stop:
+                                # If the action contains only a stopword, add it to the previous action
+                                action += " " + tok.text
+                                i += 1
+                            else:
+                                # If the word is not a stopword
+                                error = ERROR_MANY_ACTIONS
+                        
+                actions.append(self.clean_entity(action))
                         
             elif ent.label_ == 'old':
                 olds.append(self.clean_entity(ent.text))
@@ -325,10 +342,13 @@ class GetMergeV2Worker(FlaskWorker):
             
             i += 1
             
-        if len(olds) + len(news) == 0 or (len(olds) + len(news) > 1 and len(olds) != len(news)):
-            return -2, None, None
+        if len(actions) == 0:
+            error = ERROR_NO_ACTION
             
-        return action, olds, news    
+        elif len(olds) + len(news) == 0 or (len(olds) + len(news) > 1 and len(olds) != len(news)):
+            error = ERROR_NUM_OLD_NEW
+            
+        return error, actions, olds, news    
     
     
     def action_prelungeste_cu(self, pasiv, activ, action, olds, news):
@@ -503,22 +523,18 @@ class GetMergeV2Worker(FlaskWorker):
         
         doc = self.activ_ner(activ)
             
-        action, olds, news = self.group_actions_basic(doc)
+        error, actions, olds, news = self.group_actions_basic(doc)
         
         if self.debug:
-            print('Action:', action)
+            print('Action:', actions)
             print('Olds:', olds)
             print('News:', news)
         
-        if action == None:
-    #         print('No entities identified.')
-            return None, None, None
-        elif action == -1:
-    #         print('Too many actions.')
-            return None, None, None
-        elif action == -2:
-    #         print('NER error.')
-            return None, None, None
+        if error != NO_ERROR:
+            return error, False, "", actions, olds, news
+        
+        # Only one action identified
+        action = actions[0]
     
         actionType = self.get_action_type(action)
         
@@ -560,8 +576,11 @@ class GetMergeV2Worker(FlaskWorker):
         if actionApplied:
             # Clean any possible punctuation mistakes after the transformation
             transformed = self.clean_punctuation(transformed)
+            
+        if actionType == ACTION_UNKNOWN:
+            error = ERROR_ACTION_UKNOWN
                                                        
-        return actionType, actionApplied, transformed
+        return error, actionApplied, transformed, actions, olds, news
     
     
     
@@ -601,17 +620,38 @@ class GetMergeV2Worker(FlaskWorker):
         
         pasiv, activ = prep_inputs
         
-        actionType, actionApplied, transformed = self.transform(pasiv, activ) 
+        error, actionApplied, transformed, action, olds, news = self.transform(pasiv, activ) 
               
-        return transformed
+        return error, actionApplied, transformed, action, olds, news
 
     def _post_process(self, pred):
         
-        transf = pred
+        error, actionApplied, transformed, action, olds, news = pred
         
         res = {}
         
-        res['results'] = transf
+        res['action'] = action
+        res['old'] = olds
+        res['new'] = news
+        
+        success = False
+        if error == ERROR_NO_ACTION:
+            res['error'] = "No Action identified."
+        elif error == ERROR_MANY_ACTIONS:
+            res['error'] = "Too many Actions identified. Can only handle a single Action."
+        elif error == ERROR_NUM_OLD_NEW:
+            res['error'] = "Incorrect number of Old and New entities identified."
+        elif error == ERROR_ACTION_UKNOWN:
+            res['error'] = "Unknown action."
+        elif actionApplied == False:
+            # No action error
+            res['error'] = "Number of Old or New entities incorrect for identified Action."
+        else:
+            # No error
+            success = True
+            res['result'] = transformed
+                
+        res['success'] = success
         
         return res
 
@@ -659,8 +699,12 @@ if __name__ == '__main__':
         # 'ACTIV' : """Termenele prevăzute la art. 1 alin. (1) şi (7) se prorogă până la 20 decembrie 2012 inclusiv.""",
           
         # devine
-        'PASIV' : """Obligaţiunile de tezaur exprimate în dolari S.U.A. cu dobândă sunt scadente la data de 13 august 1997.""",
-        'ACTIV' : """La punctul 3 - data scadenţei devine 15 august 1997.""",
+        # 'PASIV' : """Obligaţiunile de tezaur exprimate în dolari S.U.A. cu dobândă sunt scadente la data de 13 august 1997.""",
+        # 'ACTIV' : """La punctul 3 - data scadenţei devine 15 august 1997.""",
+        
+        # 'PASIV' : """Termenul stabilit este de 30 de zile.""",
+        # 'ACTIV' : """termenul se prelungeste cu 21 zile.""",
+        
          
         'DEBUG': True
       }
