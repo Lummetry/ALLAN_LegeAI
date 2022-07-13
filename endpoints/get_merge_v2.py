@@ -60,7 +60,7 @@ MULTIPLE_SPACES = r' {2,}'
 LINK_PATTERN = "~id_link=[^;]*;([^~]*)~"
 
 
-__VER__='0.2.0.1'
+__VER__='0.2.1.0'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -208,6 +208,15 @@ class GetMergeV2Worker(FlaskWorker):
     #     ent = re.sub('[' + string.punctuation + ']', '', ent)
         
         return ent
+        
+
+    def is_date(self, ent):
+        ''' Check if an entity represents a date '''
+        
+        if ent.label_ != 'DATETIME':
+            return False
+        
+        return any(char.isdigit() for char in ent.text)
 
 
     def get_action_type(self, action):
@@ -380,7 +389,7 @@ class GetMergeV2Worker(FlaskWorker):
         for ent in pasivEnts:
             if ent.label_ == 'DATETIME':
                 pasivDates.append(ent.text)
-            
+                            
         if len(pasivDates) == 1 and len(news) == 1:
             # If there is just one date in Pasiv and one New date
             transformed = transformed.replace(pasivDates[0], news[0])
@@ -642,13 +651,17 @@ if __name__ == '__main__':
         # 'ACTIV' : """La litera A punctul 1 liniuţa a 19-a, denumirea Institutul Politehnic "Gheorghe Asachi" Iaşi se înlocuieşte cu denumirea Universitatea Tehnică "Gheorghe Asachi" Iaşi.""",
            
         # devine
-        'PASIV' : """Dreptul Împrumutatului la trageri din suma disponibilă va înceta la 31 decembrie 1997 sau la o dată ulterioară stabilită de Bancă. Banca va înştiinţa prompt Împrumutatul asupra acestei date ulterioare.""",
-        'ACTIV' : """Data specificată în secţiunea 2.03 din articolul 2 al acordului de împrumut se modifică şi devine 30 septembrie 1998.""",
+        # 'PASIV' : """Dreptul Împrumutatului la trageri din suma disponibilă va înceta la 31 decembrie 1997 sau la o dată ulterioară stabilită de Bancă. Banca va înştiinţa prompt Împrumutatul asupra acestei date ulterioare.""",
+        # 'ACTIV' : """Data specificată în secţiunea 2.03 din articolul 2 al acordului de împrumut se modifică şi devine 30 septembrie 1998.""",
           
         # se proroga pana
         # 'PASIV' : """Compania are obligaţia de a plăti obligaţiile restante prevăzute la alin. (2) până la data de 30 noiembrie 2012.""",
         # 'ACTIV' : """Termenele prevăzute la art. 1 alin. (1) şi (7) se prorogă până la 20 decembrie 2012 inclusiv.""",
-        
+          
+        # devine
+        'PASIV' : """Obligaţiunile de tezaur exprimate în dolari S.U.A. cu dobândă sunt scadente la data de 13 august 1997.""",
+        'ACTIV' : """La punctul 3 - data scadenţei devine 15 august 1997.""",
+         
         'DEBUG': True
       }
           
