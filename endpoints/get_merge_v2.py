@@ -573,8 +573,37 @@ if __name__ == '__main__':
         # 'PASIV' : """Veniturile nete lunare prevăzute la alin. (1) şi (2) se majorează cu 5.000 lei pentru fiecare membru din familie care face dovada că lucrează în baza unui contract individual de muncă, a unei convenţii civile sau că realizează venituri din activităţi pe cont propriu.""",
         # 'ACTIV' : """Suma prevăzută la art. 3 alin. (3), la art. 4 alin. (2) şi la art. 12 alin. (2) din Legea nr. 67/1995 devine 5.300 lei.""",
         
-        'PASIV' : """Cererea de stabilire a dreptului de proprietate se introduce şi se înregistrează la primărie în termen de 30 de zile de la data intrării în vigoare a prezentei legi.""",
-        'ACTIV' : """Termenul de 30 de zile prevăzut de art. 10 alin. 4 din Legea fondului funciar, ~id_link=920541;nr. 18/1991~, pentru introducerea şi înregistrarea cererii de stabilire a dreptului de proprietate se prelungeşte cu 15 zile.""",
+        # se prelungeste cu
+        # 'PASIV' : """Cererea de stabilire a dreptului de proprietate se introduce şi se înregistrează la primărie în termen de 30 de zile de la data intrării în vigoare a prezentei legi.""",
+        # 'ACTIV' : """Termenul de 30 de zile prevăzut de art. 10 alin. 4 din Legea fondului funciar, ~id_link=920541;nr. 18/1991~, pentru introducerea şi înregistrarea cererii de stabilire a dreptului de proprietate se prelungeşte cu 15 zile.""",
+        
+        # se vor citi
+        # 'PASIV' : """persoanele ale căror venituri sînt de pînă la 50.000 lei vor contribui cu o cotă de 2% din veniturile realizate, dar nu mai puţin de 2% din salariul mediu pe ţară.""",
+        # 'ACTIV' : """În Ordonanţa Guvernului României ~id_link=918610;nr. 22/1992~, publicată în Monitorul Oficial al României, Partea I, nr. 213 din 28 august 1992, la articolul 4 alineatul 1 liniuţa a 2-a, cuvintele "salariul mediu pe ţară" se vor citi "salariul minim pe ţară".""",
+                
+        # se elimina
+        # 'PASIV' : """unităţi fără personalitate juridică, cum sînt: oficiile teritoriale de difuzare a filmelor, cinematografe proprii în Bucureşti, Constanţa şi Piteşti, laboratorul pentru subtitrarea filmelor, realizarea copiilor de filme şi expedierea lor în reţeaua cinematografică, redacţia de publicaţii, tipografie şi şcoala de calificare a personalului.""",
+        # 'ACTIV' : """la art. 2 lit. b) se elimină cuvintele: "... cinematografe proprii în Bucureşti, Constanţa şi Piteşti;""",
+                
+        # se prelungeste pana
+        # 'PASIV' : """Raportul comisiei va fi depus pînă la data de 21 iunie 1993.""",
+        # 'ACTIV' : """Termenul stabilit de art. 1 alin. 2 din Hotărârea Camerei Deputaţilor ~id_link=910062;nr. 69/1992~ privind încuviinţarea Comisiei pentru industrii şi servicii de a porni o anchetă, cu modificările ulterioare, se prelungeşte până la 15 octombrie 1993.""",
+                
+        # se inlocuieste
+        # 'PASIV' : """Carne şi preparate din carne""",
+        # 'ACTIV' : """Cu aceeaşi dată se abrogă alin. 2 al art. 1, poziţia 1. "Bovine (tineret şi adulte)" din anexa nr. 1, precum şi anexa nr. 2 la Hotărârea Guvernului nr. 197 bis din 30 aprilie 1993, iar poziţia "Carne şi preparate din carne" din anexa la Hotărârea Guvernului ~id_link=908888;nr. 206/1993~ se înlocuieşte cu poziţia "Carne de porcine şi de pasăre. Preparate din carne".""",
+                
+        # se inlocuieste
+        # 'PASIV' : """Institutul Politehnic "Gheorghe Asachi" Iaşi""",
+        # 'ACTIV' : """La litera A punctul 1 liniuţa a 19-a, denumirea Institutul Politehnic "Gheorghe Asachi" Iaşi se înlocuieşte cu denumirea Universitatea Tehnică "Gheorghe Asachi" Iaşi.""",
+           
+        # devine
+        # 'PASIV' : """Dreptul Împrumutatului la trageri din suma disponibilă va înceta la 31 decembrie 1997 sau la o dată ulterioară stabilită de Bancă. Banca va înştiinţa prompt Împrumutatul asupra acestei date ulterioare.""",
+        # 'ACTIV' : """Data specificată în secţiunea 2.03 din articolul 2 al acordului de împrumut se modifică şi devine 30 septembrie 1998.""",
+          
+        # se proroga pana
+        'PASIV' : """Compania are obligaţia de a plăti obligaţiile restante prevăzute la alin. (2) până la data de 30 noiembrie 2012.""",
+        'ACTIV' : """Termenele prevăzute la art. 1 alin. (1) şi (7) se prorogă până la 20 decembrie 2012 inclusiv.""",
         
         'DEBUG': True
       }
