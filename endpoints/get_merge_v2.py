@@ -12,7 +12,7 @@ _CONFIG = {
 # Debug
 NER_MODEL_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best'
 # Prod
-NER_MODEL_PROD = 'C:\\allan_data\\...\\model-best'
+NER_MODEL_PROD = 'C:\\allan_data\\MergeNER\\model-best'
 
 
 MIN_PASIV_WORDS = 2
@@ -60,7 +60,7 @@ MULTIPLE_SPACES = r' {2,}'
 LINK_PATTERN = "~id_link=[^;]*;([^~]*)~"
 
 
-__VER__='0.2.0.0'
+__VER__='0.2.0.1'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
