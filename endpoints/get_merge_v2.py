@@ -343,7 +343,7 @@ class GetMergeV2Worker(FlaskWorker):
             
         pasivPeriods = []
         for ent in pasivEnts:
-            if ent.label_ == 'DATETIME':
+            if self.is_date(ent):
                 # Get the types of periods and the numbers
                 periodType, periodNumber = self.get_period_type(ent.text)
                     
@@ -387,7 +387,7 @@ class GetMergeV2Worker(FlaskWorker):
             
         pasivDates = []
         for ent in pasivEnts:
-            if ent.label_ == 'DATETIME':
+            if self.is_date(ent):
                 pasivDates.append(ent.text)
                             
         if len(pasivDates) == 1 and len(news) == 1:
@@ -491,7 +491,7 @@ class GetMergeV2Worker(FlaskWorker):
         elif len(news) == 1 and len(olds) < 2:
             # Check if the New is a date
             newEnts = self.nlp_model(news[0]).ents
-            if len(newEnts) == 1 and newEnts[0].label_ == 'DATETIME':
+            if len(newEnts) == 1 and self.is_date(newEnts[0]):
                 # If there is just one New and it is a date, apply Prelungeste pana
                 transformed, actionApplied = self.action_prelungeste_pana(pasiv, activ, action, olds, news)
     
