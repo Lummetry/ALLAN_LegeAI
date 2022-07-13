@@ -60,6 +60,11 @@
             "HOST" : "127.0.0.1"
         },
 
+        "get_merge_v2" : {
+            "NR_WORKERS" : 2,
+            "HOST" : "127.0.0.1"
+        },
+
         "get_mark" : {
             "NR_WORKERS" : 2,
             "HOST" : "127.0.0.1"
