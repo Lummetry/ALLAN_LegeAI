@@ -60,7 +60,7 @@ MULTIPLE_SPACES = r' {2,}'
 LINK_PATTERN = "~id_link=[^;]*;([^~]*)~"
 
 
-__VER__='0.1.0.0'
+__VER__='0.2.0.0'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -322,7 +322,7 @@ class GetMergeV2Worker(FlaskWorker):
         return action, olds, news    
     
     
-    def prelungeste_cu(self, pasiv, activ, action, olds, news):
+    def action_prelungeste_cu(self, pasiv, activ, action, olds, news):
         ''' Method for action Prelungeste cu '''
             
         actionApplied = False
@@ -366,7 +366,7 @@ class GetMergeV2Worker(FlaskWorker):
         return transformed, actionApplied
     
     
-    def prelungeste_pana(self, pasiv, activ, action, olds, news):
+    def action_prelungeste_pana(self, pasiv, activ, action, olds, news):
         ''' Method for action Prelungeste pana '''
             
         actionApplied = False
@@ -387,6 +387,105 @@ class GetMergeV2Worker(FlaskWorker):
                 
             actionApplied = True
             
+        return transformed, actionApplied
+    
+    
+    def action_citeste(self, pasiv, activ, action, olds, news):
+        ''' Method for action Citeste '''
+            
+        actionApplied = False
+        transformed = pasiv
+        
+        if len(olds) + len(news) > 0 and len(olds) == len(news):
+            # If there are corresponding Old's and New's
+                
+            for i, old in enumerate(olds):
+                pos = transformed.find(old)
+                if pos > -1:    
+                    transformed = transformed.replace(old, news[i])
+                        
+                    actionApplied = True
+    
+        return transformed, actionApplied
+    
+    
+    def action_inlocuieste(self, pasiv, activ, action, olds, news):
+        ''' Method for action Inlocuieste '''
+            
+        actionApplied = False
+        transformed = pasiv
+        
+        if len(olds) + len(news) > 0 and len(olds) == len(news):
+            # If there are corresponding Old's and New's            
+            for i, old in enumerate(olds):
+                pos = transformed.find(old)
+                if pos > -1:    
+                    transformed = transformed.replace(old, news[i])
+                    
+                    actionApplied = True
+    
+        return transformed, actionApplied
+    
+    
+    def action_elimina(self, pasiv, activ, action, olds, news):
+        ''' Method for action Elimina '''
+            
+        actionApplied = False
+        transformed = pasiv
+        
+        activPrefix = activ[activ.find(action) + len(action) + 1:]
+        if (activPrefix.startswith('virgula dupa') or activPrefix.startswith('virgula după')) and len(olds) == 1:
+            # Special case - virgula dupa
+            pos = transformed.find(olds[0])
+            if pos > -1:    
+                # Skip over comma
+                transformed = transformed[:pos + len(olds[0])] + transformed[pos + len(olds[0]) + 1:]                    
+                actionApplied = True
+                
+        elif (activPrefix.startswith('inainte de') or activPrefix.startswith('înainte de') or activPrefix.startswith('dinainte de')) and len(olds) == 1:
+            # Special case - virgula inainte
+            pos = transformed.find(olds[0])
+            if pos > -1:    
+                # Skip over comma
+                transformed = transformed[:pos - 2] + transformed[pos - 1:]                    
+                actionApplied = True
+            
+        
+        elif len(olds) > 0 and len(news) == 0:
+            # If there is at least one Old and no News 
+            
+            for i, old in enumerate(olds):
+                pos = transformed.find(old)
+                if pos > -1:    
+                    transformed = transformed[:pos] + transformed[(pos + 1) + len(old):]
+                    
+                    actionApplied = True
+    
+        return transformed, actionApplied
+    
+    
+    def action_devine(self, pasiv, activ, action, olds, news):
+        ''' Method for action Devine '''
+            
+        actionApplied = False
+        transformed = pasiv
+                    
+        if len(olds) + len(news) > 0 and len(olds) == len(news):
+            # If there are corresponding Old's and New's            
+            for i, old in enumerate(olds):
+                pos = transformed.find(old)
+                if pos > -1:    
+                    transformed = transformed.replace(old, news[i])
+                        
+                    actionApplied = True
+            
+        elif len(news) == 1 and len(olds) < 2:
+            # Check if the New is a date
+            newEnts = self.nlp_model(news[0]).ents
+            if len(newEnts) == 1 and newEnts[0].label_ == 'DATETIME':
+                # If there is just one New and it is a date, apply Prelungeste pana
+                transformed, actionApplied = self.action_prelungeste_pana(pasiv, activ, action, olds, news)
+    
         return transformed, actionApplied
     
     
@@ -418,91 +517,36 @@ class GetMergeV2Worker(FlaskWorker):
         transformed = pasiv
         
         if actionType == ACTION_CITESTE:
-            
-            if len(olds) + len(news) > 0 and len(olds) == len(news):
-                # If there are corresponding Old's and New's
-                
-                for i, old in enumerate(olds):
-                    pos = transformed.find(old)
-                    if pos > -1:    
-                        transformed = transformed.replace(old, news[i])
-                        
-                        actionApplied = True
+            # Apply Citeste
+            transformed, actionApplied = self.action_citeste(pasiv, activ, action, olds, news)
     
         elif actionType == ACTION_PRELUNGESTE_CU:
             # Apply Prelungeste cu
-            transformed, actionApplied = self.prelungeste_cu(pasiv, activ, action, olds, news)
+            transformed, actionApplied = self.action_prelungeste_cu(pasiv, activ, action, olds, news)
     
         elif actionType == ACTION_PRELUNGESTE_PANA:
             # Apply Prelungeste pana
-            transformed, actionApplied = self.prelungeste_pana(pasiv, activ, action, olds, news)
+            transformed, actionApplied = self.action_prelungeste_pana(pasiv, activ, action, olds, news)
                 
-        elif actionType == ACTION_INLOCUIESTE:        
-            
-            if len(olds) + len(news) > 0 and len(olds) == len(news):
-                # If there are corresponding Old's and New's            
-                for i, old in enumerate(olds):
-                    pos = transformed.find(old)
-                    if pos > -1:    
-                        transformed = transformed.replace(old, news[i])
-                        
-                        actionApplied = True
+        elif actionType == ACTION_INLOCUIESTE:   
+            # Apply Inlocuieste
+            transformed, actionApplied = self.action_inlocuieste(pasiv, activ, action, olds, news)
                 
-        elif actionType == ACTION_ELIMINA:        
-            
-            activPrefix = activ[activ.find(action) + len(action) + 1:]
-            if (activPrefix.startswith('virgula dupa') or activPrefix.startswith('virgula după')) and len(olds) == 1:
-                # Special case - virgula dupa
-                pos = transformed.find(olds[0])
-                if pos > -1:    
-                    # Skip over comma
-                    transformed = transformed[:pos + len(olds[0])] + transformed[pos + len(olds[0]) + 1:]                    
-                    actionApplied = True
-                    
-            elif (activPrefix.startswith('inainte de') or activPrefix.startswith('înainte de') or activPrefix.startswith('dinainte de')) and len(olds) == 1:
-                # Special case - virgula inainte
-                pos = transformed.find(olds[0])
-                if pos > -1:    
-                    # Skip over comma
-                    transformed = transformed[:pos - 2] + transformed[pos - 1:]                    
-                    actionApplied = True
-                
-            
-            elif len(olds) > 0 and len(news) == 0:
-                # If there is at least one Old and no News 
-                
-                for i, old in enumerate(olds):
-                    pos = transformed.find(old)
-                    if pos > -1:    
-                        transformed = transformed[:pos] + transformed[(pos + 1) + len(old):]
-                        
-                        actionApplied = True
+        elif actionType == ACTION_ELIMINA:  
+            # Apply Elimina
+            transformed, actionApplied = self.action_elimina(pasiv, activ, action, olds, news)
                 
         elif actionType == ACTION_DEVINE:
-                    
-            if len(olds) + len(news) > 0 and len(olds) == len(news):
-                # If there are corresponding Old's and New's            
-                for i, old in enumerate(olds):
-                    pos = transformed.find(old)
-                    if pos > -1:    
-                        transformed = transformed.replace(old, news[i])
-                        
-                        actionApplied = True
-            
-            elif len(news) == 1 and len(olds) < 2:
-                # Check if the New is a date
-                newEnts = self.nlp_model(news[0]).ents
-                if len(newEnts) == 1 and newEnts[0].label_ == 'DATETIME':
-                    # If there is just one New and it is a date, apply Prelungeste pana
-                    transformed, actionApplied = self.prelungeste_pana(pasiv, activ, action, olds, news)
+            # Apply Devine
+            transformed, actionApplied = self.action_devine(pasiv, activ, action, olds, news)
     
         elif actionType == ACTION_PROROGA_PANA:
             # Apply Prelungeste pana
-            transformed, actionApplied = self.prelungeste_pana(pasiv, activ, action, olds, news)
+            transformed, actionApplied = self.action_prelungeste_pana(pasiv, activ, action, olds, news)
     
         elif actionType == ACTION_PROROGA_CU:
             # Apply Prelungeste cu
-            transformed, actionApplied = self.prelungeste_pana(pasiv, activ, action, olds, news)
+            transformed, actionApplied = self.action_prelungeste_pana(pasiv, activ, action, olds, news)
     
         if actionApplied:
             # Clean any possible punctuation mistakes after the transformation
@@ -598,12 +642,12 @@ if __name__ == '__main__':
         # 'ACTIV' : """La litera A punctul 1 liniuţa a 19-a, denumirea Institutul Politehnic "Gheorghe Asachi" Iaşi se înlocuieşte cu denumirea Universitatea Tehnică "Gheorghe Asachi" Iaşi.""",
            
         # devine
-        # 'PASIV' : """Dreptul Împrumutatului la trageri din suma disponibilă va înceta la 31 decembrie 1997 sau la o dată ulterioară stabilită de Bancă. Banca va înştiinţa prompt Împrumutatul asupra acestei date ulterioare.""",
-        # 'ACTIV' : """Data specificată în secţiunea 2.03 din articolul 2 al acordului de împrumut se modifică şi devine 30 septembrie 1998.""",
+        'PASIV' : """Dreptul Împrumutatului la trageri din suma disponibilă va înceta la 31 decembrie 1997 sau la o dată ulterioară stabilită de Bancă. Banca va înştiinţa prompt Împrumutatul asupra acestei date ulterioare.""",
+        'ACTIV' : """Data specificată în secţiunea 2.03 din articolul 2 al acordului de împrumut se modifică şi devine 30 septembrie 1998.""",
           
         # se proroga pana
-        'PASIV' : """Compania are obligaţia de a plăti obligaţiile restante prevăzute la alin. (2) până la data de 30 noiembrie 2012.""",
-        'ACTIV' : """Termenele prevăzute la art. 1 alin. (1) şi (7) se prorogă până la 20 decembrie 2012 inclusiv.""",
+        # 'PASIV' : """Compania are obligaţia de a plăti obligaţiile restante prevăzute la alin. (2) până la data de 30 noiembrie 2012.""",
+        # 'ACTIV' : """Termenele prevăzute la art. 1 alin. (1) şi (7) se prorogă până la 20 decembrie 2012 inclusiv.""",
         
         'DEBUG': True
       }
