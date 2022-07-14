@@ -39,6 +39,8 @@ ACTION_PROROGA_PANA = 7
 KEYWORDS_PROROGA_PANA = ['proroga pana', 'proroga pina', 'prorogă până', 'prorogă pînă']
 ACTION_PROROGA_CU = 8
 KEYWORDS_PROROGA_CU = ['proroga cu', 'prorogă cu']
+ACTION_CU = 9
+KEYWORD_CU = 'cu'
 
 # Period
 PERIOD_ERROR = -1
@@ -67,7 +69,7 @@ ERROR_NUM_OLD_NEW = 3
 ERROR_ACTION_UKNOWN = 4
 
 
-__VER__='0.3.0.0'
+__VER__='0.3.1.0'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -262,6 +264,9 @@ class GetMergeV2Worker(FlaskWorker):
         for key in KEYWORDS_PROROGA_CU:
             if key in cleanAction:
                 return ACTION_PROROGA_CU
+        
+        if cleanAction == KEYWORD_CU:
+            return ACTION_CU
         
         return ACTION_UNKNOWN
     
@@ -572,6 +577,10 @@ class GetMergeV2Worker(FlaskWorker):
         elif actionType == ACTION_PROROGA_CU:
             # Apply Prelungeste cu
             transformed, actionApplied = self.action_prelungeste_pana(pasiv, activ, action, olds, news)
+
+        elif actionType == ACTION_CU:
+            # Apply Inlocuieste cu
+            transformed, actionApplied = self.action_inlocuieste(pasiv, activ, action, olds, news)
     
         if actionApplied:
             # Clean any possible punctuation mistakes after the transformation
@@ -701,6 +710,11 @@ if __name__ == '__main__':
         # devine
         # 'PASIV' : """Obligaţiunile de tezaur exprimate în dolari S.U.A. cu dobândă sunt scadente la data de 13 august 1997.""",
         # 'ACTIV' : """La punctul 3 - data scadenţei devine 15 august 1997.""",
+        
+        # cu
+        'PASIV' : """În cazul în care poluarea s-a produs în zona economică exclusivă şi fondul nu se constituie voluntar, Ministerul Finanţelor formulează în faţa instanţei judecătoreşti competente, în numele statului român, cererea de compensare a pagubelor produse prin poluare.""",
+        'ACTIV' : """"Ministerul Finanţelor" cu "Ministerul Finanţelor Publice".""",
+        
         
         # 'PASIV' : """Termenul stabilit este de 30 de zile.""",
         # 'ACTIV' : """termenul se prelungeste cu 21 zile.""",
