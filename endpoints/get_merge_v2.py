@@ -19,6 +19,7 @@ MIN_PASIV_WORDS = 2
 MIN_ACTIV_WORDS = 5
 
 # Actions
+ACTION_PREPOSITIONS = ['cu', 'pana', 'până', 'pînă', 'in', 'în', 'după', 'dupa', 'la', 'din']
 ACTION_UNKNOWN = 0
 ACTION_INLOCUIESTE = 1
 KEYWORDS_INLOCUIESTE = ['înlocuieşte', 'inlocuieste', 'înlocuiesc', 'inlocuiesc', 'înlocui', 'inlocui'
@@ -69,7 +70,7 @@ ERROR_NUM_OLD_NEW = 3
 ERROR_ACTION_UKNOWN = 4
 
 
-__VER__='0.3.1.0'
+__VER__='0.4.0.0'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -309,47 +310,36 @@ class GetMergeV2Worker(FlaskWorker):
         
         error = NO_ERROR
         
-        i = 0
-        while i < len(entities):
-            ent = entities[i]
-            
-            if ent.label_ == 'action':                
-                action = ent.text
-                
-                for j in range(i + 1, len(entities)):
-                    nextEnt = entities[j]
-                    
-                    if nextEnt.label_ == 'action':
-                        # If there is another action                    
-                        
-                        if len(nextEnt) > 1:
-                            # If the action contains several words
-                            error = ERROR_MANY_ACTIONS
-                        
-                        else:
-                            tok = doc[nextEnt.start]
+        for ent in entities:            
+            if ent.label_ == 'action':   
+                actions.append(self.clean_entity(ent.text))
                             
-                            if tok.is_stop:
-                                # If the action contains only a stopword, add it to the previous action
-                                action += " " + tok.text
-                                i += 1
-                            else:
-                                # If the word is not a stopword
-                                error = ERROR_MANY_ACTIONS
-                        
-                actions.append(self.clean_entity(action))
-                        
             elif ent.label_ == 'old':
                 olds.append(self.clean_entity(ent.text))
-            
+                
             else:
                 news.append(self.clean_entity(ent.text))
             
-            i += 1
+        # Check number of actions
+        if len(actions) > 1:
             
-        if len(actions) == 0:
+            if actions[1] in ACTION_PREPOSITIONS:
+                # If the second word is one of the action preopositions, add it to the previous action
+                action = actions[0] + ' ' + actions[1]
+                
+                # Check if next actions are the same preposition
+                for j in range(2, len(actions)):
+                    if actions[2] != actions[1]:
+                        error = ERROR_MANY_ACTIONS   
+                        
+                if error == NO_ERROR:
+                    actions = [action]            
+            else:
+                error = ERROR_MANY_ACTIONS
+                
+        elif len(actions) == 0:
             error = ERROR_NO_ACTION
-            
+                
         elif len(olds) + len(news) == 0 or (len(olds) + len(news) > 1 and len(olds) != len(news)):
             error = ERROR_NUM_OLD_NEW
             
@@ -712,8 +702,12 @@ if __name__ == '__main__':
         # 'ACTIV' : """La punctul 3 - data scadenţei devine 15 august 1997.""",
         
         # cu
-        'PASIV' : """În cazul în care poluarea s-a produs în zona economică exclusivă şi fondul nu se constituie voluntar, Ministerul Finanţelor formulează în faţa instanţei judecătoreşti competente, în numele statului român, cererea de compensare a pagubelor produse prin poluare.""",
-        'ACTIV' : """"Ministerul Finanţelor" cu "Ministerul Finanţelor Publice".""",
+        # 'PASIV' : """În cazul în care poluarea s-a produs în zona economică exclusivă şi fondul nu se constituie voluntar, Ministerul Finanţelor formulează în faţa instanţei judecătoreşti competente, în numele statului român, cererea de compensare a pagubelor produse prin poluare.""",
+        # 'ACTIV' : """"Ministerul Finanţelor" cu "Ministerul Finanţelor Publice".""",
+        
+        # se inlocuieste cu
+        'PASIV' : """'A se vedea şi 6.2.1.7.'""",
+        'ACTIV' : """"La articolul 5.2.1.6 în cadrul NOTEI se înlocuieşte '6.2.1.7' cu '6.2.2.7' şi '6.2.1.8' cu '6.2.2.8'.""",
         
         
         # 'PASIV' : """Termenul stabilit este de 30 de zile.""",
