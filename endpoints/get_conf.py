@@ -161,7 +161,7 @@ MULTIPLE_SPACES = r' {2,}'
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.0.0'
+__VER__='1.0.1.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1457,7 +1457,7 @@ class GetConfWorker(FlaskWorker):
 # USER COMMANDS #
 #################   
    
-    def add_to_file(self, fileType, entity):
+    def add_to_file(self, fileType, entity, rules):
         """ Add a new line to one of the helper files """
         
         if fileType == 'inst_name':
@@ -1470,7 +1470,29 @@ class GetConfWorker(FlaskWorker):
             pass
             
         elif fileType == 'abbr':
-            pass
+        
+            # Open abbreviations file
+            json_file = open(self.regex_path, 'r', encoding="utf-8")
+            json_string = json_file.read().replace('\\', '\\\\')
+            json_file.close()
+            json_data = json.loads(json_string)
+            abbr_dict = json_data['abbr_dict']
+            
+            # Parse new abbreviation
+            parts = entity.split(':')
+            old = parts[0].strip()
+            new = parts[1].strip()
+            if rules:
+                new = [new, rules]
+            
+            # Add new abbreviation to file
+            abbr_dict[old] = new
+            json_data['abbr_dict'] = abbr_dict        
+            
+            json_file = open(self.regex_path, 'w', encoding="utf-8")
+            json_string = json.dumps(json_data).replace('\\\\', '\\')
+            json_file.write(json_string)
+            json_file.close()
             
         elif fileType == 'file_prefix':
             pass
@@ -1493,7 +1515,8 @@ class GetConfWorker(FlaskWorker):
                     self.user_replace_list.append(command['entities'])
     
                 elif action == 'add':
-                    self.add_to_file(command['type'], command['entity'])
+                    rules = command.get('rules', None)
+                    self.add_to_file(command['type'], command['entity'], rules)
             
             except KeyError:
                 print('Incorrect keys for command: {}'.format(command))    
@@ -1507,32 +1530,44 @@ class GetConfWorker(FlaskWorker):
         
         # Read files
         if self.debug:
-            institution_path = INSTITUTION_LIST_DEBUG
-            organization_path = ORGANIZATION_LIST_DEBUG
-            prefix_institution_path = PREFIX_INSTITUTION_DEBUG
-            regex_path = CONF_REGEX_DEBUG
+            self.institution_path = INSTITUTION_LIST_DEBUG
+            self.organization_path = ORGANIZATION_LIST_DEBUG
+            self.prefix_institution_path = PREFIX_INSTITUTION_DEBUG
+            self.regex_path = CONF_REGEX_DEBUG
         else:
-            institution_path = INSTITUTION_LIST_PROD
-            organization_path = ORGANIZATION_LIST_PROD
-            prefix_institution_path = PREFIX_INSTITUTION_PROD
-            regex_path = CONF_REGEX_PROD
+            self.institution_path = INSTITUTION_LIST_PROD
+            self.organization_path = ORGANIZATION_LIST_PROD
+            self.prefix_institution_path = PREFIX_INSTITUTION_PROD
+            self.regex_path = CONF_REGEX_PROD
+            
+        
+        
+        # Initialize user command lists    
+        self.user_merge_list = []
+        self.user_replace_list = []
+            
+        # Parse user commands
+        commands = inputs.get('COMMANDS')
+        if commands:
+            self.parse_user_commands(commands)
+        
         
         # Read list of public institutions
-        institution_file = open(institution_path, 'r', encoding='utf-8')
+        institution_file = open(self.institution_path, 'r', encoding='utf-8')
         self.institution_list = institution_file.read().splitlines()
         
         # Read list of prefixes for public institutions
-        prefix_file = open(prefix_institution_path, 'r', encoding='utf-8')
+        prefix_file = open(self.prefix_institution_path, 'r', encoding='utf-8')
         self.prefix_institution_list = prefix_file.read().splitlines()
         # Replace with lemmas
         self.prefix_institution_list = [self.text_to_lemmas(prefix, self.nlp_model) for prefix in self.prefix_institution_list]
     
         # Read list of organizations
-        organization_file = open(organization_path, 'r', encoding='utf-8')
+        organization_file = open(self.organization_path, 'r', encoding='utf-8')
         self.organization_list = organization_file.read().splitlines()
         
         # Read JSON REGEX file
-        json_file = open(regex_path, 'r', encoding="utf-8")
+        json_file = open(self.regex_path, 'r', encoding="utf-8")
         json_string = json_file.read().replace('\\', '\\\\')
         json_data = json.loads(json_string)        
         self.conf_regex_list = json_data['conf_regex']
@@ -1542,16 +1577,6 @@ class GetConfWorker(FlaskWorker):
         if len(text) < ct.MODELS.TAG_MIN_INPUT:
           raise ValueError("Document: '{}' is below the minimum of {} words".format(
             text, ct.MODELS.TAG_MIN_INPUT))
-            
-          
-        # Initialize user command lists    
-        self.user_merge_list = []
-        self.user_replace_list = []
-            
-        # Parse user commands
-        commands = inputs.get('COMMANDS')
-        if commands:
-            self.parse_user_commands(commands)
           
             
         # Remove extra whitespaces
