@@ -161,7 +161,7 @@ MULTIPLE_SPACES = r' {2,}'
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.3.0'
+__VER__='1.0.4.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1485,7 +1485,28 @@ class GetConfWorker(FlaskWorker):
             inst_file.close()
             
         elif fileType == 'org':
-            pass
+        
+            # Open organizations file
+            org_file = open(self.organization_path, 'r', encoding="utf-8")
+            lines = org_file.read()
+            organizations = lines.split('\n')
+            org_file.close()
+            
+            # Check if organization already exists
+            exists = False
+            for org in organizations:
+                if org == entity:
+                    exists = True
+                    break
+            
+            # Add new organization
+            if not exists:
+                lines += '\n' + entity
+            
+            # Write to file
+            org_file = open(self.organization_path, 'w', encoding="utf-8")
+            org_file.write(lines)
+            org_file.close()
             
         elif fileType == 'inst_prefix':
         
