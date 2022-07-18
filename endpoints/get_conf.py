@@ -161,7 +161,7 @@ MULTIPLE_SPACES = r' {2,}'
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='0.7.2.2'
+__VER__='1.0.0.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1449,14 +1449,54 @@ class GetConfWorker(FlaskWorker):
             # Remove extra dots
             text = text[:start] + ' ' + text[end:]
           
-        return text    
+        return text  
+
+
     
-    
-    
+#################
+# USER COMMANDS #
+#################   
+   
+    def add_to_file(self, fileType, entity):
+        """ Add a new line to one of the helper files """
         
-    #######
-    # AUX #
-    #######
+        if fileType == 'inst_name':
+            pass
+            
+        elif fileType == 'org':
+            pass
+            
+        elif fileType == 'inst_prefix':
+            pass
+            
+        elif fileType == 'abbr':
+            pass
+            
+        elif fileType == 'file_prefix':
+            pass
+            
+        else:
+            print('Incorrect type {}.'.format(fileType)) 
+       
+    def parse_user_commands(self, commands):
+        """ Parse the list of commands given by the user. """
+        
+        for command in commands:
+            action = command.get('action')
+            print(command)
+            
+            try:
+                if action == 'merge':
+                    self.user_merge_list.append((command['words'], command['entity'], command['position']))
+    
+                elif action == 'replace':
+                    self.user_replace_list.append(command['entities'])
+    
+                elif action == 'add':
+                    self.add_to_file(command['type'], command['entity'])
+            
+            except KeyError:
+                print('Incorrect keys for command: {}'.format(command))    
     
     
     
@@ -1502,12 +1542,24 @@ class GetConfWorker(FlaskWorker):
         if len(text) < ct.MODELS.TAG_MIN_INPUT:
           raise ValueError("Document: '{}' is below the minimum of {} words".format(
             text, ct.MODELS.TAG_MIN_INPUT))
+            
           
+        # Initialize user command lists    
+        self.user_merge_list = []
+        self.user_replace_list = []
+            
+        # Parse user commands
+        commands = inputs.get('COMMANDS')
+        if commands:
+            self.parse_user_commands(commands)
+          
+            
         # Remove extra whitespaces
         text = re.sub(' +', ' ', text)  
         
         # Clean punctuation
         text = self.clean_punctuation(text)        
+        
         
         # TODO De sters cand institutiile vor fi deja normalizate la citire
         # Normalize institution names            
@@ -1519,12 +1571,14 @@ class GetConfWorker(FlaskWorker):
             inst_stripped = inst_normalized.replace('.', '')
             if inst_stripped != inst_normalized:
                 self.new_institution_list.append(inst_stripped)
+               
                 
         # Replace with abbreviations
         text = self.replace_abbreviations(text)
         
         # Replace 'alin' sequences
         text = self.replace_alin_lit(text)
+        
         
         # Apply spaCy analysis
         doc = self.nlp_model(text)
@@ -1701,7 +1755,7 @@ if __name__ == '__main__':
     
     # DE LA CLIENT
     
-    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
     
@@ -1723,7 +1777,7 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
     
-    'DOCUMENT' : """Prin cererea de chemare în judecată înregistrată pe rolul Curţii de Apel Bucureşti – Secţia a VIII- a Contencios Administrativ şi Fiscal sub numărul 2570/2/2017, reclamantul Curuti  Ionel, a solicitat, în contradictoriu cu pârâta Agenţia Naţională de Integritate anularea Raportului de evaluare nr. 9756/G/II/17.03.2017 întocmit de ANI - Inspecţia de Integritate şi obligarea pârâtei la plata cheltuielilor de judecata ocazionate.""",
+    # 'DOCUMENT' : """Prin cererea de chemare în judecată înregistrată pe rolul Curţii de Apel Bucureşti – Secţia a VIII- a Contencios Administrativ şi Fiscal sub numărul 2570/2/2017, reclamantul Curuti  Ionel, a solicitat, în contradictoriu cu pârâta Agenţia Naţională de Integritate anularea Raportului de evaluare nr. 9756/G/II/17.03.2017 întocmit de ANI - Inspecţia de Integritate şi obligarea pârâtei la plata cheltuielilor de judecata ocazionate.""",
     # 'DOCUMENT' : """S-au luat în examinare recursurile formulate de reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A. și chemata în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.) împotriva Sentinţei nr. 97 din 12 aprilie 2017 pronunţată de Curtea de Apel Ploiești – Secţia a II-a Civilă, de Contencios Administrativ şi Fiscal. La apelul nominal, făcut în şedinţă publică, răspunde recurenta- reclamantă S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin consilier juridic Niţă Vasile Laurenţiu, care depune delegaţie de reprezentare la dosar, recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.), prin consilier juridic Marinela Vladescu, care depune delegaţie de reprezentare la dosarul cauzei, lipsă fiind intimatul-pârât Ministerul Investiţiilor şi Proiectelor Europene (fostul Ministerul Fondurilor Europene). Procedura de citare este legal îndeplinită. Se prezintă referatul cauzei, magistratul – asistent învederând că recurenta-reclamantă a formulat o cerere de renunţare la cererea de chemare în judecată precum şi la cererea de chemare în garanţie, cu privire la care s-a depus punct de vedere în sensul de a se lua act de cererea de renunţare la judecată. Reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin avocat, conform art. 406 alin. 5 Cod procedură civilă, solicită a se lua act de cererea de renunţare la judecată, respectiv de chemare în garanţie, cu consecinţa anulării hotărârilor pronunţate de Curtea de Apel Ploieşti. Recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L., prin consilier juridic, precizează că nu se opune renunţării la judecată, astfel cum a fost solicitată de recurenta-reclamantă, apreciind că sunt îndeplinite condiţiile prevăzute de dispozițiile art. 406 Cod procedură civilă.""",
     # 'DOCUMENT' : """Decizia nr. 12996 din 18.02.2016, înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 8260/23.02.2016 ce priveşte soluţionarea contestaţiei formulata de Compania de Apa Târgovişte Dâmboviţa SA împotriva notei de constatare a neregulilor si de stabilire a corecţiilor financiare nr.3966/19.01.2016; Nota de constatare a neregulilor a neregulilor si de stabilire a corecţiilor financiare nr. 3966 din 19.01.2016 înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 15178 din 30.04.201 5 şi Notificării cu privire la debit nr. 3968 din 19.01.2016 înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 3663/311-UIP din 22.01.2016.""",
     # 'DOCUMENT' : """Totodată, a notificat beneficiarii PNDL cu privire la epuizarea creditelor bugetare în proporţie de 80% pentru PNDL 1, ultimele transferuri efectuându-se parţial pentru solicitările de finanţare depuse până în data de 08.11.2017 (adresa nr. 155732/18.12.2017).""",
@@ -1750,6 +1804,17 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
         
     # 'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan"""
+    
+    'COMMANDS' : [
+        {"action" : "merge", "words" : "Ciortea", "entity" : "A", "position" : "pre"},
+        {"action" : "merge", "words" : "Ciortea", "entity" : "B", "position" : "post"},
+        {"action" : "replace", "entities" : ["A", "B", "C"]},
+        {"action" : "add", "type" : "abbr", "entity" : "Cod penal: C. pen."},
+        {"action" : "add", "type" : "org", "entity" : "PSD"},
+        {"action" : "add", "type" : "inst_name", "entity" : "tribunalul Suceava"},
+        {"action": "add", "type" : "file_prefix", "entity" : "Sentintei penale emisa de catre Tribunalul Constanta"}
+        ]
+    
       }
   
   res = eng.execute(inputs=test, counter=1)
