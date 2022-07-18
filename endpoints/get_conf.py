@@ -161,7 +161,7 @@ MULTIPLE_SPACES = r' {2,}'
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.2.0'
+__VER__='1.0.3.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1461,7 +1461,28 @@ class GetConfWorker(FlaskWorker):
         """ Add a new line to one of the helper files """
         
         if fileType == 'inst_name':
-            pass
+        
+            # Open institutions file
+            inst_file = open(self.institution_path, 'r', encoding="utf-8")
+            lines = inst_file.read()
+            institutions = lines.split('\n')
+            inst_file.close()
+            
+            # Check if institution already exists
+            exists = False
+            for inst in institutions:
+                if inst == entity:
+                    exists = True
+                    break
+            
+            # Add new institution
+            if not exists:
+                lines += '\n' + entity
+            
+            # Write to file
+            inst_file = open(self.institution_path, 'w', encoding="utf-8")
+            inst_file.write(lines)
+            inst_file.close()
             
         elif fileType == 'org':
             pass
@@ -1471,7 +1492,8 @@ class GetConfWorker(FlaskWorker):
             # Open prefix file
             prefix_file = open(self.prefix_institution_path, 'r', encoding="utf-8")
             lines = prefix_file.read()
-            prefixes = lines.split('\n')  
+            prefixes = lines.split('\n') 
+            prefix_file.close() 
             
             # Check if prefix already exists
             exists = False
@@ -1854,10 +1876,10 @@ if __name__ == '__main__':
         {"action" : "merge", "words" : "Ciortea", "entity" : "A", "position" : "pre"},
         {"action" : "merge", "words" : "Ciortea", "entity" : "B", "position" : "post"},
         {"action" : "replace", "entities" : ["A", "B", "C"]},
-        {"action" : "add", "type" : "abbr", "entity" : "Cod penal: C. pen."},
+        # {"action" : "add", "type" : "abbr", "entity" : "Cod penal: C. pen."},
         {"action" : "add", "type" : "org", "entity" : "PSD"},
-        {"action" : "add", "type" : "inst_name", "entity" : "tribunalul Suceava"},
-        {"action" : "add", "type" : "inst_prefix", "entity" : "Secție"},
+        # {"action" : "add", "type" : "inst_name", "entity" : "tribunalul Suceava"},
+        # {"action" : "add", "type" : "inst_prefix", "entity" : "Secție"},
         {"action": "add", "type" : "file_prefix", "entity" : "Sentintei penale emisa de catre Tribunalul Constanta"}
         ]
     
