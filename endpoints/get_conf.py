@@ -161,7 +161,7 @@ MULTIPLE_SPACES = r' {2,}'
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.1.0'
+__VER__='1.0.2.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1467,7 +1467,27 @@ class GetConfWorker(FlaskWorker):
             pass
             
         elif fileType == 'inst_prefix':
-            pass
+        
+            # Open prefix file
+            prefix_file = open(self.prefix_institution_path, 'r', encoding="utf-8")
+            lines = prefix_file.read()
+            prefixes = lines.split('\n')  
+            
+            # Check if prefix already exists
+            exists = False
+            for prefix in prefixes:
+                if prefix == entity:
+                    exists = True
+                    break
+            
+            # Add new prefix
+            if not exists:
+                lines += '\n' + entity
+            
+            # Write to file
+            prefix_file = open(self.prefix_institution_path, 'w', encoding="utf-8")
+            prefix_file.write(lines)
+            prefix_file.close()
             
         elif fileType == 'abbr':
         
@@ -1837,6 +1857,7 @@ if __name__ == '__main__':
         {"action" : "add", "type" : "abbr", "entity" : "Cod penal: C. pen."},
         {"action" : "add", "type" : "org", "entity" : "PSD"},
         {"action" : "add", "type" : "inst_name", "entity" : "tribunalul Suceava"},
+        {"action" : "add", "type" : "inst_prefix", "entity" : "Secție"},
         {"action": "add", "type" : "file_prefix", "entity" : "Sentintei penale emisa de catre Tribunalul Constanta"}
         ]
     
