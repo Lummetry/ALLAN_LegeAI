@@ -161,7 +161,7 @@ MULTIPLE_SPACES = r' {2,}'
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.4.0'
+__VER__='1.0.4.1'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1456,81 +1456,46 @@ class GetConfWorker(FlaskWorker):
 #################
 # USER COMMANDS #
 #################   
+
+    def append_to_file(self, path, newLine):
+        """ Append a line to the end of a file, if it does not already exist """
+            
+        # Open file
+        file = open(path, 'r', encoding="utf-8")
+        content = file.read()
+        lines = content.split('\n')
+        file.close()
+            
+        # Check if line already exists
+        exists = False
+        for line in lines:
+            if line == newLine:
+                exists = True
+                break
+            
+        # Add new line
+        if not exists:
+            content += '\n' + newLine
+                
+        # Write to file
+        file = open(path, 'w', encoding="utf-8")
+        file.write(content)
+        file.close()
    
     def add_to_file(self, fileType, entity, rules):
         """ Add a new line to one of the helper files """
         
         if fileType == 'inst_name':
-        
-            # Open institutions file
-            inst_file = open(self.institution_path, 'r', encoding="utf-8")
-            lines = inst_file.read()
-            institutions = lines.split('\n')
-            inst_file.close()
+            # Add institution name
+            self.append_to_file(self.institution_path, entity)
             
-            # Check if institution already exists
-            exists = False
-            for inst in institutions:
-                if inst == entity:
-                    exists = True
-                    break
-            
-            # Add new institution
-            if not exists:
-                lines += '\n' + entity
-            
-            # Write to file
-            inst_file = open(self.institution_path, 'w', encoding="utf-8")
-            inst_file.write(lines)
-            inst_file.close()
-            
-        elif fileType == 'org':
-        
-            # Open organizations file
-            org_file = open(self.organization_path, 'r', encoding="utf-8")
-            lines = org_file.read()
-            organizations = lines.split('\n')
-            org_file.close()
-            
-            # Check if organization already exists
-            exists = False
-            for org in organizations:
-                if org == entity:
-                    exists = True
-                    break
-            
-            # Add new organization
-            if not exists:
-                lines += '\n' + entity
-            
-            # Write to file
-            org_file = open(self.organization_path, 'w', encoding="utf-8")
-            org_file.write(lines)
-            org_file.close()
+        elif fileType == 'org':            
+            # Add organization name
+            self.append_to_file(self.organization_path, entity)
             
         elif fileType == 'inst_prefix':
-        
-            # Open prefix file
-            prefix_file = open(self.prefix_institution_path, 'r', encoding="utf-8")
-            lines = prefix_file.read()
-            prefixes = lines.split('\n') 
-            prefix_file.close() 
-            
-            # Check if prefix already exists
-            exists = False
-            for prefix in prefixes:
-                if prefix == entity:
-                    exists = True
-                    break
-            
-            # Add new prefix
-            if not exists:
-                lines += '\n' + entity
-            
-            # Write to file
-            prefix_file = open(self.prefix_institution_path, 'w', encoding="utf-8")
-            prefix_file.write(lines)
-            prefix_file.close()
+            # Add institution prefix
+            self.append_to_file(self.prefix_institution_path, entity)
             
         elif fileType == 'abbr':
         
@@ -1898,7 +1863,7 @@ if __name__ == '__main__':
         {"action" : "merge", "words" : "Ciortea", "entity" : "B", "position" : "post"},
         {"action" : "replace", "entities" : ["A", "B", "C"]},
         # {"action" : "add", "type" : "abbr", "entity" : "Cod penal: C. pen."},
-        {"action" : "add", "type" : "org", "entity" : "PSD"},
+        # {"action" : "add", "type" : "org", "entity" : "PSD"},
         # {"action" : "add", "type" : "inst_name", "entity" : "tribunalul Suceava"},
         # {"action" : "add", "type" : "inst_prefix", "entity" : "Secție"},
         {"action": "add", "type" : "file_prefix", "entity" : "Sentintei penale emisa de catre Tribunalul Constanta"}
