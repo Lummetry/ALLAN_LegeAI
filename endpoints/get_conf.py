@@ -24,12 +24,14 @@ _CONFIG = {
 INSTITUTION_LIST_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\nomenclator institutii publice.txt'
 ORGANIZATION_LIST_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\organizatii.txt'
 CONF_REGEX_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\conf_regex.json'
-PREFIX_INSTITUTION_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\prefix_institutii.txt'
+PREFIX_INSTITUTION_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\prefix_institutii.txt'   
+CASE_NOCONF_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\case_noconf.txt'            
 # Prod
 INSTITUTION_LIST_PROD = 'C:\\allan_data\\2022.01.26\\nomenclator institutii publice.txt'
 ORGANIZATION_LIST_PROD = 'C:\\allan_data\\2022.01.26\\organizatii.txt'
 CONF_REGEX_PROD = 'C:\\allan_data\\2022.03.07\\conf_regex.json'
-PREFIX_INSTITUTION_PROD = 'C:\\allan_data\\2022.01.26\\prefix_institutii.txt'
+PREFIX_INSTITUTION_PROD = 'C:\\allan_data\\2022.01.26\\prefix_institutii.txt'   
+CASE_NOCONF_PROD = 'C:\\allan_data\\2022.07.19\\case_noconf.txt'            
 
 
 # CNP 
@@ -161,7 +163,7 @@ MULTIPLE_SPACES = r' {2,}'
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.4.1'
+__VER__='1.0.5.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1128,6 +1130,64 @@ class GetConfWorker(FlaskWorker):
                 print('Removed', (m_start, m_end, m_type))
                 
         return new_matches
+
+
+    def match_noconf_case(self, doc, options=None):
+        """ Find instances of keywords next to which case numbers should not be confidential. """
+        
+        text = doc.text        
+        if options:
+            if 'lemma' in options:
+                text = self.text_to_lemmas(text, self.nlp_model)
+                
+            if 'lower' in options:
+                text = text.lower()
+        print('NOCONF', text)
+        
+        res = []
+            
+        for i in range(len(self.case_noconf_list)):
+            
+            keyw = self.case_noconf_list[i]
+            if options:
+                if 'lemma' in options:
+                    keyw = self.text_to_lemmas(keyw, self.nlp_model)
+    
+                if 'lower' in options:
+                    keyw = keyw.lower()
+                                 
+            # Find all matches
+            positions = [(m.start(), m.start() + len(keyw)) for m in re.finditer(keyw, text)]
+            if positions:
+                res.extend(positions)            
+        
+        return res
+
+    def ignore_noconf_cases(self, matches, noconf_cases):
+        """ Remove matches close to an EU case match """
+        
+        case_types = ["NUMAR", "NUMĂR", "NUMĂRUL", "NUMARUL", "NR", "NR."]
+            
+        new_matches = {}
+        for (m_start, m_end, m_type) in matches.values():
+                
+            if m_type in case_types:
+                # Only check for case matches
+                near_match = False        
+                for (c_start, c_end) in noconf_cases:
+    
+                    if max(c_start, m_start) - min(c_end, m_end) < MIN_CASE_DISTANCE:
+                        near_match = True
+                        break
+    
+                if not near_match:
+                    new_matches[m_start] = (m_start, m_end, m_type)
+                    
+            else:
+                new_matches[m_start] = (m_start, m_end, m_type)
+                    
+        return new_matches    
+    
     
     def filter_noconf_matches(self, text, matches, noconf_matches):
         """ Eliminate the matches which intersect with non confidential matches. """
@@ -1489,7 +1549,7 @@ class GetConfWorker(FlaskWorker):
             # Add institution name
             self.append_to_file(self.institution_path, entity)
             
-        elif fileType == 'org':            
+        elif fileType == 'org':                        
             # Add organization name
             self.append_to_file(self.organization_path, entity)
             
@@ -1522,8 +1582,9 @@ class GetConfWorker(FlaskWorker):
             json_file.write(json_string)
             json_file.close()
             
-        elif fileType == 'file_prefix':
-            pass
+        elif fileType == 'noconf_case':
+            # Add institution prefix
+            self.append_to_file(self.case_noconf_path, entity)
             
         else:
             print('Incorrect type {}.'.format(fileType)) 
@@ -1562,11 +1623,13 @@ class GetConfWorker(FlaskWorker):
             self.organization_path = ORGANIZATION_LIST_DEBUG
             self.prefix_institution_path = PREFIX_INSTITUTION_DEBUG
             self.regex_path = CONF_REGEX_DEBUG
+            self.case_noconf_path = CASE_NOCONF_DEBUG
         else:
             self.institution_path = INSTITUTION_LIST_PROD
             self.organization_path = ORGANIZATION_LIST_PROD
             self.prefix_institution_path = PREFIX_INSTITUTION_PROD
             self.regex_path = CONF_REGEX_PROD
+            self.case_noconf_path = CASE_NOCONF_PROD
             
         
         
@@ -1599,7 +1662,12 @@ class GetConfWorker(FlaskWorker):
         json_string = json_file.read().replace('\\', '\\\\')
         json_data = json.loads(json_string)        
         self.conf_regex_list = json_data['conf_regex']
-        self.abbr_dict = json_data['abbr_dict']                
+        self.abbr_dict = json_data['abbr_dict']         
+        
+        # Read list of keywords for non-confidential cases
+        case_noconf_file = open(self.case_noconf_path, 'r', encoding='utf-8')
+        self.case_noconf_list = case_noconf_file.read().splitlines()
+        
         
         text = inputs['DOCUMENT']
         if len(text) < ct.MODELS.TAG_MIN_INPUT:
@@ -1685,9 +1753,15 @@ class GetConfWorker(FlaskWorker):
         # Match user REGEX
         matches.update(self.match_regex(text)) 
         
+        
         # Match EU case and ignore nearby matches
         cases = self.match_eu_case(text)
         matches = self.ignore_near_case_matches(matches, cases)
+        
+        # Match noconf keywords and ignore nearby case matches
+        noconf_keys = self.match_noconf_case(doc, options=['lower', 'lemma'])
+        matches = self.ignore_noconf_cases(matches, noconf_keys)
+        
         
         # Find entities which should not be confidential        
         noconf_matches = self.match_noconf_institution(text, public_insts=self.new_institution_list)
@@ -1808,11 +1882,11 @@ if __name__ == '__main__':
     
     # DE LA CLIENT
     
-    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
     
-    # 'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
+    'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
     
     # 'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
     
@@ -1866,7 +1940,7 @@ if __name__ == '__main__':
         # {"action" : "add", "type" : "org", "entity" : "PSD"},
         # {"action" : "add", "type" : "inst_name", "entity" : "tribunalul Suceava"},
         # {"action" : "add", "type" : "inst_prefix", "entity" : "Secție"},
-        {"action": "add", "type" : "file_prefix", "entity" : "Sentintei penale emisa de catre Tribunalul Constanta"}
+        {"action": "add", "type" : "noconf_case", "entity" : "decizie penală"}
         ]
     
       }
