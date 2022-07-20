@@ -163,7 +163,7 @@ MULTIPLE_SPACES = r' {2,}'
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.5.0'
+__VER__='1.0.6.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -329,6 +329,44 @@ class GetConfWorker(FlaskWorker):
         
         return different_ents
     
+    def generate_codes(self, entities):
+        """ Generate the codes corresponding to a list of entities. """
+        
+        codes = [''] * len(entities)        
+        current_code = 'A'        
+        
+        # Get a code for each of the entities
+        for i, ent in enumerate(entities):
+            # If no code was alreay set
+            if codes[i] == '':
+                    
+            # Set the current code for all occurances of the entity
+                for j in range(i, len(entities)):
+                    if entities[j] == ent:
+                        codes[j] = current_code
+                            
+                # Get the next code
+                current_code = self.next_name_code(current_code)
+                
+        return codes
+    
+    def user_update_name_codes(self, codes):
+        """ Update the name codes according to the user commands. """
+             
+        # Replace codes according to user commands
+        for replace_list in self.user_replace_list:
+            
+            # Get the first code
+            new_user_code = replace_list[0]
+            
+            # Replace next user codes
+            for user_code in replace_list[1:]:
+                for i in range(len(codes)):
+                    if codes[i] == user_code:
+                        codes[i] = new_user_code
+                        
+        return codes
+    
     def set_name_codes(self, text):
         """ Form the dictionary of names and codes. """
         
@@ -337,22 +375,15 @@ class GetConfWorker(FlaskWorker):
     
         # Unite names that refer to the same entity
         different_ents = self.unite_same_names(text) 
-        
-        codes = [''] * len(different_ents)        
-        current_code = 'A'
     
         # Get a code for each of the entities
-        for i, ent in enumerate(different_ents):
-            # If no code was alreay set
-            if codes[i] == '':
-                
-                # Set the current code for all occurances of the entity
-                for j in range(i, len(different_ents)):
-                    if different_ents[j] == ent:
-                        codes[j] = current_code
-                        
-                # Get the next code
-                current_code = self.next_name_code(current_code)
+        codes = self.generate_codes(different_ents)
+        
+        # Update the codes according to the user commands
+        updated_codes = self.user_update_name_codes(codes)        
+    
+        # Get a code for each of the entities again
+        codes = self.generate_codes(updated_codes)
         
         # Set the name - code dictionary
         name_code_dict = {self.name_list[i][1] : codes[i] for i in range(len(self.name_list))}
@@ -1142,7 +1173,6 @@ class GetConfWorker(FlaskWorker):
                 
             if 'lower' in options:
                 text = text.lower()
-        print('NOCONF', text)
         
         res = []
             
@@ -1884,9 +1914,9 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
-    # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
+    # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Adrian Fotea, Costea Sorina şi Cristescu Dorel in compania SC Minaur SRL""",
     
-    'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
+    # 'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
     
     # 'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
     
@@ -1930,17 +1960,17 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
         
-    # 'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan"""
+    'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan""",
     
     'COMMANDS' : [
         {"action" : "merge", "words" : "Ciortea", "entity" : "A", "position" : "pre"},
         {"action" : "merge", "words" : "Ciortea", "entity" : "B", "position" : "post"},
-        {"action" : "replace", "entities" : ["A", "B", "C"]},
+        # {"action" : "replace", "entities" : ["A", "B", "C"]},
         # {"action" : "add", "type" : "abbr", "entity" : "Cod penal: C. pen."},
         # {"action" : "add", "type" : "org", "entity" : "PSD"},
         # {"action" : "add", "type" : "inst_name", "entity" : "tribunalul Suceava"},
         # {"action" : "add", "type" : "inst_prefix", "entity" : "Secție"},
-        {"action": "add", "type" : "noconf_case", "entity" : "decizie penală"}
+        # {"action": "add", "type" : "noconf_case", "entity" : "decizie penală"}
         ]
     
       }
