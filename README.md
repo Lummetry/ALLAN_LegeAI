@@ -435,5 +435,5 @@ Each microservice can be configured in `config_gateway.txt`. The number of worke
    ```
    conda create -n allan_dev python=3.8 pip
    conda install -c anaconda tensorflow-gpu=2.5
-   pip install pandas matplotlib psutil tqdm shapely seaborn scikit-learn scikit-image dropbox gensim transformers flask pyodbc
+   pip install pandas matplotlib psutil tqdm shapely seaborn scikit-learn scikit-image dropbox gensim transformers flask pyodbc datasets
    ```
