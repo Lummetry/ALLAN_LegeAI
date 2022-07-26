@@ -3,6 +3,8 @@
 from libraries.model_server_v2 import FlaskWorker
 import regex as re
 import spacy
+import unidecode
+import string
 
 _CONFIG = {
   'SPACY_MODEL' : 'ro_core_news_lg',
@@ -10,7 +12,7 @@ _CONFIG = {
 
 # File paths
 # Debug
-NER_MODEL_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\prev-model-best'
+NER_MODEL_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-1000'
 # Prod
 NER_MODEL_PROD = 'C:\\allan_data\\MergeNER\\model-best'
 
@@ -70,7 +72,7 @@ ERROR_NUM_OLD_NEW = 3
 ERROR_ACTION_UKNOWN = 4
 
 
-__VER__='0.4.0.0'
+__VER__='0.4.1.0'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -219,6 +221,21 @@ class GetMergeV2Worker(FlaskWorker):
         
         return ent
         
+    def generalize_text(self, text, options=['lower', 'diacritics']):
+        ''' Generalize a text for comparisons. '''
+        
+        gen_text = text
+        
+        if 'lower' in options:
+            gen_text = gen_text.lower()
+            
+        if 'diacritics' in options:
+            gen_text = unidecode.unidecode(gen_text)
+            
+        if 'punctuation' in options:
+            gen_text = re.sub('[' + string.punctuation + ']', '', gen_text)
+        
+        return gen_text
 
     def is_date(self, ent):
         ''' Check if an entity represents a date '''
@@ -414,25 +431,6 @@ class GetMergeV2Worker(FlaskWorker):
         return transformed, actionApplied
     
     
-    def action_citeste(self, pasiv, activ, action, olds, news):
-        ''' Method for action Citeste '''
-            
-        actionApplied = False
-        transformed = pasiv
-        
-        if len(olds) + len(news) > 0 and len(olds) == len(news):
-            # If there are corresponding Old's and New's
-                
-            for i, old in enumerate(olds):
-                pos = transformed.find(old)
-                if pos > -1:    
-                    transformed = transformed.replace(old, news[i])
-                        
-                    actionApplied = True
-    
-        return transformed, actionApplied
-    
-    
     def action_inlocuieste(self, pasiv, activ, action, olds, news):
         ''' Method for action Inlocuieste '''
             
@@ -442,11 +440,22 @@ class GetMergeV2Worker(FlaskWorker):
         if len(olds) + len(news) > 0 and len(olds) == len(news):
             # If there are corresponding Old's and New's            
             for i, old in enumerate(olds):
-                pos = transformed.find(old)
-                if pos > -1:    
-                    transformed = transformed.replace(old, news[i])
+                
+                # Generalize texts
+                gen_old = self.generalize_text(old)
+                gen_tran = self.generalize_text(transformed)
+                
+                re_matches = list(re.finditer(gen_old, gen_tran))
+                
+                if re_matches:
+                    # If matches were found, replace them in reverse order
+                    re_matches.reverse()
                     
-                    actionApplied = True
+                    for re_match in re_matches:
+                        start, end = re_match.span()
+                        transformed = transformed[:start] + news[i] + transformed[end:]
+                        
+                    actionApplied = True                    
     
         return transformed, actionApplied
     
@@ -495,13 +504,8 @@ class GetMergeV2Worker(FlaskWorker):
         transformed = pasiv
                     
         if len(olds) + len(news) > 0 and len(olds) == len(news):
-            # If there are corresponding Old's and New's            
-            for i, old in enumerate(olds):
-                pos = transformed.find(old)
-                if pos > -1:    
-                    transformed = transformed.replace(old, news[i])
-                        
-                    actionApplied = True
+            # If there are corresponding Old's and New's       
+            transformed, actionApplied = self.action_inlocuieste(pasiv, activ, action, olds, news)
             
         elif len(news) == 1 and len(olds) < 2:
             # Check if the New is a date
@@ -538,7 +542,7 @@ class GetMergeV2Worker(FlaskWorker):
         
         if actionType == ACTION_CITESTE:
             # Apply Citeste
-            transformed, actionApplied = self.action_citeste(pasiv, activ, action, olds, news)
+            transformed, actionApplied = self.action_inlocuieste(pasiv, activ, action, olds, news)
     
         elif actionType == ACTION_PRELUNGESTE_CU:
             # Apply Prelungeste cu
@@ -643,8 +647,8 @@ class GetMergeV2Worker(FlaskWorker):
         elif error == ERROR_ACTION_UKNOWN:
             res['error'] = "Unknown action."
         elif actionApplied == False:
-            # No action error
-            res['error'] = "Number of Old or New entities incorrect for identified Action."
+            # No action error, but action was not applied
+            res['error'] = "Conditions for Old or New entities to apply Action not satisfied."
         else:
             # No error
             success = True
@@ -706,12 +710,12 @@ if __name__ == '__main__':
         # 'ACTIV' : """"Ministerul Finanţelor" cu "Ministerul Finanţelor Publice".""",
         
         # se inlocuieste cu
-        'PASIV' : """'A se vedea şi 6.2.1.7.'""",
-        'ACTIV' : """"La articolul 5.2.1.6 în cadrul NOTEI se înlocuieşte '6.2.1.7' cu '6.2.2.7' şi '6.2.1.8' cu '6.2.2.8'.""",
+        # 'PASIV' : """'A se vedea şi 6.2.1.7.'""",
+        # 'ACTIV' : """"La articolul 5.2.1.6 în cadrul NOTEI se înlocuieşte '6.2.1.7' cu '6.2.2.7' şi '6.2.1.8' cu '6.2.2.8'.""",
         
         
-        # 'PASIV' : """Termenul stabilit este de 30 de zile.""",
-        # 'ACTIV' : """termenul se prelungeste cu 21 zile.""",
+        'PASIV' : """lapte de vacă cu 3,5% grăsime.""",
+        'ACTIV' : """În textul hotărârii şi al anexei nr. II, denumirea produsului 'Lapte de vacă cu 3,5% grăsime' se înlocuieşte cu aceea de 'Lapte de vacă cu 3,5% grăsime, STAS 2418-61'.""",
         
          
         'DEBUG': True
