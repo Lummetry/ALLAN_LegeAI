@@ -72,7 +72,7 @@ ERROR_NUM_OLD_NEW = 3
 ERROR_ACTION_UKNOWN = 4
 
 
-__VER__='0.4.1.0'
+__VER__='0.4.2.0'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -236,6 +236,22 @@ class GetMergeV2Worker(FlaskWorker):
             gen_text = re.sub('[' + string.punctuation + ']', '', gen_text)
         
         return gen_text
+    
+    def find_generalized_matches(self, sub, text):
+        ''' Find occurances of a substring using generlized texts. '''
+        
+        # Generalize texts
+        gen_old = self.generalize_text(sub)
+        gen_tran = self.generalize_text(text)
+                
+        re_matches = list(re.finditer(gen_old, gen_tran))
+            
+        if re_matches:
+            # If matches were found, replace them in reverse order
+            re_matches.reverse()
+            
+        return re_matches
+                
 
     def is_date(self, ent):
         ''' Check if an entity represents a date '''
@@ -441,20 +457,12 @@ class GetMergeV2Worker(FlaskWorker):
             # If there are corresponding Old's and New's            
             for i, old in enumerate(olds):
                 
-                # Generalize texts
-                gen_old = self.generalize_text(old)
-                gen_tran = self.generalize_text(transformed)
-                
-                re_matches = list(re.finditer(gen_old, gen_tran))
-                
-                if re_matches:
-                    # If matches were found, replace them in reverse order
-                    re_matches.reverse()
-                    
-                    for re_match in re_matches:
-                        start, end = re_match.span()
-                        transformed = transformed[:start] + news[i] + transformed[end:]
-                        
+                # Find all generalized matches
+                matches = self.find_generalized_matches(old, transformed)
+                                  
+                for match in matches:
+                    start, end = match.span()
+                    transformed = transformed[:start] + news[i] + transformed[end:]
                     actionApplied = True                    
     
         return transformed, actionApplied
@@ -467,20 +475,28 @@ class GetMergeV2Worker(FlaskWorker):
         transformed = pasiv
         
         activPrefix = activ[activ.find(action) + len(action) + 1:]
-        if (activPrefix.startswith('virgula dupa') or activPrefix.startswith('virgula după')) and len(olds) == 1:
-            # Special case - virgula dupa
-            pos = transformed.find(olds[0])
-            if pos > -1:    
-                # Skip over comma
-                transformed = transformed[:pos + len(olds[0])] + transformed[pos + len(olds[0]) + 1:]                    
-                actionApplied = True
+        if (activPrefix.startswith('virgula dupa') or activPrefix.startswith('virgula după') or 
+            activPrefix.startswith('virgulă după')) and len(olds) == 1:
                 
-        elif (activPrefix.startswith('inainte de') or activPrefix.startswith('înainte de') or activPrefix.startswith('dinainte de')) and len(olds) == 1:
-            # Special case - virgula inainte
-            pos = transformed.find(olds[0])
-            if pos > -1:    
+            # Find all generalized matches
+            matches = self.find_generalized_matches(olds[0], transformed)
+                        
+            for match in matches:
+                start, end = match.span()
                 # Skip over comma
-                transformed = transformed[:pos - 2] + transformed[pos - 1:]                    
+                transformed = transformed[:start + len(olds[0])] + transformed[start + len(olds[0]) + 1:]
+                actionApplied = True 
+                
+        elif (activPrefix.startswith('virgula inainte de') or activPrefix.startswith('virgula înainte de') or activPrefix.startswith('virgula dinainte de') or
+              activPrefix.startswith('virgulă înainte de') or activPrefix.startswith('virgulă dinainte de')) and len(olds) == 1:
+                  
+            # Find all generalized matches
+            matches = self.find_generalized_matches(olds[0], transformed)
+            
+            for match in matches:
+                start, end = match.span()
+                # Skip over comma
+                transformed = transformed[:start - 2] + transformed[start - 1:]    
                 actionApplied = True
             
         
@@ -714,8 +730,8 @@ if __name__ == '__main__':
         # 'ACTIV' : """"La articolul 5.2.1.6 în cadrul NOTEI se înlocuieşte '6.2.1.7' cu '6.2.2.7' şi '6.2.1.8' cu '6.2.2.8'.""",
         
         
-        'PASIV' : """lapte de vacă cu 3,5% grăsime.""",
-        'ACTIV' : """În textul hotărârii şi al anexei nr. II, denumirea produsului 'Lapte de vacă cu 3,5% grăsime' se înlocuieşte cu aceea de 'Lapte de vacă cu 3,5% grăsime, STAS 2418-61'.""",
+        'PASIV' : """lapte de vacă, cu 3,5% grăsime.""",
+        'ACTIV' : """se elimină virgula după cuvântul vacă """,
         
          
         'DEBUG': True
