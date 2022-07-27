@@ -159,11 +159,12 @@ TOO_MANY_DOTS = r'\.{4,}'
 SOLO_PUNCTUATION = r'(\.{3})|[\.,\:;\?\!]'
 PAIR_PUNCTUATION = r'\(.+\)|\[.+\]|\{.+\}|\".+\"|\'.+\''
 MULTIPLE_SPACES = r' {2,}'
+SPACE_AND_PUNCTUATION = punctuation + ' '
 
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.6.0'
+__VER__='1.0.7.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -349,6 +350,61 @@ class GetConfWorker(FlaskWorker):
                 current_code = self.next_name_code(current_code)
                 
         return codes
+
+    def find_merge_sequence(self, text, seq, name, pos, merge_type):
+        """ Search for a sequence to be merged. """
+        
+        strip_seq = seq.strip(SPACE_AND_PUNCTUATION)
+        delta = 0
+        
+        if merge_type == 'pre':
+            strip_text = text[:pos]
+            
+            # Ignore spaces and punctution
+            while strip_text[-1] in SPACE_AND_PUNCTUATION:
+                strip_text = strip_text[:-1]
+                delta += 1
+                
+            if strip_text.endswith(strip_seq):
+                delta += len(strip_seq)
+                
+                new_pos = pos - delta
+                new_name = text[new_pos : (pos+len(name))]
+                
+                return new_pos, new_name
+        
+        else:
+            strip_text = text[pos + len(name):]
+            
+            # Ignore spaces and punctution
+            while strip_text[0] in SPACE_AND_PUNCTUATION:
+                strip_text = strip_text[1:]
+                delta += 1
+                
+            if strip_text.startswith(strip_seq):
+                delta += len(strip_seq)
+                
+                new_pos = pos
+                new_name = text[pos : (pos+len(name) + delta)]
+                
+                return new_pos, new_name
+            
+        return pos, name        
+    
+    def user_merge_names(self, text, codes):
+        """ Merge sequences into previously identified names, according to user commands. """
+        
+        for merge_seq, merge_code, merge_type in self.user_merge_list:
+                    
+            for i, code in enumerate(codes):
+                
+                if code == merge_code:
+                    pos, name = self.name_list[i]
+                    
+                    new_pos, new_name = self.find_merge_sequence(text, merge_seq, name, pos, merge_type)
+                    
+                    # Set the updated entry in the name list
+                    self.name_list[i] = (new_pos, new_name)
     
     def user_update_name_codes(self, codes):
         """ Update the name codes according to the user commands. """
@@ -378,6 +434,9 @@ class GetConfWorker(FlaskWorker):
     
         # Get a code for each of the entities
         codes = self.generate_codes(different_ents)
+        
+        # Merge sequences to names according to the user commands
+        self.user_merge_names(text, codes)
         
         # Update the codes according to the user commands
         updated_codes = self.user_update_name_codes(codes)        
@@ -1417,7 +1476,6 @@ class GetConfWorker(FlaskWorker):
             alin_text = match.group()
             span_start, span_end = match.span()
             
-            print(alin_text)
             for number_match in re.finditer(ALIN_NUMBER_REG, alin_text):
                 number_text = number_match.group()
                 number_start, number_end = number_match.span()
@@ -1624,7 +1682,6 @@ class GetConfWorker(FlaskWorker):
         
         for command in commands:
             action = command.get('action')
-            print(command)
             
             try:
                 if action == 'merge':
@@ -1912,7 +1969,7 @@ if __name__ == '__main__':
     
     # DE LA CLIENT
     
-    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Adrian Fotea, Costea Sorina şi Cristescu Dorel in compania SC Minaur SRL""",
     
@@ -1960,7 +2017,7 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
         
-    'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan""",
+    # 'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan""",
     
     'COMMANDS' : [
         {"action" : "merge", "words" : "Ciortea", "entity" : "A", "position" : "pre"},
