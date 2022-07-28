@@ -9,6 +9,7 @@ import re
 import phonenumbers
 from string import punctuation
 from utils.utils import simple_levenshtein_distance
+from collections import defaultdict
 import unidecode
 import json
 from fuzzywuzzy import fuzz
@@ -49,13 +50,16 @@ PERSON_UPPERCASE = 1
 PERSON_PROPN = 2
 PERSON_TWO_WORDS = 3
 MAX_LEV_DIST = 3
-SAME_NAME_THRESHOLD = 75
+SAME_NAME_THRESHOLD = 98
 CHECK_SON_OF_INTERVAL = 40
 SON_OF_PHRASES = ["fiul lui", "fiica lui"]
 NEE_PHRASES = ['fostă', 'fosta', 'fost', 'nascuta', 'nascut', 'născut']
 
 # PUBLIC INSTITUTIONS
 MIN_PREFIX_FUZZY = 90
+
+# ORGANIZATIONS
+ORG_HALF_UPPERCASE = 0
 
 # ADDRESS
 MIN_LOC_LENGTH = 10
@@ -164,7 +168,7 @@ SPACE_AND_PUNCTUATION = punctuation + ' '
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.7.1'
+__VER__='1.0.7.2'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -854,7 +858,8 @@ class GetConfWorker(FlaskWorker):
                 
         return matches
         
-    def match_organization(self, nlp, text):
+    def match_organization(self, nlp, text,
+                           org_checks=[ORG_HALF_UPPERCASE]):
         """ Return the position of all the matches for organizations in a text. """
         
         matches = {}    
@@ -865,9 +870,25 @@ class GetConfWorker(FlaskWorker):
         for ent in doc.ents:
             
             if ent.label_ == 'ORGANIZATION':
-                matches[ent.start_char] = (ent.start_char, ent.end_char, "INSTITUTIE")
-                if self.debug:
-                    print('Organizatie spaCy:', ent.text)
+            
+                is_org = True
+                
+                if ORG_HALF_UPPERCASE in org_checks:
+                    # Check if at least half of the tokens are title tokens (first letter uppercase)
+                    num_title = 0
+                    for tok in ent:
+                        if tok.is_title:
+                            num_title += 1
+                            
+                    if num_title < len(ent) / 2:
+                        # If the number of title tokens in less than half
+                        is_org = False
+                        
+                if is_org:
+                    matches[ent.start_char] = (ent.start_char, ent.end_char, "INSTITUTIE")
+                 
+                    if self.debug:
+                        print('Organizatie spaCy:', ent.text)
                     
         # Search for matches in the organization file
         for org in self.organization_list:
@@ -1610,6 +1631,17 @@ class GetConfWorker(FlaskWorker):
             text = text[:start] + ' ' + text[end:]
           
         return text  
+    
+    def print_name_codes(self, code_dict):
+        """ Print the names assosciated to codes. """
+        
+        data_dict = defaultdict(list)
+    
+        for name, code in code_dict.items():
+            data_dict[code].append(name)
+    
+        lists = list(data_dict.items())
+        print(lists)    
 
 
     
@@ -1889,7 +1921,7 @@ class GetConfWorker(FlaskWorker):
         name_code_dict = self.set_name_codes(text)  
             
         if self.debug:
-            print(name_code_dict)   
+            self.print_name_codes(name_code_dict)   
         
         # Replace names with their codes, starting with longer names (which might include the shorter ones)
         for name in sorted(name_code_dict, key=len, reverse=True):
@@ -1922,8 +1954,8 @@ class GetConfWorker(FlaskWorker):
         res['positions'] = match_tuples
         res['output'] = hidden_doc
         
-        if self.debug:
-            print(hidden_doc)
+        # if self.debug:
+        #     print(hidden_doc)
         
         return res
 
@@ -1933,6 +1965,11 @@ if __name__ == '__main__':
 
   l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
   eng = GetConfWorker(log=l, default_config=_CONFIG, verbosity_level=1)
+  
+  path = "C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29\\0204 SC dec nr.1558-2021 ds.6822-99-2016-doc.txt"
+
+  file = open(path, 'r', encoding='utf-8')
+  full_doc = file.read()
   
   test = {
       'DEBUG' : True,
@@ -1981,7 +2018,7 @@ if __name__ == '__main__':
     
     # DE LA CLIENT
     
-    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Adrian Fotea, Costea Sorina şi Cristescu Dorel in compania SC Minaur SRL""",
     
@@ -2031,9 +2068,11 @@ if __name__ == '__main__':
         
     # 'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan""",
     
+    'DOCUMENT' : full_doc,
+    
     'COMMANDS' : [
-        {"action" : "merge", "words" : "Ciortea", "entity" : "A", "position" : "pre"},
-        {"action" : "merge", "words" : "Geo", "entity" : "A", "position" : "post"},
+        # {"action" : "merge", "words" : "Ciortea", "entity" : "A", "position" : "pre"},
+        # {"action" : "merge", "words" : "Geo", "entity" : "A", "position" : "post"},
         # {"action" : "replace", "entities" : ["A", "B", "C"]},
         # {"action" : "add", "type" : "abbr", "entity" : "Cod penal: C. pen."},
         # {"action" : "add", "type" : "org", "entity" : "PSD"},
@@ -2045,4 +2084,4 @@ if __name__ == '__main__':
       }
   
   res = eng.execute(inputs=test, counter=1)
-  print(res)
+  # print(res)
