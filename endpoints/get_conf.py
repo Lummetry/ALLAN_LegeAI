@@ -164,7 +164,7 @@ SPACE_AND_PUNCTUATION = punctuation + ' '
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.7.0'
+__VER__='1.0.7.1'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -389,22 +389,34 @@ class GetConfWorker(FlaskWorker):
                 
                 return new_pos, new_name
             
-        return pos, name        
+        return 0, None        
     
     def user_merge_names(self, text, codes):
         """ Merge sequences into previously identified names, according to user commands. """
+        
+        new_codes = codes.copy()
         
         for merge_seq, merge_code, merge_type in self.user_merge_list:
                     
             for i, code in enumerate(codes):
                 
                 if code == merge_code:
-                    pos, name = self.name_list[i]
+                    _, name = self.name_list[i]                    
                     
-                    new_pos, new_name = self.find_merge_sequence(text, merge_seq, name, pos, merge_type)
+                    # Find all occurances of name
+                    for m in re.finditer(name, text):
+                        pos = m.start()  
                     
-                    # Set the updated entry in the name list
-                    self.name_list[i] = (new_pos, new_name)
+                        new_pos, new_name = self.find_merge_sequence(text, merge_seq, name, pos, merge_type)
+                        
+                        if new_name:
+                            # Add the updated entry and code 
+                            self.name_list.append((new_pos, new_name))
+                            new_codes.append(code)
+                        
+        return new_codes
+                    
+        
     
     def user_update_name_codes(self, codes):
         """ Update the name codes according to the user commands. """
@@ -436,7 +448,7 @@ class GetConfWorker(FlaskWorker):
         codes = self.generate_codes(different_ents)
         
         # Merge sequences to names according to the user commands
-        self.user_merge_names(text, codes)
+        codes = self.user_merge_names(text, codes)
         
         # Update the codes according to the user commands
         updated_codes = self.user_update_name_codes(codes)        
@@ -2021,7 +2033,7 @@ if __name__ == '__main__':
     
     'COMMANDS' : [
         {"action" : "merge", "words" : "Ciortea", "entity" : "A", "position" : "pre"},
-        {"action" : "merge", "words" : "Ciortea", "entity" : "B", "position" : "post"},
+        {"action" : "merge", "words" : "Geo", "entity" : "A", "position" : "post"},
         # {"action" : "replace", "entities" : ["A", "B", "C"]},
         # {"action" : "add", "type" : "abbr", "entity" : "Cod penal: C. pen."},
         # {"action" : "add", "type" : "org", "entity" : "PSD"},
