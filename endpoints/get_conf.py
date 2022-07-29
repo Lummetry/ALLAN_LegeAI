@@ -54,6 +54,7 @@ SAME_NAME_THRESHOLD = 98
 CHECK_SON_OF_INTERVAL = 40
 SON_OF_PHRASES = ["fiul lui", "fiica lui"]
 NEE_PHRASES = ['fostă', 'fosta', 'fost', 'nascuta', 'nascut', 'născut']
+NAME_PREFIX_NOMATCH = ['pârâţii', 'pârâta', 'pârâtul', 'parata', 'paratii', 'paratul', 'parata', 'bnp']
 
 # PUBLIC INSTITUTIONS
 MIN_PREFIX_FUZZY = 90
@@ -169,7 +170,7 @@ SPACE_AND_PUNCTUATION = punctuation + ' '
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.7.3'
+__VER__='1.0.7.4'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -572,6 +573,7 @@ class GetConfWorker(FlaskWorker):
         # Check uppercase words
         if PERSON_UPPERCASE in person_checks:
             candidate_matches = self.check_name_condition(candidate_matches, doc, condition='capital')
+           
                 
         # Check other conditions
         match_list = []
@@ -600,8 +602,16 @@ class GetConfWorker(FlaskWorker):
                 else:
                     break
                 
+             
+            # Check for words which should not be included in name
+            name = doc[new_start : new_end].text.lower()            
+            for prefix in NAME_PREFIX_NOMATCH:
+                if name.startswith(prefix):
+                    # Skip first word
+                    new_start += 1
+                    break
            
-            # Check and cleand the new match
+            # Check and clean the new match
             new_start, new_end = self.clean_match(doc, new_start, new_end)
             if new_start == -1 and new_end == -1:
                 new_start, new_end = start, end
@@ -644,8 +654,8 @@ class GetConfWorker(FlaskWorker):
             match_dict[start] = (start, end, "NUME")
                 
             person = text[start:end]
-            if self.debug:
-                print('Nume:', person)
+            # if self.debug:
+            #     print('Nume:', person)
                 
             if self.find_name(person, match='perfect') == -1:
                 self.name_list.append((start, person))
