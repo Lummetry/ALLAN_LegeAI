@@ -68,6 +68,7 @@ ADDRESS_MIN_TOKENS = 1
 ADDRESS_MERGE_DIST = 3
 ADDRESS_INCLUDE_GPE = 4
 ADDRESS_REMOVE_PUNCT = 5
+PLACE_TITLE = 6
 
 # EMAIL
 EMAIL_REG = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
@@ -168,7 +169,7 @@ SPACE_AND_PUNCTUATION = punctuation + ' '
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.7.2'
+__VER__='1.0.7.3'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -730,7 +731,7 @@ class GetConfWorker(FlaskWorker):
         return matches
     
     def match_address(self, nlp, doc, text, 
-                      address_checks=[ADDRESS_INCLUDE_GPE, ADDRESS_REMOVE_PUNCT]
+                      address_checks=[ADDRESS_INCLUDE_GPE, ADDRESS_REMOVE_PUNCT, PLACE_TITLE]
                      ):
         """ Return the position of address entities in a text. """
         matches = {}    
@@ -739,9 +740,22 @@ class GetConfWorker(FlaskWorker):
         if ADDRESS_INCLUDE_GPE in address_checks:
             for ent in doc.ents:
                 if ent.label_ == 'GPE':
-                    matches[ent.start_char] = [ent.start_char, ent.end_char, "ADRESA"]
-                    if self.debug:
-                        print('Place:', ent)
+                    
+                    is_place = True
+                    
+                    if PLACE_TITLE in address_checks:
+                        is_place = False 
+                        
+                        # Check that at least one word starts with uppercase
+                        for tok in ent:
+                            if tok.is_title:
+                                is_place = True
+                                break
+                    
+                    if is_place:
+                        matches[ent.start_char] = [ent.start_char, ent.end_char, "ADRESA"]
+                        if self.debug:
+                            print('Place:', ent)
     
         # Check all LOC entities from initial Doc
         matches = self.check_loc_entities(doc, matches, address_checks)  
@@ -1863,7 +1877,7 @@ class GetConfWorker(FlaskWorker):
                     
         # Match addresses
         matches.update(self.match_address(self.nlp_model, doc, text, 
-                                          address_checks=[ADDRESS_INCLUDE_GPE, ADDRESS_REMOVE_PUNCT]))
+                                          address_checks=[ADDRESS_INCLUDE_GPE, ADDRESS_REMOVE_PUNCT, PLACE_TITLE]))
 
         # Match phone
         matches.update(self.match_phone(text, check_strength=PHONE_REG_VALID))
