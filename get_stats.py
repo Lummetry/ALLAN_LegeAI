@@ -39,7 +39,7 @@ def get_data_db():
       'DRIVER' : '{ODBC Driver 17 for SQL Server}',
       'SERVER' : '195.60.78.50',
       'PORT' : 1433,
-      'DATABASE' : 'LegeV_New',
+      'DATABASE' : 'LegeV',
       'Uid' : 'damian',
       'Pwd' : '4Esoft1234!@#$2021',
     },

@@ -240,7 +240,7 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(args.bert_backbone, use_fast=False)
 
     train_inputs, train_labels, dev_inputs, dev_labels, test_inputs, test_labels, labels_dict = load_data(tokenizer)
-
+    
 
     if args.run_type == 'train':
         train_dataset = build_dataset(train_inputs, train_labels, labels_dict, tokenizer).shuffle(10000).batch(args.batch_size)

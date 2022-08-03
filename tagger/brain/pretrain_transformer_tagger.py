@@ -72,7 +72,7 @@ def load_data(data_path, tokenizer):
 
         return result
 
-    lm_dataset = dataset.map(tokenize_and_chunk, batched=True, num_proc=4, remove_columns=dataset["train"].column_names)
+    lm_dataset = dataset.map(tokenize_and_chunk, batched=True, num_proc=16, remove_columns=dataset["train"].column_names)
 
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm_probability=0.15, return_tensors="tf")
 
