@@ -3,6 +3,8 @@
 from libraries.model_server_v2 import FlaskWorker
 import regex as re
 import spacy
+import unidecode
+import string
 
 _CONFIG = {
   'SPACY_MODEL' : 'ro_core_news_lg',
@@ -10,7 +12,7 @@ _CONFIG = {
 
 # File paths
 # Debug
-NER_MODEL_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\prev-model-best'
+NER_MODEL_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-1000'
 # Prod
 NER_MODEL_PROD = 'C:\\allan_data\\MergeNER\\model-best'
 
@@ -70,7 +72,7 @@ ERROR_NUM_OLD_NEW = 3
 ERROR_ACTION_UKNOWN = 4
 
 
-__VER__='0.4.0.0'
+__VER__='0.4.2.1'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -219,6 +221,37 @@ class GetMergeV2Worker(FlaskWorker):
         
         return ent
         
+    def generalize_text(self, text, options=['lower', 'diacritics']):
+        ''' Generalize a text for comparisons. '''
+        
+        gen_text = text
+        
+        if 'lower' in options:
+            gen_text = gen_text.lower()
+            
+        if 'diacritics' in options:
+            gen_text = unidecode.unidecode(gen_text)
+            
+        if 'punctuation' in options:
+            gen_text = re.sub('[' + string.punctuation + ']', '', gen_text)
+        
+        return gen_text
+    
+    def find_generalized_matches(self, sub, text):
+        ''' Find occurances of a substring using generlized texts. '''
+        
+        # Generalize texts
+        gen_old = self.generalize_text(sub)
+        gen_tran = self.generalize_text(text)
+                
+        re_matches = list(re.finditer(gen_old, gen_tran))
+            
+        if re_matches:
+            # If matches were found, replace them in reverse order
+            re_matches.reverse()
+            
+        return re_matches
+                
 
     def is_date(self, ent):
         ''' Check if an entity represents a date '''
@@ -335,7 +368,15 @@ class GetMergeV2Worker(FlaskWorker):
                 if error == NO_ERROR:
                     actions = [action]            
             else:
-                error = ERROR_MANY_ACTIONS
+                # Check if same action several times
+                action = actions[0]
+                for action2 in actions[1:]:
+                    if action2 != action:
+                        error = ERROR_MANY_ACTIONS
+                        break
+                    
+                if error != ERROR_MANY_ACTIONS:
+                    actions = [action]
                 
         elif len(actions) == 0:
             error = ERROR_NO_ACTION
@@ -414,25 +455,6 @@ class GetMergeV2Worker(FlaskWorker):
         return transformed, actionApplied
     
     
-    def action_citeste(self, pasiv, activ, action, olds, news):
-        ''' Method for action Citeste '''
-            
-        actionApplied = False
-        transformed = pasiv
-        
-        if len(olds) + len(news) > 0 and len(olds) == len(news):
-            # If there are corresponding Old's and New's
-                
-            for i, old in enumerate(olds):
-                pos = transformed.find(old)
-                if pos > -1:    
-                    transformed = transformed.replace(old, news[i])
-                        
-                    actionApplied = True
-    
-        return transformed, actionApplied
-    
-    
     def action_inlocuieste(self, pasiv, activ, action, olds, news):
         ''' Method for action Inlocuieste '''
             
@@ -442,11 +464,14 @@ class GetMergeV2Worker(FlaskWorker):
         if len(olds) + len(news) > 0 and len(olds) == len(news):
             # If there are corresponding Old's and New's            
             for i, old in enumerate(olds):
-                pos = transformed.find(old)
-                if pos > -1:    
-                    transformed = transformed.replace(old, news[i])
-                    
-                    actionApplied = True
+                
+                # Find all generalized matches
+                matches = self.find_generalized_matches(old, transformed)
+                                  
+                for match in matches:
+                    start, end = match.span()
+                    transformed = transformed[:start] + news[i] + transformed[end:]
+                    actionApplied = True                    
     
         return transformed, actionApplied
     
@@ -458,20 +483,28 @@ class GetMergeV2Worker(FlaskWorker):
         transformed = pasiv
         
         activPrefix = activ[activ.find(action) + len(action) + 1:]
-        if (activPrefix.startswith('virgula dupa') or activPrefix.startswith('virgula după')) and len(olds) == 1:
-            # Special case - virgula dupa
-            pos = transformed.find(olds[0])
-            if pos > -1:    
-                # Skip over comma
-                transformed = transformed[:pos + len(olds[0])] + transformed[pos + len(olds[0]) + 1:]                    
-                actionApplied = True
+        if (activPrefix.startswith('virgula dupa') or activPrefix.startswith('virgula după') or 
+            activPrefix.startswith('virgulă după')) and len(olds) == 1:
                 
-        elif (activPrefix.startswith('inainte de') or activPrefix.startswith('înainte de') or activPrefix.startswith('dinainte de')) and len(olds) == 1:
-            # Special case - virgula inainte
-            pos = transformed.find(olds[0])
-            if pos > -1:    
+            # Find all generalized matches
+            matches = self.find_generalized_matches(olds[0], transformed)
+                        
+            for match in matches:
+                start, end = match.span()
                 # Skip over comma
-                transformed = transformed[:pos - 2] + transformed[pos - 1:]                    
+                transformed = transformed[:start + len(olds[0])] + transformed[start + len(olds[0]) + 1:]
+                actionApplied = True 
+                
+        elif (activPrefix.startswith('virgula inainte de') or activPrefix.startswith('virgula înainte de') or activPrefix.startswith('virgula dinainte de') or
+              activPrefix.startswith('virgulă înainte de') or activPrefix.startswith('virgulă dinainte de')) and len(olds) == 1:
+                  
+            # Find all generalized matches
+            matches = self.find_generalized_matches(olds[0], transformed)
+            
+            for match in matches:
+                start, end = match.span()
+                # Skip over comma
+                transformed = transformed[:start - 2] + transformed[start - 1:]    
                 actionApplied = True
             
         
@@ -495,13 +528,8 @@ class GetMergeV2Worker(FlaskWorker):
         transformed = pasiv
                     
         if len(olds) + len(news) > 0 and len(olds) == len(news):
-            # If there are corresponding Old's and New's            
-            for i, old in enumerate(olds):
-                pos = transformed.find(old)
-                if pos > -1:    
-                    transformed = transformed.replace(old, news[i])
-                        
-                    actionApplied = True
+            # If there are corresponding Old's and New's       
+            transformed, actionApplied = self.action_inlocuieste(pasiv, activ, action, olds, news)
             
         elif len(news) == 1 and len(olds) < 2:
             # Check if the New is a date
@@ -538,7 +566,7 @@ class GetMergeV2Worker(FlaskWorker):
         
         if actionType == ACTION_CITESTE:
             # Apply Citeste
-            transformed, actionApplied = self.action_citeste(pasiv, activ, action, olds, news)
+            transformed, actionApplied = self.action_inlocuieste(pasiv, activ, action, olds, news)
     
         elif actionType == ACTION_PRELUNGESTE_CU:
             # Apply Prelungeste cu
@@ -643,8 +671,8 @@ class GetMergeV2Worker(FlaskWorker):
         elif error == ERROR_ACTION_UKNOWN:
             res['error'] = "Unknown action."
         elif actionApplied == False:
-            # No action error
-            res['error'] = "Number of Old or New entities incorrect for identified Action."
+            # No action error, but action was not applied
+            res['error'] = "Conditions for Old or New entities to apply Action not satisfied."
         else:
             # No error
             success = True
@@ -706,12 +734,12 @@ if __name__ == '__main__':
         # 'ACTIV' : """"Ministerul Finanţelor" cu "Ministerul Finanţelor Publice".""",
         
         # se inlocuieste cu
-        'PASIV' : """'A se vedea şi 6.2.1.7.'""",
-        'ACTIV' : """"La articolul 5.2.1.6 în cadrul NOTEI se înlocuieşte '6.2.1.7' cu '6.2.2.7' şi '6.2.1.8' cu '6.2.2.8'.""",
+        # 'PASIV' : """'A se vedea şi 6.2.1.7.'""",
+        # 'ACTIV' : """"La articolul 5.2.1.6 în cadrul NOTEI se înlocuieşte '6.2.1.7' cu '6.2.2.7' şi '6.2.1.8' cu '6.2.2.8'.""",
         
         
-        # 'PASIV' : """Termenul stabilit este de 30 de zile.""",
-        # 'ACTIV' : """termenul se prelungeste cu 21 zile.""",
+        'PASIV' : """art 1  (2) Prevederile metodologiei se utilizează exclusiv în cadrul proiectului "Facilitarea inserţiei pe piaţa muncii a persoanelor cu dizabilităţi", proiect implementat de Autoritatea Naţională pentru Drepturile Persoanelor cu Dizabilităţi, Copii şi Adopţii (ANDPDCA) în parteneriat cu Agenţia Naţională pentru Ocuparea Forţei de Muncă (ANOFM), cofinanţat din Programul operaţional Capital uman (POCU) - axa prioritară 3 - Locuri de muncă pentru toţi.  """,
+        'ACTIV' : """6. În tot cuprinsul ordinului, sintagma "Autoritatea Naţională pentru Drepturile Persoanelor cu Dizabilităţi, Copii şi Adopţii" se înlocuieşte cu sintagma "Autoritatea Naţională pentru Protecţia Drepturilor Persoanelor cu Dizabilităţi", acronimul "ANDPDCA" se înlocuieşte cu acronimul "Autoritate", site-ul "www.andpdca.gov.ro" se înlocuieşte cu site-ul "www.anpd.gov.ro", iar adresa "asistive@andpdca.gov.ro" se înlocuieşte cu adresa "asistive@anpd.gov.ro".  """,
         
          
         'DEBUG': True

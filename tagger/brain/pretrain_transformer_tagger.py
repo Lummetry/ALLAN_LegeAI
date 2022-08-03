@@ -19,7 +19,8 @@ from transformers import DataCollatorForLanguageModeling
 from transformers import AdamWeightDecay
 from datasets import load_dataset
 
-
+NUM_PROC = 16
+GPU_INDEX_FOR_TRAINING = 3
 
 parser = argparse.ArgumentParser(description='Pre-training for transformer-based document-level multilabel classifier')
 parser.add_argument('-data_path', help='path + files desciptor (i.e. _cache/_data/20220209_211238)')
@@ -72,7 +73,7 @@ def load_data(data_path, tokenizer):
 
         return result
 
-    lm_dataset = dataset.map(tokenize_and_chunk, batched=True, num_proc=16, remove_columns=dataset["train"].column_names)
+    lm_dataset = dataset.map(tokenize_and_chunk, batched=True, num_proc=NUM_PROC, remove_columns=dataset["train"].column_names)
 
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm_probability=0.15, return_tensors="tf")
 
@@ -92,28 +93,35 @@ def load_data(data_path, tokenizer):
 
 if __name__ == "__main__":
 
-    bert_model = TFBertForMaskedLM.from_pretrained(args.bert_model)
+    if GPU_INDEX_FOR_TRAINING != -1:
+        str_device = '/device:GPU:{}'.format(GPU_INDEX_FOR_TRAINING)
+    else:
+        str_device = '/device:CPU:0'
 
-    if args.run_type == "train":
-        # load and save tokenizer due to bug (loading tokenizer and saving it lead to different indexes)
-        tokenizer = AutoTokenizer.from_pretrained(args.bert_model, use_fast=False)
-        tokenizer.save_pretrained("test_save_model")
-        tokenizer = AutoTokenizer.from_pretrained("test_save_model", use_fast=False)
+    with tf.device(str_device):
+        bert_model = TFBertForMaskedLM.from_pretrained(args.bert_model)
 
-    elif args.run_type == "eval":
-        tokenizer = AutoTokenizer.from_pretrained(args.bert_model, use_fast=False)
+        if args.run_type == "train":
+            # load and save tokenizer due to bug (loading tokenizer and saving it lead to different indexes)
+            tokenizer = AutoTokenizer.from_pretrained(args.bert_model, use_fast=False)
+            tokenizer.save_pretrained("test_save_model")
+            tokenizer = AutoTokenizer.from_pretrained("test_save_model", use_fast=False)
+
+        elif args.run_type == "eval":
+            tokenizer = AutoTokenizer.from_pretrained(args.bert_model, use_fast=False)
 
 
-    train_dataset, test_dataset = load_data(args.data_path, tokenizer)
+        train_dataset, test_dataset = load_data(args.data_path, tokenizer)
 
-    
-    optimizer = AdamWeightDecay(learning_rate=args.learning_rate, weight_decay_rate=0.01)
-    bert_model.compile(optimizer=optimizer)
 
-    if args.run_type == "train":
-        bert_model.fit(x=train_dataset, validation_data=test_dataset, epochs=args.epochs)
-        bert_model.evaluate(test_dataset)
-        bert_model.save_pretrained("test_save_model")
+        optimizer = AdamWeightDecay(learning_rate=args.learning_rate, weight_decay_rate=0.01)
+        bert_model.compile(optimizer=optimizer)
 
-    elif args.run_type == "eval":
-        bert_model.evaluate(test_dataset)
+        if args.run_type == "train":
+            bert_model.fit(x=train_dataset, validation_data=test_dataset, epochs=args.epochs)
+            bert_model.evaluate(test_dataset)
+            bert_model.save_pretrained("test_save_model")
+
+        elif args.run_type == "eval":
+            bert_model.evaluate(test_dataset)
+    #endwith

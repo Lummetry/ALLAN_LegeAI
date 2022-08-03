@@ -9,6 +9,7 @@ import re
 import phonenumbers
 from string import punctuation
 from utils.utils import simple_levenshtein_distance
+from collections import defaultdict
 import unidecode
 import json
 from fuzzywuzzy import fuzz
@@ -49,13 +50,17 @@ PERSON_UPPERCASE = 1
 PERSON_PROPN = 2
 PERSON_TWO_WORDS = 3
 MAX_LEV_DIST = 3
-SAME_NAME_THRESHOLD = 75
+SAME_NAME_THRESHOLD = 98
 CHECK_SON_OF_INTERVAL = 40
 SON_OF_PHRASES = ["fiul lui", "fiica lui"]
 NEE_PHRASES = ['fostă', 'fosta', 'fost', 'nascuta', 'nascut', 'născut']
+NAME_PREFIX_NOMATCH = ['pârâţii', 'pârâta', 'pârâtul', 'parata', 'paratii', 'paratul', 'parata', 'bnp']
 
 # PUBLIC INSTITUTIONS
 MIN_PREFIX_FUZZY = 90
+
+# ORGANIZATIONS
+ORG_HALF_UPPERCASE = 0
 
 # ADDRESS
 MIN_LOC_LENGTH = 10
@@ -64,6 +69,7 @@ ADDRESS_MIN_TOKENS = 1
 ADDRESS_MERGE_DIST = 3
 ADDRESS_INCLUDE_GPE = 4
 ADDRESS_REMOVE_PUNCT = 5
+PLACE_TITLE = 6
 
 # EMAIL
 EMAIL_REG = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
@@ -159,11 +165,12 @@ TOO_MANY_DOTS = r'\.{4,}'
 SOLO_PUNCTUATION = r'(\.{3})|[\.,\:;\?\!]'
 PAIR_PUNCTUATION = r'\(.+\)|\[.+\]|\{.+\}|\".+\"|\'.+\''
 MULTIPLE_SPACES = r' {2,}'
+SPACE_AND_PUNCTUATION = punctuation + ' '
 
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.5.0'
+__VER__='1.0.7.4'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -329,6 +336,111 @@ class GetConfWorker(FlaskWorker):
         
         return different_ents
     
+    def generate_codes(self, entities):
+        """ Generate the codes corresponding to a list of entities. """
+        
+        codes = [''] * len(entities)        
+        current_code = 'A'        
+        
+        # Get a code for each of the entities
+        for i, ent in enumerate(entities):
+            # If no code was alreay set
+            if codes[i] == '':
+                    
+            # Set the current code for all occurances of the entity
+                for j in range(i, len(entities)):
+                    if entities[j] == ent:
+                        codes[j] = current_code
+                            
+                # Get the next code
+                current_code = self.next_name_code(current_code)
+                
+        return codes
+
+    def find_merge_sequence(self, text, seq, name, pos, merge_type):
+        """ Search for a sequence to be merged. """
+        
+        strip_seq = seq.strip(SPACE_AND_PUNCTUATION)
+        delta = 0
+        
+        if merge_type == 'pre':
+            strip_text = text[:pos]
+            
+            # Ignore spaces and punctution
+            while strip_text[-1] in SPACE_AND_PUNCTUATION:
+                strip_text = strip_text[:-1]
+                delta += 1
+                
+            if strip_text.endswith(strip_seq):
+                delta += len(strip_seq)
+                
+                new_pos = pos - delta
+                new_name = text[new_pos : (pos+len(name))]
+                
+                return new_pos, new_name
+        
+        else:
+            strip_text = text[pos + len(name):]
+            
+            # Ignore spaces and punctution
+            while strip_text[0] in SPACE_AND_PUNCTUATION:
+                strip_text = strip_text[1:]
+                delta += 1
+                
+            if strip_text.startswith(strip_seq):
+                delta += len(strip_seq)
+                
+                new_pos = pos
+                new_name = text[pos : (pos+len(name) + delta)]
+                
+                return new_pos, new_name
+            
+        return 0, None        
+    
+    def user_merge_names(self, text, codes):
+        """ Merge sequences into previously identified names, according to user commands. """
+        
+        new_codes = codes.copy()
+        
+        for merge_seq, merge_code, merge_type in self.user_merge_list:
+                    
+            for i, code in enumerate(codes):
+                
+                if code == merge_code:
+                    _, name = self.name_list[i]                    
+                    
+                    # Find all occurances of name
+                    for m in re.finditer(name, text):
+                        pos = m.start()  
+                    
+                        new_pos, new_name = self.find_merge_sequence(text, merge_seq, name, pos, merge_type)
+                        
+                        if new_name:
+                            # Add the updated entry and code 
+                            self.name_list.append((new_pos, new_name))
+                            new_codes.append(code)
+                        
+        return new_codes
+                    
+        
+    
+    def user_update_name_codes(self, codes):
+        """ Update the name codes according to the user commands. """
+             
+        # Replace codes according to user commands
+        for replace_list in self.user_replace_list:
+            
+            # Get the first code
+            new_user_code = replace_list[0]
+            
+            # Replace next user codes
+            for user_code in replace_list[1:]:
+                for i in range(len(codes)):
+                    if codes[i] == user_code:
+                        codes[i] = new_user_code
+                        
+        return codes
+    
     def set_name_codes(self, text):
         """ Form the dictionary of names and codes. """
         
@@ -337,22 +449,18 @@ class GetConfWorker(FlaskWorker):
     
         # Unite names that refer to the same entity
         different_ents = self.unite_same_names(text) 
-        
-        codes = [''] * len(different_ents)        
-        current_code = 'A'
     
         # Get a code for each of the entities
-        for i, ent in enumerate(different_ents):
-            # If no code was alreay set
-            if codes[i] == '':
-                
-                # Set the current code for all occurances of the entity
-                for j in range(i, len(different_ents)):
-                    if different_ents[j] == ent:
-                        codes[j] = current_code
-                        
-                # Get the next code
-                current_code = self.next_name_code(current_code)
+        codes = self.generate_codes(different_ents)
+        
+        # Merge sequences to names according to the user commands
+        codes = self.user_merge_names(text, codes)
+        
+        # Update the codes according to the user commands
+        updated_codes = self.user_update_name_codes(codes)        
+    
+        # Get a code for each of the entities again
+        codes = self.generate_codes(updated_codes)
         
         # Set the name - code dictionary
         name_code_dict = {self.name_list[i][1] : codes[i] for i in range(len(self.name_list))}
@@ -465,6 +573,7 @@ class GetConfWorker(FlaskWorker):
         # Check uppercase words
         if PERSON_UPPERCASE in person_checks:
             candidate_matches = self.check_name_condition(candidate_matches, doc, condition='capital')
+           
                 
         # Check other conditions
         match_list = []
@@ -493,8 +602,16 @@ class GetConfWorker(FlaskWorker):
                 else:
                     break
                 
+             
+            # Check for words which should not be included in name
+            name = doc[new_start : new_end].text.lower()            
+            for prefix in NAME_PREFIX_NOMATCH:
+                if name.startswith(prefix):
+                    # Skip first word
+                    new_start += 1
+                    break
            
-            # Check and cleand the new match
+            # Check and clean the new match
             new_start, new_end = self.clean_match(doc, new_start, new_end)
             if new_start == -1 and new_end == -1:
                 new_start, new_end = start, end
@@ -537,8 +654,8 @@ class GetConfWorker(FlaskWorker):
             match_dict[start] = (start, end, "NUME")
                 
             person = text[start:end]
-            if self.debug:
-                print('Nume:', person)
+            # if self.debug:
+            #     print('Nume:', person)
                 
             if self.find_name(person, match='perfect') == -1:
                 self.name_list.append((start, person))
@@ -624,7 +741,7 @@ class GetConfWorker(FlaskWorker):
         return matches
     
     def match_address(self, nlp, doc, text, 
-                      address_checks=[ADDRESS_INCLUDE_GPE, ADDRESS_REMOVE_PUNCT]
+                      address_checks=[ADDRESS_INCLUDE_GPE, ADDRESS_REMOVE_PUNCT, PLACE_TITLE]
                      ):
         """ Return the position of address entities in a text. """
         matches = {}    
@@ -633,9 +750,22 @@ class GetConfWorker(FlaskWorker):
         if ADDRESS_INCLUDE_GPE in address_checks:
             for ent in doc.ents:
                 if ent.label_ == 'GPE':
-                    matches[ent.start_char] = [ent.start_char, ent.end_char, "ADRESA"]
-                    if self.debug:
-                        print('Place:', ent)
+                    
+                    is_place = True
+                    
+                    if PLACE_TITLE in address_checks:
+                        is_place = False 
+                        
+                        # Check that at least one word starts with uppercase
+                        for tok in ent:
+                            if tok.is_title:
+                                is_place = True
+                                break
+                    
+                    if is_place:
+                        matches[ent.start_char] = [ent.start_char, ent.end_char, "ADRESA"]
+                        if self.debug:
+                            print('Place:', ent)
     
         # Check all LOC entities from initial Doc
         matches = self.check_loc_entities(doc, matches, address_checks)  
@@ -752,7 +882,8 @@ class GetConfWorker(FlaskWorker):
                 
         return matches
         
-    def match_organization(self, nlp, text):
+    def match_organization(self, nlp, text,
+                           org_checks=[ORG_HALF_UPPERCASE]):
         """ Return the position of all the matches for organizations in a text. """
         
         matches = {}    
@@ -763,9 +894,25 @@ class GetConfWorker(FlaskWorker):
         for ent in doc.ents:
             
             if ent.label_ == 'ORGANIZATION':
-                matches[ent.start_char] = (ent.start_char, ent.end_char, "INSTITUTIE")
-                if self.debug:
-                    print('Organizatie spaCy:', ent.text)
+            
+                is_org = True
+                
+                if ORG_HALF_UPPERCASE in org_checks:
+                    # Check if at least half of the tokens are title tokens (first letter uppercase)
+                    num_title = 0
+                    for tok in ent:
+                        if tok.is_title:
+                            num_title += 1
+                            
+                    if num_title < len(ent) / 2:
+                        # If the number of title tokens in less than half
+                        is_org = False
+                        
+                if is_org:
+                    matches[ent.start_char] = (ent.start_char, ent.end_char, "INSTITUTIE")
+                 
+                    if self.debug:
+                        print('Organizatie spaCy:', ent.text)
                     
         # Search for matches in the organization file
         for org in self.organization_list:
@@ -1142,7 +1289,6 @@ class GetConfWorker(FlaskWorker):
                 
             if 'lower' in options:
                 text = text.lower()
-        print('NOCONF', text)
         
         res = []
             
@@ -1387,7 +1533,6 @@ class GetConfWorker(FlaskWorker):
             alin_text = match.group()
             span_start, span_end = match.span()
             
-            print(alin_text)
             for number_match in re.finditer(ALIN_NUMBER_REG, alin_text):
                 number_text = number_match.group()
                 number_start, number_end = number_match.span()
@@ -1510,6 +1655,17 @@ class GetConfWorker(FlaskWorker):
             text = text[:start] + ' ' + text[end:]
           
         return text  
+    
+    def print_name_codes(self, code_dict):
+        """ Print the names assosciated to codes. """
+        
+        data_dict = defaultdict(list)
+    
+        for name, code in code_dict.items():
+            data_dict[code].append(name)
+    
+        lists = list(data_dict.items())
+        print(lists)    
 
 
     
@@ -1594,7 +1750,6 @@ class GetConfWorker(FlaskWorker):
         
         for command in commands:
             action = command.get('action')
-            print(command)
             
             try:
                 if action == 'merge':
@@ -1732,7 +1887,7 @@ class GetConfWorker(FlaskWorker):
                     
         # Match addresses
         matches.update(self.match_address(self.nlp_model, doc, text, 
-                                          address_checks=[ADDRESS_INCLUDE_GPE, ADDRESS_REMOVE_PUNCT]))
+                                          address_checks=[ADDRESS_INCLUDE_GPE, ADDRESS_REMOVE_PUNCT, PLACE_TITLE]))
 
         # Match phone
         matches.update(self.match_phone(text, check_strength=PHONE_REG_VALID))
@@ -1790,7 +1945,7 @@ class GetConfWorker(FlaskWorker):
         name_code_dict = self.set_name_codes(text)  
             
         if self.debug:
-            print(name_code_dict)   
+            self.print_name_codes(name_code_dict)   
         
         # Replace names with their codes, starting with longer names (which might include the shorter ones)
         for name in sorted(name_code_dict, key=len, reverse=True):
@@ -1823,8 +1978,8 @@ class GetConfWorker(FlaskWorker):
         res['positions'] = match_tuples
         res['output'] = hidden_doc
         
-        if self.debug:
-            print(hidden_doc)
+        # if self.debug:
+        #     print(hidden_doc)
         
         return res
 
@@ -1834,6 +1989,11 @@ if __name__ == '__main__':
 
   l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
   eng = GetConfWorker(log=l, default_config=_CONFIG, verbosity_level=1)
+  
+  path = "C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29\\0204 SC dec nr.1558-2021 ds.6822-99-2016-doc.txt"
+
+  file = open(path, 'r', encoding='utf-8')
+  full_doc = file.read()
   
   test = {
       'DEBUG' : True,
@@ -1884,9 +2044,9 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
-    # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Botev Adrian, Costea Sorina şi Cristescu Dorel.""",
+    # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Adrian Fotea, Costea Sorina şi Cristescu Dorel in compania SC Minaur SRL""",
     
-    'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
+    # 'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
     
     # 'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
     
@@ -1930,20 +2090,22 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
         
-    # 'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan"""
+    # 'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan""",
+    
+    'DOCUMENT' : full_doc,
     
     'COMMANDS' : [
-        {"action" : "merge", "words" : "Ciortea", "entity" : "A", "position" : "pre"},
-        {"action" : "merge", "words" : "Ciortea", "entity" : "B", "position" : "post"},
-        {"action" : "replace", "entities" : ["A", "B", "C"]},
+        # {"action" : "merge", "words" : "Ciortea", "entity" : "A", "position" : "pre"},
+        # {"action" : "merge", "words" : "Geo", "entity" : "A", "position" : "post"},
+        # {"action" : "replace", "entities" : ["A", "B", "C"]},
         # {"action" : "add", "type" : "abbr", "entity" : "Cod penal: C. pen."},
         # {"action" : "add", "type" : "org", "entity" : "PSD"},
         # {"action" : "add", "type" : "inst_name", "entity" : "tribunalul Suceava"},
         # {"action" : "add", "type" : "inst_prefix", "entity" : "Secție"},
-        {"action": "add", "type" : "noconf_case", "entity" : "decizie penală"}
+        # {"action": "add", "type" : "noconf_case", "entity" : "decizie penală"}
         ]
     
       }
   
   res = eng.execute(inputs=test, counter=1)
-  print(res)
+  # print(res)
