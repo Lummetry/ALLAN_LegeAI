@@ -72,7 +72,7 @@ ERROR_NUM_OLD_NEW = 3
 ERROR_ACTION_UKNOWN = 4
 
 
-__VER__='0.4.2.0'
+__VER__='0.4.2.1'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -368,7 +368,15 @@ class GetMergeV2Worker(FlaskWorker):
                 if error == NO_ERROR:
                     actions = [action]            
             else:
-                error = ERROR_MANY_ACTIONS
+                # Check if same action several times
+                action = actions[0]
+                for action2 in actions[1:]:
+                    if action2 != action:
+                        error = ERROR_MANY_ACTIONS
+                        break
+                    
+                if error != ERROR_MANY_ACTIONS:
+                    actions = [action]
                 
         elif len(actions) == 0:
             error = ERROR_NO_ACTION
@@ -730,8 +738,8 @@ if __name__ == '__main__':
         # 'ACTIV' : """"La articolul 5.2.1.6 în cadrul NOTEI se înlocuieşte '6.2.1.7' cu '6.2.2.7' şi '6.2.1.8' cu '6.2.2.8'.""",
         
         
-        'PASIV' : """lapte de vacă, cu 3,5% grăsime.""",
-        'ACTIV' : """se elimină virgula după cuvântul vacă """,
+        'PASIV' : """art 1  (2) Prevederile metodologiei se utilizează exclusiv în cadrul proiectului "Facilitarea inserţiei pe piaţa muncii a persoanelor cu dizabilităţi", proiect implementat de Autoritatea Naţională pentru Drepturile Persoanelor cu Dizabilităţi, Copii şi Adopţii (ANDPDCA) în parteneriat cu Agenţia Naţională pentru Ocuparea Forţei de Muncă (ANOFM), cofinanţat din Programul operaţional Capital uman (POCU) - axa prioritară 3 - Locuri de muncă pentru toţi.  """,
+        'ACTIV' : """6. În tot cuprinsul ordinului, sintagma "Autoritatea Naţională pentru Drepturile Persoanelor cu Dizabilităţi, Copii şi Adopţii" se înlocuieşte cu sintagma "Autoritatea Naţională pentru Protecţia Drepturilor Persoanelor cu Dizabilităţi", acronimul "ANDPDCA" se înlocuieşte cu acronimul "Autoritate", site-ul "www.andpdca.gov.ro" se înlocuieşte cu site-ul "www.anpd.gov.ro", iar adresa "asistive@andpdca.gov.ro" se înlocuieşte cu adresa "asistive@anpd.gov.ro".  """,
         
          
         'DEBUG': True
