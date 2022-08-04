@@ -71,8 +71,12 @@ ERROR_MANY_ACTIONS = 2
 ERROR_NUM_OLD_NEW = 3
 ERROR_ACTION_UKNOWN = 4
 
+# Heuristics    
+MODIFICA_CUPRINS_KEYS = ['se modifică şi va avea următorul cuprins', 'se modifica si va avea urmatorul cuprins',
+                         'se modifică şi vor avea următorul cuprins', 'se modifica si vor avea urmatorul cuprins']
 
-__VER__='0.4.2.1'
+
+__VER__='0.4.3.0'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -610,6 +614,41 @@ class GetMergeV2Worker(FlaskWorker):
         return error, actionApplied, transformed, actions, olds, news
     
     
+    ##############
+    # Heuristics #
+    ##############
+    
+    def match_keywords(self, activ, keywords):
+        """ Search for keywords in the text. """
+        
+        match_dict = {}
+        for key in keywords:
+            pos = activ.find(key)
+            
+            if pos > -1:
+                match_dict[pos] = key   
+                
+        return match_dict
+    
+    def search_modifica_cuprins(self, activ):
+        """ Search for the phrase 'se modifică şi va avea următorul cuprins'. """
+        
+        match_dict = self.match_keywords(activ, MODIFICA_CUPRINS_KEYS)
+        
+        if match_dict:
+            # If phrase found
+            pos, _ = list(match_dict.items())[0]
+            
+            # Find first and last quotation mark
+            q1 = activ.find('"', pos + 1)
+            q2 = activ.rfind('"')
+            transf = activ[q1 + 1:q2]
+            
+            return transf
+        
+        return None
+    
+    
     
     def _pre_process(self, inputs):
        
@@ -646,6 +685,17 @@ class GetMergeV2Worker(FlaskWorker):
     def _predict(self, prep_inputs):
         
         pasiv, activ = prep_inputs
+        
+        # First check heuristics
+        transformed = self.search_modifica_cuprins(activ)
+        if transformed:
+            # If a transformation was made
+            error = None
+            actionApplied = True
+            action = ["se modifică şi va avea următorul cuprins"]
+            news = [transformed]
+            olds = []
+            return error, actionApplied, transformed, action, olds, news
         
         error, actionApplied, transformed, action, olds, news = self.transform(pasiv, activ) 
               
@@ -737,9 +787,13 @@ if __name__ == '__main__':
         # 'PASIV' : """'A se vedea şi 6.2.1.7.'""",
         # 'ACTIV' : """"La articolul 5.2.1.6 în cadrul NOTEI se înlocuieşte '6.2.1.7' cu '6.2.2.7' şi '6.2.1.8' cu '6.2.2.8'.""",
         
+        # se modifică şi va avea următorul cuprins        
+        'PASIV' : """(3) Cifra de şcolarizare pentru rezidenţiat este cel puţin egală cu numărul de locuri reprezentând totalul absolvenţilor de medicină, medicină dentară şi farmacie cu diplomă de licenţă din promoţia anului în curs, cumulat cu numărul de posturi conform art. 18, stabilită prin ordin al ministrului sănătăţii. În cazul în care numărul candidaţilor pentru domeniul medicină care promovează examenul de rezidenţiat este mai mare decât cifra de şcolarizare iniţial anunţată, aceasta se poate suplimenta până la repartiţia candidaţilor, astfel încât toţi candidaţii promovaţi să poată accesa un loc sau un post de rezidenţiat. Ministerul Finanţelor asigură resursele financiare necesare şcolarizării prin rezidenţiat la nivelul cifrelor de şcolarizare aprobate.  """,
+        'ACTIV' : """   1. La articolul 2, alineatul (3) se modifică şi va avea următorul cuprins: " (3) Cifra de şcolarizare pentru rezidenţiat este stabilită anual prin ordin al ministrului sănătăţii. La stabilirea cifrei de şcolarizare se are în vedere capacitatea de pregătire disponibilă comunicată de instituţiile de învăţământ superior cu profil medical acreditate, până cel târziu la data de 1 august a fiecărui an. Pentru domeniul medicină, cifra de şcolarizare este cel puţin egală cu numărul absolvenţilor cu diplomă de licenţă din promoţia anului în curs." """,
         
-        'PASIV' : """art 1  (2) Prevederile metodologiei se utilizează exclusiv în cadrul proiectului "Facilitarea inserţiei pe piaţa muncii a persoanelor cu dizabilităţi", proiect implementat de Autoritatea Naţională pentru Drepturile Persoanelor cu Dizabilităţi, Copii şi Adopţii (ANDPDCA) în parteneriat cu Agenţia Naţională pentru Ocuparea Forţei de Muncă (ANOFM), cofinanţat din Programul operaţional Capital uman (POCU) - axa prioritară 3 - Locuri de muncă pentru toţi.  """,
-        'ACTIV' : """6. În tot cuprinsul ordinului, sintagma "Autoritatea Naţională pentru Drepturile Persoanelor cu Dizabilităţi, Copii şi Adopţii" se înlocuieşte cu sintagma "Autoritatea Naţională pentru Protecţia Drepturilor Persoanelor cu Dizabilităţi", acronimul "ANDPDCA" se înlocuieşte cu acronimul "Autoritate", site-ul "www.andpdca.gov.ro" se înlocuieşte cu site-ul "www.anpd.gov.ro", iar adresa "asistive@andpdca.gov.ro" se înlocuieşte cu adresa "asistive@anpd.gov.ro".  """,
+        
+        # 'PASIV' : """art 1  (2) Prevederile metodologiei se utilizează exclusiv în cadrul proiectului "Facilitarea inserţiei pe piaţa muncii a persoanelor cu dizabilităţi", proiect implementat de Autoritatea Naţională pentru Drepturile Persoanelor cu Dizabilităţi, Copii şi Adopţii (ANDPDCA) în parteneriat cu Agenţia Naţională pentru Ocuparea Forţei de Muncă (ANOFM), cofinanţat din Programul operaţional Capital uman (POCU) - axa prioritară 3 - Locuri de muncă pentru toţi.  """,
+        # 'ACTIV' : """6. În tot cuprinsul ordinului, sintagma "Autoritatea Naţională pentru Drepturile Persoanelor cu Dizabilităţi, Copii şi Adopţii" se înlocuieşte cu sintagma "Autoritatea Naţională pentru Protecţia Drepturilor Persoanelor cu Dizabilităţi", acronimul "ANDPDCA" se înlocuieşte cu acronimul "Autoritate", site-ul "www.andpdca.gov.ro" se înlocuieşte cu site-ul "www.anpd.gov.ro", iar adresa "asistive@andpdca.gov.ro" se înlocuieşte cu adresa "asistive@anpd.gov.ro".  """,
         
          
         'DEBUG': True
