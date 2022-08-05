@@ -88,7 +88,7 @@ MODIFICA_CUPRINS_KEYS = ['se modifică şi va avea următorul cuprins', 'se modi
                          'se modifică şi vor avea următorul cuprins', 'se modifica si vor avea urmatorul cuprins']
 
 
-__VER__='1.0.0.0'
+__VER__='1.0.0.1'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -257,7 +257,7 @@ class GetMergeV2Worker(FlaskWorker):
         ''' Find occurances of a substring using generlized texts. '''
         
         # Generalize texts
-        gen_old = self.generalize_text(sub)
+        gen_old = re.escape(self.generalize_text(sub))
         gen_tran = self.generalize_text(text)
                 
         re_matches = list(re.finditer(gen_old, gen_tran))
@@ -590,45 +590,44 @@ class GetMergeV2Worker(FlaskWorker):
         
         # Only one action identified
         action = actions[0]
-    
-        actionType = self.get_action_type(action)
+        action_type = action_types[0]
         
         actionApplied = False
         transformed = pasiv
         
-        if actionType == ACTION_CITESTE:
+        if action_type == ACTION_CITESTE:
             # Apply Citeste
             transformed, actionApplied = self.action_inlocuieste(pasiv, activ, action, olds, news)
     
-        elif actionType == ACTION_PRELUNGESTE_CU:
+        elif action_type == ACTION_PRELUNGESTE_CU:
             # Apply Prelungeste cu
             transformed, actionApplied = self.action_prelungeste_cu(pasiv, activ, action, olds, news)
     
-        elif actionType == ACTION_PRELUNGESTE_PANA:
+        elif action_type == ACTION_PRELUNGESTE_PANA:
             # Apply Prelungeste pana
             transformed, actionApplied = self.action_prelungeste_pana(pasiv, activ, action, olds, news)
                 
-        elif actionType == ACTION_INLOCUIESTE:   
+        elif action_type == ACTION_INLOCUIESTE:   
             # Apply Inlocuieste
             transformed, actionApplied = self.action_inlocuieste(pasiv, activ, action, olds, news)
                 
-        elif actionType == ACTION_ELIMINA:  
+        elif action_type == ACTION_ELIMINA:  
             # Apply Elimina
             transformed, actionApplied = self.action_elimina(pasiv, activ, action, olds, news)
                 
-        elif actionType == ACTION_DEVINE:
+        elif action_type == ACTION_DEVINE:
             # Apply Devine
             transformed, actionApplied = self.action_devine(pasiv, activ, action, olds, news)
     
-        elif actionType == ACTION_PROROGA_PANA:
+        elif action_type == ACTION_PROROGA_PANA:
             # Apply Prelungeste pana
             transformed, actionApplied = self.action_prelungeste_pana(pasiv, activ, action, olds, news)
     
-        elif actionType == ACTION_PROROGA_CU:
+        elif action_type == ACTION_PROROGA_CU:
             # Apply Prelungeste cu
             transformed, actionApplied = self.action_prelungeste_cu(pasiv, activ, action, olds, news)
 
-        elif actionType == ACTION_CU:
+        elif action_type == ACTION_CU:
             # Apply Inlocuieste cu
             transformed, actionApplied = self.action_inlocuieste(pasiv, activ, action, olds, news)
     
@@ -636,7 +635,7 @@ class GetMergeV2Worker(FlaskWorker):
             # Clean any possible punctuation mistakes after the transformation
             transformed = self.clean_punctuation(transformed)
             
-        if actionType == ACTION_UNKNOWN:
+        if action_type == ACTION_UNKNOWN:
             error = ERROR_ACTION_UKNOWN
                                                        
         return error, actionApplied, transformed, actions, olds, news
@@ -857,9 +856,9 @@ if __name__ == '__main__':
         # 'ACTIV' : """   1. La articolul 2, alineatul (3) se modifică şi va avea următorul cuprins: " (3) Cifra de şcolarizare pentru rezidenţiat este stabilită anual prin ordin al ministrului sănătăţii. La stabilirea cifrei de şcolarizare se are în vedere capacitatea de pregătire disponibilă comunicată de instituţiile de învăţământ superior cu profil medical acreditate, până cel târziu la data de 1 august a fiecărui an. Pentru domeniul medicină, cifra de şcolarizare este cel puţin egală cu numărul absolvenţilor cu diplomă de licenţă din promoţia anului în curs." """,
         
         
-        'PASIV' : """art. 4   (4) În cazul în care se constată că beneficiarii nu au respectat criteriile de eligibilitate şi angajamentele prevăzute în ghidurile de finanţare care constituie Programul "ELECTRIC UP" privind finanţarea întreprinderilor mici şi mijlocii pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică şi a staţiilor de reîncărcare pentru vehicule electrice şi electrice hibrid plug-in, au făcut declaraţii incomplete sau neconforme cu realitatea pentru a obţine ajutorul de minimis sau au schimbat destinaţia acestuia ori se constată că nu au respectat obligaţiile prevăzute în contractul de finanţare, se recuperează, potrivit dreptului comun în materie, ajutorul de minimis acordat, cu respectarea normelor naţionale şi europene în materia ajutorului de stat de către Ministerul Economiei, Energiei şi Mediului de Afaceri în calitate de furnizor.  """,
-        'ACTIV' : """În cuprinsul Ordonanţei de urgenţă a Guvernului nr. 159/2020 privind finanţarea întreprinderilor mici şi mijlocii şi domeniului HORECA pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică cu o putere instalată cuprinsă între 27 kWp şi 100 kWp necesară consumului propriu şi livrarea surplusului în Sistemul energetic naţional, precum şi a staţiilor de reîncărcare de minimum 22 kW pentru vehicule electrice şi electrice hibrid plug-in, prin Programul de finanţare "ELECTRIC UP", sintagma "Ministerul Economiei, Energiei şi Mediului de Afaceri" se înlocuieşte cu sintagma "Ministerul Energiei".""",
-        
+        'PASIV' : """art. 4   (4) În cazul în care se constată că beneficiarii nu au respectat criteriile de eligibilitate şi angajamentele prevăzute în ghidurile de finanţare care constituie Programul \"ELECTRIC UP\" privind finanţarea întreprinderilor mici şi mijlocii pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică şi a staţiilor de reîncărcare pentru vehicule electrice şi electrice hibrid plug-in, au făcut declaraţii incomplete sau neconforme cu realitatea pentru a obţine ajutorul de minimis sau au schimbat destinaţia acestuia ori se constată că nu au respectat obligaţiile prevăzute în contractul de finanţare, se recuperează, potrivit dreptului comun în materie, ajutorul de minimis acordat, cu respectarea normelor naţionale şi europene în materia ajutorului de stat de către Ministerul Economiei, Energiei şi Mediului de Afaceri în calitate de furnizor.""",
+        'ACTIV' : """În cuprinsul Ordonanţei de urgenţă a Guvernului nr. 159/2020 privind finanţarea întreprinderilor mici şi mijlocii şi domeniului HORECA pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică cu o putere instalată cuprinsă între 27 kWp şi 100 kWp necesară consumului propriu şi livrarea surplusului în Sistemul energetic naţional, precum şi a staţiilor de reîncărcare de minimum 22 kW pentru vehicule electrice şi electrice hibrid plug-in, prin Programul de finanţare \"ELECTRIC UP\", sintagma \"Ministerul Economiei, Energiei şi Mediului de Afaceri\" se înlocuieşte cu sintagma \"Ministerul Energiei\".""",
+
          
         'ENSAMBLE': True,
         'DEBUG': True
