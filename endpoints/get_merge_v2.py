@@ -45,6 +45,11 @@ KEYWORDS_PROROGA_CU = ['proroga cu', 'prorogă cu']
 ACTION_CU = 9
 KEYWORD_CU = 'cu'
 
+SAME_ACTION_GROUPS = [[ACTION_INLOCUIESTE, ACTION_CU, ACTION_CITESTE],
+                      [ACTION_PRELUNGESTE_PANA, ACTION_PROROGA_PANA],
+                      [ACTION_PRELUNGESTE_CU, ACTION_PROROGA_CU]
+                      ]
+
 # Period
 PERIOD_ERROR = -1
 PERIOD_ZILE = 0
@@ -76,7 +81,7 @@ MODIFICA_CUPRINS_KEYS = ['se modifică şi va avea următorul cuprins', 'se modi
                          'se modifică şi vor avea următorul cuprins', 'se modifica si vor avea urmatorul cuprins']
 
 
-__VER__='0.4.3.0'
+__VER__='0.4.4.0'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -336,6 +341,18 @@ class GetMergeV2Worker(FlaskWorker):
                 
         return PERIOD_ERROR, None
     
+    def is_same_action(self, action1, action2):
+        ''' Detect if two actions actually refer to the same transformation. '''
+        
+        if action1 == action2:
+            return True
+        
+        for action_group in SAME_ACTION_GROUPS:
+            if action1 in action_group and action2 in action_group:
+                # If both actions are in the same group
+                return True
+            
+        return False    
     
     def group_actions_basic(self, doc):
         ''' Group Old's and New's for a text with a single action. '''
@@ -344,6 +361,7 @@ class GetMergeV2Worker(FlaskWorker):
         olds = []
         news = []
         actions = []
+        action_types = []
         
         error = NO_ERROR
         
@@ -356,6 +374,9 @@ class GetMergeV2Worker(FlaskWorker):
                 
             else:
                 news.append(self.clean_entity(ent.text))
+              
+        # Get action types
+        action_types = [self.get_action_type(action) for action in actions]
             
         # Check number of actions
         if len(actions) > 1:
@@ -373,14 +394,14 @@ class GetMergeV2Worker(FlaskWorker):
                     actions = [action]            
             else:
                 # Check if same action several times
-                action = actions[0]
-                for action2 in actions[1:]:
-                    if action2 != action:
+                action_type1 = action_types[0]
+                for action_type2 in action_types[1:]:
+                    if not self.is_same_action(action_type1, action_type2):
                         error = ERROR_MANY_ACTIONS
                         break
                     
                 if error != ERROR_MANY_ACTIONS:
-                    actions = [action]
+                    actions = [actions[0]]
                 
         elif len(actions) == 0:
             error = ERROR_NO_ACTION
@@ -388,7 +409,7 @@ class GetMergeV2Worker(FlaskWorker):
         elif len(olds) + len(news) == 0 or (len(olds) + len(news) > 1 and len(olds) != len(news)):
             error = ERROR_NUM_OLD_NEW
             
-        return error, actions, olds, news    
+        return error, actions, action_types, olds, news    
     
     
     def action_prelungeste_cu(self, pasiv, activ, action, olds, news):
@@ -550,7 +571,7 @@ class GetMergeV2Worker(FlaskWorker):
         
         doc = self.activ_ner(activ)
             
-        error, actions, olds, news = self.group_actions_basic(doc)
+        error, actions, action_types, olds, news = self.group_actions_basic(doc)
         
         if self.debug:
             print('Action:', actions)
@@ -598,7 +619,7 @@ class GetMergeV2Worker(FlaskWorker):
     
         elif actionType == ACTION_PROROGA_CU:
             # Apply Prelungeste cu
-            transformed, actionApplied = self.action_prelungeste_pana(pasiv, activ, action, olds, news)
+            transformed, actionApplied = self.action_prelungeste_cu(pasiv, activ, action, olds, news)
 
         elif actionType == ACTION_CU:
             # Apply Inlocuieste cu
@@ -788,12 +809,12 @@ if __name__ == '__main__':
         # 'ACTIV' : """"La articolul 5.2.1.6 în cadrul NOTEI se înlocuieşte '6.2.1.7' cu '6.2.2.7' şi '6.2.1.8' cu '6.2.2.8'.""",
         
         # se modifică şi va avea următorul cuprins        
-        'PASIV' : """(3) Cifra de şcolarizare pentru rezidenţiat este cel puţin egală cu numărul de locuri reprezentând totalul absolvenţilor de medicină, medicină dentară şi farmacie cu diplomă de licenţă din promoţia anului în curs, cumulat cu numărul de posturi conform art. 18, stabilită prin ordin al ministrului sănătăţii. În cazul în care numărul candidaţilor pentru domeniul medicină care promovează examenul de rezidenţiat este mai mare decât cifra de şcolarizare iniţial anunţată, aceasta se poate suplimenta până la repartiţia candidaţilor, astfel încât toţi candidaţii promovaţi să poată accesa un loc sau un post de rezidenţiat. Ministerul Finanţelor asigură resursele financiare necesare şcolarizării prin rezidenţiat la nivelul cifrelor de şcolarizare aprobate.  """,
-        'ACTIV' : """   1. La articolul 2, alineatul (3) se modifică şi va avea următorul cuprins: " (3) Cifra de şcolarizare pentru rezidenţiat este stabilită anual prin ordin al ministrului sănătăţii. La stabilirea cifrei de şcolarizare se are în vedere capacitatea de pregătire disponibilă comunicată de instituţiile de învăţământ superior cu profil medical acreditate, până cel târziu la data de 1 august a fiecărui an. Pentru domeniul medicină, cifra de şcolarizare este cel puţin egală cu numărul absolvenţilor cu diplomă de licenţă din promoţia anului în curs." """,
+        # 'PASIV' : """(3) Cifra de şcolarizare pentru rezidenţiat este cel puţin egală cu numărul de locuri reprezentând totalul absolvenţilor de medicină, medicină dentară şi farmacie cu diplomă de licenţă din promoţia anului în curs, cumulat cu numărul de posturi conform art. 18, stabilită prin ordin al ministrului sănătăţii. În cazul în care numărul candidaţilor pentru domeniul medicină care promovează examenul de rezidenţiat este mai mare decât cifra de şcolarizare iniţial anunţată, aceasta se poate suplimenta până la repartiţia candidaţilor, astfel încât toţi candidaţii promovaţi să poată accesa un loc sau un post de rezidenţiat. Ministerul Finanţelor asigură resursele financiare necesare şcolarizării prin rezidenţiat la nivelul cifrelor de şcolarizare aprobate.  """,
+        # 'ACTIV' : """   1. La articolul 2, alineatul (3) se modifică şi va avea următorul cuprins: " (3) Cifra de şcolarizare pentru rezidenţiat este stabilită anual prin ordin al ministrului sănătăţii. La stabilirea cifrei de şcolarizare se are în vedere capacitatea de pregătire disponibilă comunicată de instituţiile de învăţământ superior cu profil medical acreditate, până cel târziu la data de 1 august a fiecărui an. Pentru domeniul medicină, cifra de şcolarizare este cel puţin egală cu numărul absolvenţilor cu diplomă de licenţă din promoţia anului în curs." """,
         
         
-        # 'PASIV' : """art 1  (2) Prevederile metodologiei se utilizează exclusiv în cadrul proiectului "Facilitarea inserţiei pe piaţa muncii a persoanelor cu dizabilităţi", proiect implementat de Autoritatea Naţională pentru Drepturile Persoanelor cu Dizabilităţi, Copii şi Adopţii (ANDPDCA) în parteneriat cu Agenţia Naţională pentru Ocuparea Forţei de Muncă (ANOFM), cofinanţat din Programul operaţional Capital uman (POCU) - axa prioritară 3 - Locuri de muncă pentru toţi.  """,
-        # 'ACTIV' : """6. În tot cuprinsul ordinului, sintagma "Autoritatea Naţională pentru Drepturile Persoanelor cu Dizabilităţi, Copii şi Adopţii" se înlocuieşte cu sintagma "Autoritatea Naţională pentru Protecţia Drepturilor Persoanelor cu Dizabilităţi", acronimul "ANDPDCA" se înlocuieşte cu acronimul "Autoritate", site-ul "www.andpdca.gov.ro" se înlocuieşte cu site-ul "www.anpd.gov.ro", iar adresa "asistive@andpdca.gov.ro" se înlocuieşte cu adresa "asistive@anpd.gov.ro".  """,
+        'PASIV' : """art. 4   (4) În cazul în care se constată că beneficiarii nu au respectat criteriile de eligibilitate şi angajamentele prevăzute în ghidurile de finanţare care constituie Programul "ELECTRIC UP" privind finanţarea întreprinderilor mici şi mijlocii pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică şi a staţiilor de reîncărcare pentru vehicule electrice şi electrice hibrid plug-in, au făcut declaraţii incomplete sau neconforme cu realitatea pentru a obţine ajutorul de minimis sau au schimbat destinaţia acestuia ori se constată că nu au respectat obligaţiile prevăzute în contractul de finanţare, se recuperează, potrivit dreptului comun în materie, ajutorul de minimis acordat, cu respectarea normelor naţionale şi europene în materia ajutorului de stat de către Ministerul Economiei, Energiei şi Mediului de Afaceri în calitate de furnizor.  """,
+        'ACTIV' : """În cuprinsul Ordonanţei de urgenţă a Guvernului nr. 159/2020 privind finanţarea întreprinderilor mici şi mijlocii şi domeniului HORECA pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică cu o putere instalată cuprinsă între 27 kWp şi 100 kWp necesară consumului propriu şi livrarea surplusului în Sistemul energetic naţional, precum şi a staţiilor de reîncărcare de minimum 22 kW pentru vehicule electrice şi electrice hibrid plug-in, prin Programul de finanţare "ELECTRIC UP", sintagma "Ministerul Economiei, Energiei şi Mediului de Afaceri" se înlocuieşte cu sintagma "Ministerul Energiei".""",
         
          
         'DEBUG': True
