@@ -13,8 +13,15 @@ _CONFIG = {
 # File paths
 # Debug
 NER_MODEL_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-1000'
+NER_MODELS_DEBUG = ['C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-931-150-150-d0.1',
+                    'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-1000',
+                    'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-400']
+
 # Prod
 NER_MODEL_PROD = 'C:\\allan_data\\MergeNER\\model-best'
+NER_MODELS_PROD = ['C:\\allan_data\\MergeNER\\model-best-931-150-150-d0.1',
+                   'C:\\allan_data\\MergeNER\\model-best-1000',
+                   'C:\\allan_data\\MergeNER\\model-best-400']
 
 
 MIN_PASIV_WORDS = 2
@@ -81,7 +88,7 @@ MODIFICA_CUPRINS_KEYS = ['se modifică şi va avea următorul cuprins', 'se modi
                          'se modifică şi vor avea următorul cuprins', 'se modifica si vor avea urmatorul cuprins']
 
 
-__VER__='0.4.4.0'
+__VER__='1.0.0.0'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -566,10 +573,10 @@ class GetMergeV2Worker(FlaskWorker):
         return transformed, actionApplied
     
     
-    def transform(self, pasiv, activ):
+    def transform(self, activ_ner, pasiv, activ):
         ''' Transform an instance of Pasiv using the corresponding instance of Activ. '''
         
-        doc = self.activ_ner(activ)
+        doc = activ_ner(activ)
             
         error, actions, action_types, olds, news = self.group_actions_basic(doc)
         
@@ -634,6 +641,23 @@ class GetMergeV2Worker(FlaskWorker):
                                                        
         return error, actionApplied, transformed, actions, olds, news
     
+    def transform_ensamble(self, pasiv, activ):
+        ''' Apply the transform function for an ensamble of NERs. '''
+        
+        for ner in self.activ_ners:
+            # Apply transform function for current NER
+            error, actionApplied, transformed, actions, olds, news = self.transform(ner, pasiv, activ)
+            
+            if actionApplied == True:
+                # If the action could be applied, return the results and do not apply other NERs
+                break
+            else:
+                # Otherwise, continue to try the other NERs
+                continue
+          
+        # Either return the correct results of a NER which applied the action or the error of the last NER
+        return error, actionApplied, transformed, actions, olds, news
+    
     
     ##############
     # Heuristics #
@@ -679,11 +703,26 @@ class GetMergeV2Worker(FlaskWorker):
         # Set paths
         if self.debug:
             ner_model_path = NER_MODEL_DEBUG
+            ner_models_paths = NER_MODELS_DEBUG
         else:
-            ner_model_path = NER_MODEL_PROD            
+            ner_model_path = NER_MODEL_PROD
+            ner_models_paths = NER_MODELS_PROD
+            
+        self.apply_ensamble = bool(inputs.get('ENSAMBLE', False))
         
-        # Load trained NER model for Activ        
-        self.activ_ner = spacy.load(ner_model_path)
+        
+        if self.apply_ensamble:
+            # Load list of trainer NER models for Activ
+            self.activ_ners = []
+            for ner_path in ner_models_paths:
+                self.activ_ners.append(spacy.load(ner_path))
+                if self.debug:
+                    print('Loaded NER model {}'.format(ner_path))
+                
+        else:            
+            # Load trained NER model for Activ    
+            self.activ_ner = spacy.load(ner_model_path)
+        
                 
         pasiv = inputs['PASIV']
         num_words = len(pasiv.split(' '))
@@ -718,8 +757,13 @@ class GetMergeV2Worker(FlaskWorker):
             olds = []
             return error, actionApplied, transformed, action, olds, news
         
-        error, actionApplied, transformed, action, olds, news = self.transform(pasiv, activ) 
-              
+        if self.apply_ensamble: 
+            # Apply ensamble of NERs
+            error, actionApplied, transformed, action, olds, news = self.transform_ensamble(pasiv, activ)
+        else:
+            # Apply single NER
+            error, actionApplied, transformed, action, olds, news = self.transform(self.activ_ner, pasiv, activ)
+        
         return error, actionApplied, transformed, action, olds, news
 
     def _post_process(self, pred):
@@ -817,6 +861,7 @@ if __name__ == '__main__':
         'ACTIV' : """În cuprinsul Ordonanţei de urgenţă a Guvernului nr. 159/2020 privind finanţarea întreprinderilor mici şi mijlocii şi domeniului HORECA pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică cu o putere instalată cuprinsă între 27 kWp şi 100 kWp necesară consumului propriu şi livrarea surplusului în Sistemul energetic naţional, precum şi a staţiilor de reîncărcare de minimum 22 kW pentru vehicule electrice şi electrice hibrid plug-in, prin Programul de finanţare "ELECTRIC UP", sintagma "Ministerul Economiei, Energiei şi Mediului de Afaceri" se înlocuieşte cu sintagma "Ministerul Energiei".""",
         
          
+        'ENSAMBLE': True,
         'DEBUG': True
       }
           
