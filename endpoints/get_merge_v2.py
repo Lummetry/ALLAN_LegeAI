@@ -12,16 +12,18 @@ _CONFIG = {
 
 # File paths
 # Debug
-NER_MODEL_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-1000'
+NER_MODEL_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-2299-150-150-d0.1'
 NER_MODELS_DEBUG = ['C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-931-150-150-d0.1',
                     'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-1000',
-                    'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-400']
+                    'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-400',
+                    'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-2299-150-150-d0.1']
 
 # Prod
-NER_MODEL_PROD = 'C:\\allan_data\\MergeNER\\model-best'
+NER_MODEL_PROD = 'C:\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1'
 NER_MODELS_PROD = ['C:\\allan_data\\MergeNER\\model-best-931-150-150-d0.1',
                    'C:\\allan_data\\MergeNER\\model-best-1000',
-                   'C:\\allan_data\\MergeNER\\model-best-400']
+                   'C:\\allan_data\\MergeNER\\model-best-400',
+                   'C:\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1']
 
 
 MIN_PASIV_WORDS = 2
