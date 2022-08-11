@@ -13,17 +13,18 @@ _CONFIG = {
 # File paths
 # Debug
 NER_MODEL_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-2299-150-150-d0.1'
-NER_MODELS_DEBUG = ['C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-931-150-150-d0.1',
+NER_MODELS_DEBUG = ['C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-2299-150-150-d0.1',
+                    'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-931-150-150-d0.1',
                     'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-1000',
                     'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-400',
-                    'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-2299-150-150-d0.1']
+                    ]
 
 # Prod
 NER_MODEL_PROD = 'C:\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1'
-NER_MODELS_PROD = ['C:\\allan_data\\MergeNER\\model-best-931-150-150-d0.1',
+NER_MODELS_PROD = ['C:\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1',
+                   'C:\\allan_data\\MergeNER\\model-best-931-150-150-d0.1',
                    'C:\\allan_data\\MergeNER\\model-best-1000',
-                   'C:\\allan_data\\MergeNER\\model-best-400',
-                   'C:\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1']
+                   'C:\\allan_data\\MergeNER\\model-best-400',]
 
 
 MIN_PASIV_WORDS = 2
@@ -90,7 +91,7 @@ MODIFICA_CUPRINS_KEYS = ['se modifică şi va avea următorul cuprins', 'se modi
                          'se modifică şi vor avea următorul cuprins', 'se modifica si vor avea urmatorul cuprins']
 
 
-__VER__='1.0.0.1'
+__VER__='1.0.0.2'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -709,7 +710,7 @@ class GetMergeV2Worker(FlaskWorker):
             ner_model_path = NER_MODEL_PROD
             ner_models_paths = NER_MODELS_PROD
             
-        self.apply_ensamble = bool(inputs.get('ENSAMBLE', False))
+        self.apply_ensamble = bool(inputs.get('ENSAMBLE', True))
         
         
         if self.apply_ensamble:
@@ -838,8 +839,8 @@ if __name__ == '__main__':
         # 'ACTIV' : """Data specificată în secţiunea 2.03 din articolul 2 al acordului de împrumut se modifică şi devine 30 septembrie 1998.""",
           
         # se proroga pana
-        # 'PASIV' : """Compania are obligaţia de a plăti obligaţiile restante prevăzute la alin. (2) până la data de 30 noiembrie 2012.""",
-        # 'ACTIV' : """Termenele prevăzute la art. 1 alin. (1) şi (7) se prorogă până la 20 decembrie 2012 inclusiv.""",
+        'PASIV' : """Compania are obligaţia de a plăti obligaţiile restante prevăzute la alin. (2) până la data de 30 noiembrie 2012.""",
+        'ACTIV' : """Termenele prevăzute la art. 1 alin. (1) şi (7) se prorogă până la 20 decembrie 2012 inclusiv.""",
           
         # devine
         # 'PASIV' : """Obligaţiunile de tezaur exprimate în dolari S.U.A. cu dobândă sunt scadente la data de 13 august 1997.""",
@@ -858,11 +859,11 @@ if __name__ == '__main__':
         # 'ACTIV' : """   1. La articolul 2, alineatul (3) se modifică şi va avea următorul cuprins: " (3) Cifra de şcolarizare pentru rezidenţiat este stabilită anual prin ordin al ministrului sănătăţii. La stabilirea cifrei de şcolarizare se are în vedere capacitatea de pregătire disponibilă comunicată de instituţiile de învăţământ superior cu profil medical acreditate, până cel târziu la data de 1 august a fiecărui an. Pentru domeniul medicină, cifra de şcolarizare este cel puţin egală cu numărul absolvenţilor cu diplomă de licenţă din promoţia anului în curs." """,
         
         
-        'PASIV' : """art. 4   (4) În cazul în care se constată că beneficiarii nu au respectat criteriile de eligibilitate şi angajamentele prevăzute în ghidurile de finanţare care constituie Programul \"ELECTRIC UP\" privind finanţarea întreprinderilor mici şi mijlocii pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică şi a staţiilor de reîncărcare pentru vehicule electrice şi electrice hibrid plug-in, au făcut declaraţii incomplete sau neconforme cu realitatea pentru a obţine ajutorul de minimis sau au schimbat destinaţia acestuia ori se constată că nu au respectat obligaţiile prevăzute în contractul de finanţare, se recuperează, potrivit dreptului comun în materie, ajutorul de minimis acordat, cu respectarea normelor naţionale şi europene în materia ajutorului de stat de către Ministerul Economiei, Energiei şi Mediului de Afaceri în calitate de furnizor.""",
-        'ACTIV' : """În cuprinsul Ordonanţei de urgenţă a Guvernului nr. 159/2020 privind finanţarea întreprinderilor mici şi mijlocii şi domeniului HORECA pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică cu o putere instalată cuprinsă între 27 kWp şi 100 kWp necesară consumului propriu şi livrarea surplusului în Sistemul energetic naţional, precum şi a staţiilor de reîncărcare de minimum 22 kW pentru vehicule electrice şi electrice hibrid plug-in, prin Programul de finanţare \"ELECTRIC UP\", sintagma \"Ministerul Economiei, Energiei şi Mediului de Afaceri\" se înlocuieşte cu sintagma \"Ministerul Energiei\".""",
+        # 'PASIV' : """art. 4   (4) În cazul în care se constată că beneficiarii nu au respectat criteriile de eligibilitate şi angajamentele prevăzute în ghidurile de finanţare care constituie Programul \"ELECTRIC UP\" privind finanţarea întreprinderilor mici şi mijlocii pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică şi a staţiilor de reîncărcare pentru vehicule electrice şi electrice hibrid plug-in, au făcut declaraţii incomplete sau neconforme cu realitatea pentru a obţine ajutorul de minimis sau au schimbat destinaţia acestuia ori se constată că nu au respectat obligaţiile prevăzute în contractul de finanţare, se recuperează, potrivit dreptului comun în materie, ajutorul de minimis acordat, cu respectarea normelor naţionale şi europene în materia ajutorului de stat de către Ministerul Economiei, Energiei şi Mediului de Afaceri în calitate de furnizor.""",
+        # 'ACTIV' : """În cuprinsul Ordonanţei de urgenţă a Guvernului nr. 159/2020 privind finanţarea întreprinderilor mici şi mijlocii şi domeniului HORECA pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică cu o putere instalată cuprinsă între 27 kWp şi 100 kWp necesară consumului propriu şi livrarea surplusului în Sistemul energetic naţional, precum şi a staţiilor de reîncărcare de minimum 22 kW pentru vehicule electrice şi electrice hibrid plug-in, prin Programul de finanţare \"ELECTRIC UP\", sintagma \"Ministerul Economiei, Energiei şi Mediului de Afaceri\" se înlocuieşte cu sintagma \"Ministerul Energiei\".""",
 
          
-        'ENSAMBLE': True,
+        # 'ENSAMBLE': True,
         'DEBUG': True
       }
           
