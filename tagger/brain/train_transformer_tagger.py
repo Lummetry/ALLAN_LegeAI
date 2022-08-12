@@ -20,6 +20,8 @@ import json
 import pandas as pd
 import copy
 
+GPU_INDEX_FOR_TRAINING = 3
+
 
 parser = argparse.ArgumentParser(description='Training and evaluation file for transformer-based document-level multilabel classifier')
 parser.add_argument('-args_path', help='path to config file')
@@ -235,52 +237,58 @@ class MetricsCallback(keras.callbacks.Callback):
 
 
 if __name__ == "__main__":
+    if GPU_INDEX_FOR_TRAINING != -1:
+        str_device = '/device:GPU:{}'.format(GPU_INDEX_FOR_TRAINING)
+    else:
+        str_device = '/device:CPU:0'
 
-    bert_model = TFBertModel.from_pretrained(args.bert_backbone)
-    tokenizer = AutoTokenizer.from_pretrained(args.bert_backbone, use_fast=False)
+    with tf.device(str_device):
 
-    train_inputs, train_labels, dev_inputs, dev_labels, test_inputs, test_labels, labels_dict = load_data(tokenizer)
-    
+        bert_model = TFBertModel.from_pretrained(args.bert_backbone)
+        tokenizer = AutoTokenizer.from_pretrained(args.bert_backbone, use_fast=False)
 
-    if args.run_type == 'train':
-        train_dataset = build_dataset(train_inputs, train_labels, labels_dict, tokenizer).shuffle(10000).batch(args.batch_size)
-    dev_dataset = build_dataset(dev_inputs, dev_labels, labels_dict, tokenizer).batch(args.batch_size)
-    if args.run_type == 'eval':
-        test_dataset = build_dataset(test_inputs, test_labels, labels_dict, tokenizer).batch(args.batch_size)
-        test_callback = MetricsCallback(test_dataset)
-
-    dev_callback = MetricsCallback(dev_dataset)    
-    model = build_model(bert_model, len(labels_dict))
-
-    if args.run_type == 'train':
-        checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath=args.model_path+"/weights/{epoch:02d}", save_weights_only = True)
-        
-        history = model.fit(train_dataset, epochs=args.epochs, callbacks=[dev_callback, checkpoint_callback])
-
-        hist_df = pd.DataFrame(history.history) 
-        hist_json_file = '{0}/history.json'.format(args.model_path) 
-        with open(hist_json_file, mode='w') as f:
-            hist_df.to_json(f, indent=2)
+        train_inputs, train_labels, dev_inputs, dev_labels, test_inputs, test_labels, labels_dict = load_data(tokenizer)
 
 
-    elif args.run_type == 'eval':
-        model.load_weights(args.model_path)
-        
-        print("Dev results:", end="")
-        dev_callback.model = model
-        dev_results = dev_callback.on_epoch_end(0, {})
-        print(dev_results)
-        print()
+        if args.run_type == 'train':
+            train_dataset = build_dataset(train_inputs, train_labels, labels_dict, tokenizer).shuffle(10000).batch(args.batch_size)
+        dev_dataset = build_dataset(dev_inputs, dev_labels, labels_dict, tokenizer).batch(args.batch_size)
+        if args.run_type == 'eval':
+            test_dataset = build_dataset(test_inputs, test_labels, labels_dict, tokenizer).batch(args.batch_size)
+            test_callback = MetricsCallback(test_dataset)
 
-        print("Test results:",end="")
-        test_callback.model = model
-        test_results = test_callback.on_epoch_end(0, {})
-        print(test_results)
-        
-        # save to hf format
-        path_parts = args.model_path.split("weights")        
-        save_path = os.path.join(path_parts[0], path_parts[1][1:])
-        bert_model.save_pretrained(save_path)
-        tokenizer.save_pretrained(save_path)
+        dev_callback = MetricsCallback(dev_dataset)
+        model = build_model(bert_model, len(labels_dict))
 
+        if args.run_type == 'train':
+            checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath=args.model_path+"/weights/{epoch:02d}", save_weights_only = True)
+
+            history = model.fit(train_dataset, epochs=args.epochs, callbacks=[dev_callback, checkpoint_callback])
+
+            hist_df = pd.DataFrame(history.history)
+            hist_json_file = '{0}/history.json'.format(args.model_path)
+            with open(hist_json_file, mode='w') as f:
+                hist_df.to_json(f, indent=2)
+
+
+        elif args.run_type == 'eval':
+            model.load_weights(args.model_path)
+
+            print("Dev results:", end="")
+            dev_callback.model = model
+            dev_results = dev_callback.on_epoch_end(0, {})
+            print(dev_results)
+            print()
+
+            print("Test results:",end="")
+            test_callback.model = model
+            test_results = test_callback.on_epoch_end(0, {})
+            print(test_results)
+
+            # save to hf format
+            path_parts = args.model_path.split("weights")
+            save_path = os.path.join(path_parts[0], path_parts[1][1:])
+            bert_model.save_pretrained(save_path)
+            tokenizer.save_pretrained(save_path)
+    #endwith
 
