@@ -8,15 +8,20 @@ import string
 
 _CONFIG = {
   'SPACY_MODEL' : 'ro_core_news_lg',
+  # The first model is used when Ensamble is turned off
+  'NER_MODELS' : ['..\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1',
+                  '..\\allan_data\\MergeNER\\model-best-931-150-150-d0.1',
+                  '..\\allan_data\\MergeNER\\model-best-1000',
+                  '..\\allan_data\\MergeNER\\model-best-400',
+                  ]
  }
 
 # File paths
-# Debug
-NER_MODEL_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-2299-150-150-d0.1'
-NER_MODELS_DEBUG = ['C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-2299-150-150-d0.1',
-                    'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-931-150-150-d0.1',
-                    'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-1000',
-                    'C:\\Proiecte\\LegeAI\\Date\\Task9\\output\\model-best-400',
+NER_MODEL_DEBUG = '..\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1'
+NER_MODELS_DEBUG = ['..\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1',
+                    '..\\allan_data\\MergeNER\\model-best-931-150-150-d0.1',
+                    '..\\allan_data\\MergeNER\\model-best-1000',
+                    '..\\allan_data\\MergeNER\\model-best-400',
                     ]
 
 # Prod
@@ -91,7 +96,7 @@ MODIFICA_CUPRINS_KEYS = ['se modifică şi va avea următorul cuprins', 'se modi
                          'se modifică şi vor avea următorul cuprins', 'se modifica si vor avea urmatorul cuprins']
 
 
-__VER__='1.0.0.2'
+__VER__='1.0.1.0'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -112,6 +117,15 @@ class GetMergeV2Worker(FlaskWorker):
             spacy.cli.download(self.config_worker['SPACY_MODEL'])
             self.nlp_model = spacy.load(self.config_worker['SPACY_MODEL'])   
         self._create_notification('LOAD', 'Loaded spaCy model')
+        
+        # Load NER models
+        self.activ_ners = []
+        for ner_path in self.config_worker['NER_MODELS']:
+            self.activ_ners.append(spacy.load(ner_path))
+            print('Loaded NER model {}'.format(ner_path))
+                
+        # The first NER model is used if Ensamble is turned off
+        self.activ_ner = self.activ_ners[0]
     
         return 
     
@@ -700,30 +714,8 @@ class GetMergeV2Worker(FlaskWorker):
     def _pre_process(self, inputs):
        
         self.debug = bool(inputs.get('DEBUG', False))
-        
-        
-        # Set paths
-        if self.debug:
-            ner_model_path = NER_MODEL_DEBUG
-            ner_models_paths = NER_MODELS_DEBUG
-        else:
-            ner_model_path = NER_MODEL_PROD
-            ner_models_paths = NER_MODELS_PROD
             
         self.apply_ensamble = bool(inputs.get('ENSAMBLE', True))
-        
-        
-        if self.apply_ensamble:
-            # Load list of trainer NER models for Activ
-            self.activ_ners = []
-            for ner_path in ner_models_paths:
-                self.activ_ners.append(spacy.load(ner_path))
-                if self.debug:
-                    print('Loaded NER model {}'.format(ner_path))
-                
-        else:            
-            # Load trained NER model for Activ    
-            self.activ_ner = spacy.load(ner_model_path)
         
                 
         pasiv = inputs['PASIV']
@@ -863,7 +855,7 @@ if __name__ == '__main__':
         # 'ACTIV' : """În cuprinsul Ordonanţei de urgenţă a Guvernului nr. 159/2020 privind finanţarea întreprinderilor mici şi mijlocii şi domeniului HORECA pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică cu o putere instalată cuprinsă între 27 kWp şi 100 kWp necesară consumului propriu şi livrarea surplusului în Sistemul energetic naţional, precum şi a staţiilor de reîncărcare de minimum 22 kW pentru vehicule electrice şi electrice hibrid plug-in, prin Programul de finanţare \"ELECTRIC UP\", sintagma \"Ministerul Economiei, Energiei şi Mediului de Afaceri\" se înlocuieşte cu sintagma \"Ministerul Energiei\".""",
 
          
-        # 'ENSAMBLE': True,
+        'ENSAMBLE': False,
         'DEBUG': True
       }
           
