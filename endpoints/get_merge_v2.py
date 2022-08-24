@@ -5,31 +5,19 @@ import regex as re
 import spacy
 import unidecode
 import string
+import pandas as pd
+import difflib
 
 _CONFIG = {
   'SPACY_MODEL' : 'ro_core_news_lg',
   # The first model is used when Ensamble is turned off
-  'NER_MODELS' : ['..\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1',
+  'NER_MODELS' : ['..\\allan_data\\MergeNER\\model-best-3415-150-150',
+                  '..\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1',
                   '..\\allan_data\\MergeNER\\model-best-931-150-150-d0.1',
                   '..\\allan_data\\MergeNER\\model-best-1000',
                   '..\\allan_data\\MergeNER\\model-best-400',
                   ]
  }
-
-# File paths
-NER_MODEL_DEBUG = '..\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1'
-NER_MODELS_DEBUG = ['..\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1',
-                    '..\\allan_data\\MergeNER\\model-best-931-150-150-d0.1',
-                    '..\\allan_data\\MergeNER\\model-best-1000',
-                    '..\\allan_data\\MergeNER\\model-best-400',
-                    ]
-
-# Prod
-NER_MODEL_PROD = 'C:\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1'
-NER_MODELS_PROD = ['C:\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1',
-                   'C:\\allan_data\\MergeNER\\model-best-931-150-150-d0.1',
-                   'C:\\allan_data\\MergeNER\\model-best-1000',
-                   'C:\\allan_data\\MergeNER\\model-best-400',]
 
 
 MIN_PASIV_WORDS = 2
@@ -59,8 +47,10 @@ ACTION_PROROGA_CU = 8
 KEYWORDS_PROROGA_CU = ['proroga cu', 'prorogă cu']
 ACTION_CU = 9
 KEYWORD_CU = 'cu'
+ACTION_MODIFICA = 10
+KEYWORDS_MODIFICA = ['modifica', 'modifică']
 
-SAME_ACTION_GROUPS = [[ACTION_INLOCUIESTE, ACTION_CU, ACTION_CITESTE],
+SAME_ACTION_GROUPS = [[ACTION_INLOCUIESTE, ACTION_CU, ACTION_CITESTE, ACTION_MODIFICA],
                       [ACTION_PRELUNGESTE_PANA, ACTION_PROROGA_PANA],
                       [ACTION_PRELUNGESTE_CU, ACTION_PROROGA_CU]
                       ]
@@ -96,7 +86,7 @@ MODIFICA_CUPRINS_KEYS = ['se modifică şi va avea următorul cuprins', 'se modi
                          'se modifică şi vor avea următorul cuprins', 'se modifica si vor avea urmatorul cuprins']
 
 
-__VER__='1.0.1.0'
+__VER__='1.1.0.0'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -331,6 +321,10 @@ class GetMergeV2Worker(FlaskWorker):
         for key in KEYWORDS_PROROGA_CU:
             if key in cleanAction:
                 return ACTION_PROROGA_CU
+            
+        for key in KEYWORDS_MODIFICA:
+            if key in cleanAction:
+                return ACTION_MODIFICA
         
         if cleanAction == KEYWORD_CU:
             return ACTION_CU
@@ -647,6 +641,10 @@ class GetMergeV2Worker(FlaskWorker):
         elif action_type == ACTION_CU:
             # Apply Inlocuieste cu
             transformed, actionApplied = self.action_inlocuieste(pasiv, activ, action, olds, news)
+
+        elif action_type == ACTION_MODIFICA:
+            # Apply Inlocuieste cu
+            transformed, actionApplied = self.action_inlocuieste(pasiv, activ, action, olds, news)
     
         if actionApplied:
             # Clean any possible punctuation mistakes after the transformation
@@ -708,6 +706,7 @@ class GetMergeV2Worker(FlaskWorker):
             return transf
         
         return None
+
     
     
     
@@ -859,5 +858,72 @@ if __name__ == '__main__':
         'DEBUG': True
       }
           
-    res = eng.execute(inputs=test, counter=1)
-    print(res)
+    # res = eng.execute(inputs=test, counter=1)
+    # print(res)
+    
+
+    
+    
+    ################
+    # Client tests #
+    ################    
+    
+        
+    testsFile = "C:\\Proiecte\\LegeAI\\Date\\Task9\\teste_client\\minim 5 exemple cu diferite acţiuni_mod.xlsx"
+    NUM_ACTIV = 3
+    NUM_PASIV = 4
+    NUM_TRANSF = 5
+        
+    testSheets = pd.read_excel(testsFile, sheet_name=None)
+    
+    nCor, nIncor, nFail = 0, 0, 0
+    
+    for sheet in testSheets:
+        sheetDf = testSheets[sheet]
+        
+        nCorSh, nIncorSh, nFailSh = 0, 0, 0
+            
+        # No NaN values in Pasiv, Activ or Transf
+        sheetDf = sheetDf[~sheetDf.iloc[:, [NUM_ACTIV, 
+                                            NUM_PASIV, 
+                                            NUM_TRANSF]].isnull().any(axis=1)]
+            
+        for i, row in sheetDf.iterrows():
+            pasiv = row[NUM_PASIV]
+            activ = row[NUM_ACTIV]
+            transf = row[NUM_TRANSF]
+            
+            test = {                 
+                'PASIV' : pasiv,
+                'ACTIV' : activ,
+                'ENSAMBLE': True,
+                'DEBUG': False
+              }
+            
+            res = eng.execute(inputs=test, counter=i)
+                
+            if not 'success' in res:
+                # print('Error', i)
+                continue
+            else: 
+                if res['success'] == True:
+                    # print(res)
+                    if res['result'].strip(" \n\t") == transf.strip(" \n\t"):
+                        # print('Correct')
+                        nCor += 1
+                        nCorSh += 1
+                    else:
+                        # print('Incorrect')
+                        nIncor += 1
+                        nIncorSh += 1
+                else:
+                    # print(res)
+                    # print('Fail')
+                    nFail += 1
+                    nFailSh += 1
+        
+        total = nCorSh + nIncorSh + nFailSh
+        print('{} - {} / {}; {} incorrect'.format(sheet, nCorSh, total, nIncorSh))
+        
+    total = nCor + nIncor + nFail
+    print('Total: {} / {}, {:.2f}%'.format(nCor, total, nCor * 100 / total))
