@@ -1,55 +1,62 @@
 {
-    "CONFIG_ENDPOINTS" : {
-        "get_aprox" : {
-            "NR_WORKERS" : 2,
-            "HOST" : "127.0.0.1"
-        },
+	"CONFIG_ENDPOINTS" : {
+		"get_aprox" : {
+			"NR_WORKERS" : 2,
+			"HOST" : "127.0.0.1"
+		},
 
-        "get_sim" : {
-            "NR_WORKERS" : 2,
-            "HOST" : "127.0.0.1"
-        },
+		"get_sim" : {
+			"NR_WORKERS" : 2,
+			"HOST" : "127.0.0.1"
+		},
 
-	"get_qa" : {
-            "NR_WORKERS" : 1,
-            "HOST" : "127.0.0.1"
-        },
+		"get_qa" : {
+			"NR_WORKERS" : 1,
+			"HOST" : "127.0.0.1",
+			"TAGGER_MODEL" : "_cache/_models/tags_titles_3_long/weights/09",
+			"LABEL2ID" : "tags_titles_v1_labels_dict.pkl",
+			"BERT_BACKBONE" : "readerbench/jurBERT-base",
+			"BERT_MAX_SEQ_LEN" : 64
+
+		},
         
+		"get_tags" : {
+			"NR_WORKERS" : 1,
+			"HOST" : "127.0.0.1",
+			"TAGGER_MODEL" : "_cache/_models/tags_5/weights/05",
+			"LABEL2ID" : "tags_v1_labels_dict.pkl",
+			"BERT_BACKBONE" : "readerbench/jurBERT-base",
+			"BERT_MAX_SEQ_LEN" : 512
+		},
 
-        "get_tags" : {
-            "NR_WORKERS" : 1,
-            "HOST" : "127.0.0.1"
-        },
-
+		"get_sum" : {
+			"NR_WORKERS" : 2,
+			"HOST" : "127.0.0.1"
+		},
 		
-        "get_sum" : {
-            "NR_WORKERS" : 2,
-            "HOST" : "127.0.0.1"
-        },
-		
-        "get_sum2" : {
-            "NR_WORKERS" : 2,
-            "HOST" : "127.0.0.1"
-        },
+		"get_sum2" : {
+			"NR_WORKERS" : 2,
+			"HOST" : "127.0.0.1"
+		},
 
-        "get_conf" : {
-            "NR_WORKERS" : 2,
-            "HOST" : "127.0.0.1"
-        },
+		"get_conf" : {
+			"NR_WORKERS" : 2,
+			"HOST" : "127.0.0.1"
+		},
 
-        "get_merge" : {
-            "NR_WORKERS" : 2,
-            "HOST" : "127.0.0.1"
-        },
+		"get_merge" : {
+			"NR_WORKERS" : 2,
+			"HOST" : "127.0.0.1"
+		},
 
-        "get_merge_v2" : {
-            "NR_WORKERS" : 2,
-            "HOST" : "127.0.0.1"
-        },
+		"get_merge_v2" : {
+			"NR_WORKERS" : 2,
+			"HOST" : "127.0.0.1"
+		},
 
-        "get_mark" : {
-            "NR_WORKERS" : 2,
-            "HOST" : "127.0.0.1"
-        }
-    }
+		"get_mark" : {
+			"NR_WORKERS" : 2,
+			"HOST" : "127.0.0.1"
+		}
+	}
 }

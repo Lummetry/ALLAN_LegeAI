@@ -35,10 +35,7 @@ import tensorflow as tf
 import constants as ct
 
 _CONFIG = {
-  'TAGGER_MODEL': '_cache/_models/tags_titles_3_long/weights/09',
-  'LABEL2ID': 'tags_titles_v1_labels_dict.pkl',
-  'BERT_BACKBONE': 'readerbench/jurBERT-base',
-  'BERT_MAX_SEQ_LEN': 64,
+  
 }
 
 
