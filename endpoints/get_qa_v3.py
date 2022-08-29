@@ -19,7 +19,7 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 @project: 
 @description:
 @created on: Fri Dec  3 08:59:47 2021
-@created by: damia
+@created by: mihai.masala
 """
 
 import numpy as np
@@ -36,7 +36,7 @@ import constants as ct
 
 _CONFIG = {
   'TAGGER_MODEL': '_cache/_models/qav2_0/weights/05',
-  'LABEL2ID': 'qa_v2_labels_dict.pkl',
+  'LABEL2ID': 'qa_v1_labels_dict.pkl',
   'BERT_BACKBONE': '_cache/_models/tags_5/05',
   'BERT_MAX_SEQ_LEN': 128,
 }

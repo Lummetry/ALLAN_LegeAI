@@ -17,9 +17,9 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 @copyright: Lummetry.AI
 @author: Lummetry.AI
 @project: 
-@description:
+@description: script for saving documents (text) and tags (labels); used for tags corpus
 @created on: Fri Nov 26 12:24:06 2021
-@created by: damia
+@created by: mihai.masala
 """
 import numpy as np
 import sys

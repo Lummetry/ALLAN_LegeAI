@@ -19,7 +19,7 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 @project: 
 @description:
 @created on: Fri Dec  3 08:59:47 2021
-@created by: damia
+@created by: mihai.masala
 """
 
 import numpy as np
@@ -35,7 +35,7 @@ import tensorflow as tf
 import constants as ct
 
 _CONFIG = {
-  'TAGGER_MODEL': '_cache/_models/tags_title_model0/weights/05',
+  'TAGGER_MODEL': '_cache/_models/tags_titles_0/weights/05',
   'LABEL2ID': 'tags_titles_v1_labels_dict.pkl',
   'BERT_BACKBONE': 'readerbench/jurBERT-base',
   'BERT_MAX_SEQ_LEN': 64,
