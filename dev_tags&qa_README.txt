@@ -4,10 +4,11 @@ Readme for tags&qa dev
 Corpora:
 
 tags_v1: original tags
-train: 83.133, dev: 10.391, test: 10.393, total: 103.917
+train: 131.510, dev: 16.438, test: 16.440, total: 164.388
 
 qa_v3: 29.03.2022 from new db legeV
 tags_title: tags_v1 with only titles, corpora extracted on 05.04.2022
+train: 83.133, dev: 10.391, test: 10.393, total: 103.917
 
 ####################################################
 
