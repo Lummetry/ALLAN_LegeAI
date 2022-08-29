@@ -249,9 +249,21 @@ if __name__ == "__main__":
 
         train_inputs, train_labels, dev_inputs, dev_labels, test_inputs, test_labels, labels_dict = load_data(tokenizer)
 
+        if 'train' in args.run_type:
+            if args.run_type == 'train_dev':
+                train_inputs[0].extend(dev_inputs[0])
+                train_inputs[1].extend(dev_inputs[1])
+                train_labels.extend(dev_labels)
+            
+            if args.run_type == 'train_full':
+                train_inputs[0].extend(dev_inputs[0])
+                train_inputs[1].extend(dev_inputs[1])
+                train_labels.extend(dev_labels)
+                train_inputs[0].extend(test_inputs[0])
+                train_inputs[1].extend(test_inputs[1])
+                train_labels.extend(test_labels)
 
-        if args.run_type == 'train':
-            train_dataset = build_dataset(train_inputs, train_labels, labels_dict, tokenizer).shuffle(10000).batch(args.batch_size)
+            train_dataset = build_dataset(train_inputs, train_labels, labels_dict, tokenizer).shuffle(40000).batch(args.batch_size)
         dev_dataset = build_dataset(dev_inputs, dev_labels, labels_dict, tokenizer).batch(args.batch_size)
         if args.run_type == 'eval':
             test_dataset = build_dataset(test_inputs, test_labels, labels_dict, tokenizer).batch(args.batch_size)
