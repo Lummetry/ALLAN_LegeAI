@@ -29,13 +29,14 @@ from transformers import AutoTokenizer, TFBertModel
 from tensorflow.keras import layers
 from tensorflow import keras
 import tensorflow as tf
+import csv
 
 
 
 import constants as ct
 
 _CONFIG = {
-  
+
 }
 
 
@@ -49,10 +50,24 @@ class GetQAWorker(FlaskWorker):
     fn_label_to_id = self.config_worker['LABEL2ID']
     fn_bert_backbone = self.config_worker["BERT_BACKBONE"]
     fn_bert_max_seq_len = self.config_worker["BERT_MAX_SEQ_LEN"]
+    fn_mapping = self.config_worker["MAPPING_FILE"]
 
     self.label_to_id = self.log.load_pickle_from_data(fn_label_to_id)
     self.id_to_label = {v: k for k, v in self.label_to_id.items()}
 
+    self.mappings = {}
+    with open(fn_mapping) as csv_file:
+      csv_reader = csv.reader(csv_file, delimiter=',')
+      for row_index, row in enumerate(csv_reader):
+          if row_index == 0:
+            continue
+          else:
+              tags_label = str(row[0])
+              qa_labels = str(row[1]).split(",")
+              qa_labels = list(map(lambda x: x.strip(), qa_labels))
+              qa_labels = list(filter(lambda x: x != "", qa_labels))
+              self.mappings[tags_label] = qa_labels
+    
     bert_backbone =  TFBertModel.from_pretrained(fn_bert_backbone)
     self.tokenizer = AutoTokenizer.from_pretrained(fn_bert_backbone)
 
@@ -94,14 +109,45 @@ class GetQAWorker(FlaskWorker):
   def _post_process(self, pred):
     predictions, n_hits = pred
     top_n_idxs = np.argsort(predictions.squeeze())[-n_hits:]
+    top_n_idxs = top_n_idxs[::-1]
+
+
+    # res = {}
+    # res['results'] = [
+    #   [self.id_to_label[top_n_index], round(predictions.squeeze()[top_n_index].astype(float), 3)] for top_n_index in top_n_idxs
+    # ]
 
     res = {}
-    res['results'] = [
-      [self.id_to_label[i], round(predictions.squeeze()[i].astype(float), 3)]
-      for i in top_n_idxs
-    ]
-    res['results'].reverse()
+    res['results'] = []
+    for top_n_id in top_n_idxs:
+      # initial version with label from tags
+      # inner_results = [self.id_to_label[top_n_id], round(predictions.squeeze()[top_n_id].astype(float), 3)]
 
+      # here we have multiple options:
+      # add or not tags label
+      # add all or one (first or random) qa label
+      inner_results = []
+      for label_qa in self.mappings[self.id_to_label[top_n_id]]:
+        found = False
+        for aux_result in res['results']:
+          if label_qa == aux_result[0]:
+            found = True
+            break
+        if found == False:
+          inner_results.append([label_qa, round(predictions.squeeze()[top_n_id].astype(float), 3)])
+
+      res['results'].extend(inner_results)
+
+    # what to do when having less results?
+    if len(res['results']) < n_hits:
+      if n_hits > 200:
+        res = {}
+        res['results'] = [[self.id_to_label[top_n_index], round(predictions.squeeze()[top_n_index].astype(float), 3)] for top_n_index in top_n_idxs]
+      else:
+        res = self._post_process((predictions, 2*n_hits))
+    
+    # trim results to needed value
+    res['results'] = res['results'][:n_hits]
     return res
 
 if __name__ == '__main__':
@@ -111,7 +157,7 @@ if __name__ == '__main__':
 
   a = GetQAWorker(log=l, default_config=_CONFIG, verbosity_level=0)
   a._load_model()
-  ins = a._pre_process({"QUERY": "Cat la suta din salariul brut merge la pensii pentru un programator?"})
+  ins = a._pre_process({"QUERY": "Cat la suta din salariul brut merge la pensii pentru un programator?", "TOP_N": 10})
   p = a._predict(ins)
   r = a._post_process(p)
 
