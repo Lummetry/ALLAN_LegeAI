@@ -50,7 +50,7 @@ PERSON_UPPERCASE = 1
 PERSON_PROPN = 2
 PERSON_TWO_WORDS = 3
 MAX_LEV_DIST = 3
-SAME_NAME_THRESHOLD = 98
+SAME_NAME_THRESHOLD = 90
 CHECK_SON_OF_INTERVAL = 40
 SON_OF_PHRASES = ["fiul lui", "fiica lui"]
 NEE_PHRASES = ['fostă', 'fosta', 'fost', 'nascuta', 'nascut', 'născut']
@@ -170,7 +170,7 @@ SPACE_AND_PUNCTUATION = punctuation + ' '
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.7.4'
+__VER__='1.0.8.0'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -422,8 +422,6 @@ class GetConfWorker(FlaskWorker):
                         
         return new_codes
                     
-        
-    
     def user_update_name_codes(self, codes):
         """ Update the name codes according to the user commands. """
              
@@ -440,6 +438,16 @@ class GetConfWorker(FlaskWorker):
                         codes[i] = new_user_code
                         
         return codes
+
+    def user_assign_codes(self, name_code_dict):
+        """ Assign new codes to name entities, according to user commands. """   
+        
+        for name, code in self.user_assign_list:
+            
+            if name in name_code_dict:
+                name_code_dict[name] = code
+                
+        return name_code_dict
     
     def set_name_codes(self, text):
         """ Form the dictionary of names and codes. """
@@ -464,6 +472,11 @@ class GetConfWorker(FlaskWorker):
         
         # Set the name - code dictionary
         name_code_dict = {self.name_list[i][1] : codes[i] for i in range(len(self.name_list))}
+        
+        # Assign new user codes to the names
+        print(name_code_dict)
+        name_code_dict = self.user_assign_codes(name_code_dict)
+        print(name_code_dict)
         
         return name_code_dict
         
@@ -1442,7 +1455,8 @@ class GetConfWorker(FlaskWorker):
     
             # If any kind of overlap
             if not overlap == NO_OVERLAP:
-                print('overlap', label1, label2)
+                if self.debug:
+                    print('overlap', label1, label2)
                 
                 # If only one is a spaCy match, give priority to non-spaCy match
                 if label1 in SPACY_LABELS and label2 not in SPACY_LABELS:
@@ -1761,6 +1775,9 @@ class GetConfWorker(FlaskWorker):
                 elif action == 'add':
                     rules = command.get('rules', None)
                     self.add_to_file(command['type'], command['entity'], rules)
+
+                elif action == 'assign':
+                    self.user_assign_list.append((command['entity'], command['code']))
             
             except KeyError:
                 print('Incorrect keys for command: {}'.format(command))    
@@ -1791,6 +1808,7 @@ class GetConfWorker(FlaskWorker):
         # Initialize user command lists    
         self.user_merge_list = []
         self.user_replace_list = []
+        self.user_assign_list = []
             
         # Parse user commands
         commands = inputs.get('COMMANDS')
@@ -1958,6 +1976,7 @@ class GetConfWorker(FlaskWorker):
                 
                 if name_match:
                     start, end = name_match.span()
+                    
                     if end < len(hidden_doc) and hidden_doc[end] != '.':
                         # Add dot after the code if it's not before a dot
                         code += '.'
@@ -2090,9 +2109,9 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
         
-    # 'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan""",
+    'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan""",
     
-    'DOCUMENT' : full_doc,
+    # 'DOCUMENT' : full_doc,
     
     'COMMANDS' : [
         # {"action" : "merge", "words" : "Ciortea", "entity" : "A", "position" : "pre"},
@@ -2102,10 +2121,11 @@ if __name__ == '__main__':
         # {"action" : "add", "type" : "org", "entity" : "PSD"},
         # {"action" : "add", "type" : "inst_name", "entity" : "tribunalul Suceava"},
         # {"action" : "add", "type" : "inst_prefix", "entity" : "Secție"},
-        # {"action": "add", "type" : "noconf_case", "entity" : "decizie penală"}
+        # {"action": "add", "type" : "noconf_case", "entity" : "decizie penală"},
+        {"action": "assign", "entity" : "Silviu Mihail", "code" : "C"}
         ]
     
       }
   
   res = eng.execute(inputs=test, counter=1)
-  # print(res)
+  print(res)
