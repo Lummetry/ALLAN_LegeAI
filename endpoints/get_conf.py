@@ -170,7 +170,7 @@ SPACE_AND_PUNCTUATION = punctuation + ' '
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.8.1'
+__VER__='1.0.8.2'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1991,6 +1991,7 @@ class GetConfWorker(FlaskWorker):
             
         res = {}
         res['positions'] = match_tuples
+        res['name_codes'] = name_code_dict
         res['output'] = hidden_doc
         
         # if self.debug:
