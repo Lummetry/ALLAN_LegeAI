@@ -170,7 +170,7 @@ SPACE_AND_PUNCTUATION = punctuation + ' '
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.8.0'
+__VER__='1.0.8.1'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -474,9 +474,7 @@ class GetConfWorker(FlaskWorker):
         name_code_dict = {self.name_list[i][1] : codes[i] for i in range(len(self.name_list))}
         
         # Assign new user codes to the names
-        print(name_code_dict)
         name_code_dict = self.user_assign_codes(name_code_dict)
-        print(name_code_dict)
         
         return name_code_dict
         
@@ -1976,10 +1974,8 @@ class GetConfWorker(FlaskWorker):
                 
                 if name_match:
                     start, end = name_match.span()
-                    
-                    if end < len(hidden_doc) and hidden_doc[end] != '.':
-                        # Add dot after the code if it's not before a dot
-                        code += '.'
+                                        
+                    code += '.'
                     hidden_doc = hidden_doc[:start] + code + hidden_doc[end:]
                 else:
                     break  
