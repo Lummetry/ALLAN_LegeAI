@@ -316,7 +316,7 @@ The single communication point is the gateway which can be accessed via `HTTP RE
             "signature" : <String>, # worker signature - which worker resolved the input,
             "output" : <String> # the input document having confidentialized the sensible information,
             "position" : <List[[Integer, Integer, String]]> # [[pos_start_1, pos_end_1, confidential_categ_1], [pos_start_2, pos_end_2, confidential_categ_2], ...]
-            "name_cods" : <Dictionary[String:String]> # [name1 : code1, name2 : code2, ...], the code assigned to each name
+            "name_codes" : <Dictionary[String:String]> # [name1 : code1, name2 : code2, ...], the code assigned to each name
         }
         ```
         
