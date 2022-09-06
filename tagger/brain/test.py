@@ -369,7 +369,79 @@ def get_preds_scores(preds, gts):
 
         print("Recall: {0:.4f} Precision: {1:.4f} F1: {2:.4f} Acc: {3:.4f} @{4}".format(rec, prec, f1, acc, k))
 
+
+def stats_pred():
+
+    dev = pickle.load(open("preds_dev.pkl", "rb"))
+
+    print(len(dev), len(dev[0]), len(dev[1]), len(dev[2]))
+    bpreds = []
+    opreds = []
+    gts = []
+    for i in range(len(dev[0])):
+        bert_pred = dev[0][i][:3]
+        orig_pred = dev[1][i][:3]
+        gt = dev[2][i]
+
+        bpreds.extend(list(map(lambda x: x[0], bert_pred)))
+        opreds.extend(list(map(lambda x: x[0], orig_pred)))
+        gts.extend(gt)
+        
+        # break
+
+    print(len(bpreds), len(opreds), len(gts))
+    # print(bpreds)
+    # print(opreds)
+    # print(gts)
+
+    from collections import Counter
+    c = Counter(gts)
+    print("total labels", len(c))
+    t = 0
+    tg = 0
+    tb = 0
+    to = 0
+    for value, count in c.items():
+        if count < 3:
+            if bpreds.count(value) > opreds.count(value): 
+                print(value, count)
+                print("b", bpreds.count(value), "o", opreds.count(value))
+            tg += count
+            tb += bpreds.count(value)
+            to += opreds.count(value)
+            t += 1
+    print("total", t)
+    print(tg, tb, to)
+
+
+    labels = ["meteorologie"]
+
+    for i in range(len(dev[0])):
+        bert_pred = dev[0][i][:3]
+        orig_pred = dev[1][i][:3]
+        gt = dev[2][i]
+
+        for label in labels:
+            if label in gt:
+                print(i)
+                print(bert_pred)
+                print(orig_pred)
+                print(gt)
+                print()
+
+
+
+    # for x in dev:
+    #     print(x[0])
+    #     print()
+    #     print(x[1])
+    #     print()
+    #     print(x[2])
+
 if __name__ == "__main__":
+
+    stats_pred()
+    # sys.exit()
     # recover_text_from_xdata("_cache/_data/tags_v1_x_data.pkl")
     # sys.exit()
     # split_csv("_cache/_data/merge/merge_examples.csv")
@@ -381,26 +453,26 @@ if __name__ == "__main__":
     # sys.exit()
 
     l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
-    worker_orig = GetTagsWorkerOrig(log=l, default_config=_CONFIG_V1, verbosity_level=0)
-    worker = GetTagsWorker(log=l, default_config=_CONFIG_V2, verbosity_level=0)
+    # worker_orig = GetTagsWorkerOrig(log=l, default_config=_CONFIG_V1, verbosity_level=0)
+    # worker = GetTagsWorker(log=l, default_config=_CONFIG_V2, verbosity_level=0)
 
     test_indexes = pickle.load(open(data_path+"_{0}_idx.pkl".format(split), "rb"))
     inputs = pickle.load(open(data_path + "_x_data.pkl", "rb"))
     labels = pickle.load(open(data_path + "_y_data.pkl", "rb"))
 
-    processed_labels = []
-    for label in labels:
-        onehot_labels = [0 for _ in range(len(worker.label_to_id))]
-        for l in label:
-            onehot_labels[worker.label_to_id[l]] = 1
-        processed_labels.append(onehot_labels)
+    # processed_labels = []
+    # for label in labels:
+    #     onehot_labels = [0 for _ in range(len(worker.label_to_id))]
+    #     for l in label:
+    #         onehot_labels[worker.label_to_id[l]] = 1
+    #     processed_labels.append(onehot_labels)
 
-    processed_labels_orig = []
-    for label in labels:
-        onehot_labels = [0 for _ in range(len(worker_orig.label_to_id))]
-        for l in label:
-            onehot_labels[worker_orig.label_to_id[l]] = 1
-        processed_labels_orig.append(onehot_labels)
+    # processed_labels_orig = []
+    # for label in labels:
+    #     onehot_labels = [0 for _ in range(len(worker_orig.label_to_id))]
+    #     for l in label:
+    #         onehot_labels[worker_orig.label_to_id[l]] = 1
+    #     processed_labels_orig.append(onehot_labels)
 
 
 
@@ -420,14 +492,16 @@ if __name__ == "__main__":
             continue
         
         test_documents.append(' '.join(inputs[x]))
-        test_labels.append(processed_labels[x])
-        test_labels_orig.append(processed_labels_orig[x])
+        # test_labels.append(processed_labels[x])
+        # test_labels_orig.append(processed_labels_orig[x])
         c += 1
         
         if c == end_index:
             break
            
     #print("next start_index", end_index, "value", test_indexes[end_index])
+    print(test_documents[4588])
+    sys.exit()
     del inputs
     print(len(test_documents))
     preds = []
