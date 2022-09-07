@@ -13,6 +13,8 @@ from collections import defaultdict
 import unidecode
 import json
 from fuzzywuzzy import fuzz
+from os import listdir
+from os.path import isfile, join
 
 
 _CONFIG = {
@@ -21,18 +23,11 @@ _CONFIG = {
 
 
 # File paths
-# Debug
-INSTITUTION_LIST_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\nomenclator institutii publice.txt'
-ORGANIZATION_LIST_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\organizatii.txt'
-CONF_REGEX_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\conf_regex.json'
-PREFIX_INSTITUTION_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\prefix_institutii.txt'   
-CASE_NOCONF_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\case_noconf.txt'            
-# Prod
-INSTITUTION_LIST_PROD = 'C:\\allan_data\\2022.01.26\\nomenclator institutii publice.txt'
-ORGANIZATION_LIST_PROD = 'C:\\allan_data\\2022.01.26\\organizatii.txt'
-CONF_REGEX_PROD = 'C:\\allan_data\\2022.03.07\\conf_regex.json'
-PREFIX_INSTITUTION_PROD = 'C:\\allan_data\\2022.01.26\\prefix_institutii.txt'   
-CASE_NOCONF_PROD = 'C:\\allan_data\\2022.07.19\\case_noconf.txt'            
+INSTITUTION_LIST = '..\\allan_data\\ConfFiles\\nomenclator institutii publice.txt'
+ORGANIZATION_LIST = '..\\allan_data\\ConfFiles\\organizatii.txt'
+CONF_REGEX = '..\\allan_data\\ConfFiles\\conf_regex.json'
+PREFIX_INSTITUTION = '..\\allan_data\\ConfFiles\\prefix_institutii.txt'   
+CASE_NOCONF = '..\\allan_data\\ConfFiles\\case_noconf.txt'                     
 
 
 # CNP 
@@ -1880,7 +1875,7 @@ class GetConfWorker(FlaskWorker):
         if precision + recall:
             F_score = (2 * precision * recall) / (precision + recall)
     
-        return precision, recall, F_score
+        return precision, recall, F_score, len(common_codes)
     
     
 
@@ -1891,21 +1886,14 @@ class GetConfWorker(FlaskWorker):
         
         self.debug = bool(inputs.get('DEBUG', False))
         
-        self.user_names_path = inputs.get('USER_NAMES')
+        self.user_names_path = inputs.get('USER_NAMES', None)
         
         # Read files
-        if self.debug:
-            self.institution_path = INSTITUTION_LIST_DEBUG
-            self.organization_path = ORGANIZATION_LIST_DEBUG
-            self.prefix_institution_path = PREFIX_INSTITUTION_DEBUG
-            self.regex_path = CONF_REGEX_DEBUG
-            self.case_noconf_path = CASE_NOCONF_DEBUG
-        else:
-            self.institution_path = INSTITUTION_LIST_PROD
-            self.organization_path = ORGANIZATION_LIST_PROD
-            self.prefix_institution_path = PREFIX_INSTITUTION_PROD
-            self.regex_path = CONF_REGEX_PROD
-            self.case_noconf_path = CASE_NOCONF_PROD
+        self.institution_path = INSTITUTION_LIST
+        self.organization_path = ORGANIZATION_LIST
+        self.prefix_institution_path = PREFIX_INSTITUTION
+        self.regex_path = CONF_REGEX
+        self.case_noconf_path = CASE_NOCONF
             
         
         
@@ -2097,12 +2085,12 @@ class GetConfWorker(FlaskWorker):
                     
         
         # Evaluare client name lists
-        mod_code_lists = [[unidecode.unidecode(c.lower()) for c in l[1]] for l in code_lists]        
-        user_name_lists = self.read_user_code_lists(self.user_names_path)  
-        
-        scores = self.deduplication_score_lists(user_name_lists, mod_code_lists)   
-        print(scores)
-        print('aici')
+        if self.user_names_path:
+            mod_code_lists = [[unidecode.unidecode(c.lower()) for c in l[1]] for l in code_lists]        
+            user_name_lists = self.read_user_code_lists(self.user_names_path)  
+            
+            prec, rec, F, n_common = self.deduplication_score_lists(user_name_lists, mod_code_lists)   
+            print('Scores = {:.2f} {:.2f} {:.2f}, n_common = {}'.format(prec, rec, F, n_common))
         
         
         res = {}
@@ -2226,7 +2214,6 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan""",
     
     'DOCUMENT' : full_doc,
-    'USER_NAMES' : user_names_path,
     
     'COMMANDS' : [
         # {"action" : "merge", "words" : "Ciortea", "entity" : "A", "position" : "pre"},
@@ -2242,5 +2229,39 @@ if __name__ == '__main__':
     
       }
   
-  res = eng.execute(inputs=test, counter=1)
+  # res = eng.execute(inputs=test, counter=1)
   # print(res)
+  
+  
+  #####################
+  # CLIENT NAME TESTS #
+  #####################
+  
+  path = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29'
+  all_files = [path + "\\" + f for f in listdir(path) if isfile(join(path, f)) and '.txt' in f]
+    
+  doc_files = []
+  name_files = []
+    
+  for file in all_files:
+      if '-doc' in file:
+          doc_files.append(file)
+      else:
+          name_files.append(file)
+            
+          
+  for i in range(len(doc_files)):
+      text_path = doc_files[i]
+      user_names_path = name_files[i]
+
+      file = open(text_path, 'r', encoding='utf-8')
+      full_doc = file.read()
+      
+      test = {
+          'DEBUG' : False,
+          'DOCUMENT' : full_doc,
+          'USER_NAMES' : user_names_path        
+          }
+      
+      res = eng.execute(inputs=test, counter=1)
+      # print(res)
