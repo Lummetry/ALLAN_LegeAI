@@ -112,10 +112,12 @@ class GetQAWorker(FlaskWorker):
     top_n_idxs = top_n_idxs[::-1]
 
 
-    # res = {}
-    # res['results'] = [
-    #   [self.id_to_label[top_n_index], round(predictions.squeeze()[top_n_index].astype(float), 3)] for top_n_index in top_n_idxs
-    # ]
+    res = {}
+    res['results'] = [
+        [self.id_to_label[top_n_index], round(predictions.squeeze()[top_n_index].astype(float), 3)] for top_n_index in top_n_idxs
+     ]
+    
+    return res
 
     res = {}
     res['results'] = []

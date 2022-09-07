@@ -42,7 +42,7 @@ if args.args_path != None:
     with open(args.args_path, 'r') as f:
         args.__dict__ = json.load(f)
 
-if args.run_type == "train":
+if 'train' in args.run_type:
 
     if os.path.isdir(args.model_path):
         print("{0} already exists!".format(args.model_path))
@@ -272,7 +272,7 @@ if __name__ == "__main__":
         dev_callback = MetricsCallback(dev_dataset)
         model = build_model(bert_model, len(labels_dict))
 
-        if args.run_type == 'train':
+        if 'train' in args.run_type:
             checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath=args.model_path+"/weights/{epoch:02d}", save_weights_only = True)
 
             history = model.fit(train_dataset, epochs=args.epochs, callbacks=[dev_callback, checkpoint_callback])
