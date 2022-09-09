@@ -306,6 +306,7 @@ The single communication point is the gateway which can be accessed via `HTTP RE
         {
             "SIGNATURE" : "get_conf",
             "DOCUMENT" : <String: mandatory>, # document to be confidentialized>
+            "COMMANDS" : <List<dict>: optional> # human configured commands for helping and improving manually the endpoint performance 
         }
         ```
         
