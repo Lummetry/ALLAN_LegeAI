@@ -1,4 +1,4 @@
-from endpoints.get_tags_orig import GetTagsWorker as GetTagsWorker_orig
+from endpoints.get_tags_orig import GetTagsWorkerOrig
 from endpoints.get_tags import GetTagsWorker
 from libraries import Logger
 import itertools
@@ -7,7 +7,7 @@ import numpy as np
 import os
 import csv
 import sys
-
+import copy
 # import Levenshtein as lev
 
 
@@ -23,6 +23,7 @@ _CONFIG_V1 = {
   'GENERATED_EMBEDS': 'embgen_full_embeds.npy',
   'WORD_EMBEDS': 'lai_embeddings_191K.pkl',
   'IDX2WORD': 'lai_ro_i2w_191K.pkl'
+
 }
 
 _CONFIG_V2 = {
@@ -34,7 +35,7 @@ _CONFIG_V2 = {
 
 
 data_path = "_cache/_data/tags_v1"
-split = "dev"
+split = "test"
 
 
 def multiclass_rec(y, y_hat, top_k=None):
@@ -368,7 +369,79 @@ def get_preds_scores(preds, gts):
 
         print("Recall: {0:.4f} Precision: {1:.4f} F1: {2:.4f} Acc: {3:.4f} @{4}".format(rec, prec, f1, acc, k))
 
+
+def stats_pred():
+
+    dev = pickle.load(open("preds_dev.pkl", "rb"))
+
+    print(len(dev), len(dev[0]), len(dev[1]), len(dev[2]))
+    bpreds = []
+    opreds = []
+    gts = []
+    for i in range(len(dev[0])):
+        bert_pred = dev[0][i][:3]
+        orig_pred = dev[1][i][:3]
+        gt = dev[2][i]
+
+        bpreds.extend(list(map(lambda x: x[0], bert_pred)))
+        opreds.extend(list(map(lambda x: x[0], orig_pred)))
+        gts.extend(gt)
+        
+        # break
+
+    print(len(bpreds), len(opreds), len(gts))
+    # print(bpreds)
+    # print(opreds)
+    # print(gts)
+
+    from collections import Counter
+    c = Counter(gts)
+    print("total labels", len(c))
+    t = 0
+    tg = 0
+    tb = 0
+    to = 0
+    for value, count in c.items():
+        if count < 3:
+            if bpreds.count(value) > opreds.count(value): 
+                print(value, count)
+                print("b", bpreds.count(value), "o", opreds.count(value))
+            tg += count
+            tb += bpreds.count(value)
+            to += opreds.count(value)
+            t += 1
+    print("total", t)
+    print(tg, tb, to)
+
+
+    labels = ["meteorologie"]
+
+    for i in range(len(dev[0])):
+        bert_pred = dev[0][i][:3]
+        orig_pred = dev[1][i][:3]
+        gt = dev[2][i]
+
+        for label in labels:
+            if label in gt:
+                print(i)
+                print(bert_pred)
+                print(orig_pred)
+                print(gt)
+                print()
+
+
+
+    # for x in dev:
+    #     print(x[0])
+    #     print()
+    #     print(x[1])
+    #     print()
+    #     print(x[2])
+
 if __name__ == "__main__":
+
+    stats_pred()
+    # sys.exit()
     # recover_text_from_xdata("_cache/_data/tags_v1_x_data.pkl")
     # sys.exit()
     # split_csv("_cache/_data/merge/merge_examples.csv")
@@ -380,66 +453,112 @@ if __name__ == "__main__":
     # sys.exit()
 
     l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
-    worker_orig = GetTagsWorker_orig(log=l, default_config=_CONFIG_V1, verbosity_level=0)
-    worker = GetTagsWorker(log=l, default_config=_CONFIG_V2, verbosity_level=0)
+    # worker_orig = GetTagsWorkerOrig(log=l, default_config=_CONFIG_V1, verbosity_level=0)
+    # worker = GetTagsWorker(log=l, default_config=_CONFIG_V2, verbosity_level=0)
 
     test_indexes = pickle.load(open(data_path+"_{0}_idx.pkl".format(split), "rb"))
-    with open("data.txt") as myfile:
-        for line in myfile:
-            print(line)
-            sys.exit()
-
     inputs = pickle.load(open(data_path + "_x_data.pkl", "rb"))
     labels = pickle.load(open(data_path + "_y_data.pkl", "rb"))
 
-    processed_labels = []
-    for label in labels:
-        onehot_labels = [0 for _ in range(len(worker.label_to_id))]
-        for l in label:
-            onehot_labels[worker.label_to_id[l]] = 1
-        processed_labels.append(onehot_labels)
+    # processed_labels = []
+    # for label in labels:
+    #     onehot_labels = [0 for _ in range(len(worker.label_to_id))]
+    #     for l in label:
+    #         onehot_labels[worker.label_to_id[l]] = 1
+    #     processed_labels.append(onehot_labels)
+
+    # processed_labels_orig = []
+    # for label in labels:
+    #     onehot_labels = [0 for _ in range(len(worker_orig.label_to_id))]
+    #     for l in label:
+    #         onehot_labels[worker_orig.label_to_id[l]] = 1
+    #     processed_labels_orig.append(onehot_labels)
+
+
 
     test_documents = []
     test_labels = []
+    test_labels_orig = []
 
-    c = 0
-    for x in test_indexes:
-        test_documents.append(' '.join(inputs[x])*4)
-        test_labels.append(processed_labels[x])
+    test_indexes = list(test_indexes)
+
+
+    start_index = 0
+    end_index = 9999999999999
+    
+    #print(test_indexes[start_index], test_indexes[end_index])
+    for c, x in enumerate(test_indexes):
+        if c < start_index:
+            continue
+        
+        test_documents.append(' '.join(inputs[x]))
+        # test_labels.append(processed_labels[x])
+        # test_labels_orig.append(processed_labels_orig[x])
         c += 1
-        if c == 500:
+        
+        if c == end_index:
             break
-
-
+           
+    #print("next start_index", end_index, "value", test_indexes[end_index])
+    print(test_documents[4588])
+    sys.exit()
+    del inputs
     print(len(test_documents))
     preds = []
     preds_orig = []
 
+    ground_truth = []
+    text_preds = []
+    text_preds_orig = []
     for el in range(len(test_documents)):
-        if el % 100 == 0:
+        if el % 500 == 0:
             print(el)
+        
+        if el != 0 and el % 3000 == 0:
+            pickle.dump([text_preds, text_preds_orig, ground_truth], open("preds_{0}_{1}.pkl".format(split, el), "wb"))
+            gts = test_labels[:el]
+            gts_orig = test_labels_orig[:el]
+            print(len(test_documents), len(preds), len(preds_orig), len(gts), len(gts_orig), len(ground_truth), len(text_preds), len(text_preds_orig))
+
+            get_preds_scores(preds, gts)
+            print()
+            get_preds_scores(preds_orig, gts_orig)
+            
         doc = test_documents[el]
 
         ins = worker._pre_process({"DOCUMENT": doc, "TOP_N": 5})
         p = worker._predict(ins)
+        r = worker._post_process(p)
+        aux = []
+        for ix, x in enumerate(test_labels[el]):
+            if x == 1:
+                aux.append(worker.id_to_label[ix])
+        ground_truth.append(aux)
         preds.append(np.array(np.squeeze(p[0])))
-
+        text_preds.append(r['results'])
+        
         ins = worker_orig._pre_process({"DOCUMENT": doc, "TOP_N": 5})
         p = worker_orig._predict(ins)
+        r = worker_orig._post_process(p)       
         preds_orig.append(np.array(np.squeeze(p[0])))
-    
+        text_preds_orig.append(r['results'])
+        
     print(np.array(preds).shape, np.array(test_labels).shape)
-    print(np.array(preds_orig).shape, np.array(test_labels).shape)
+    print(np.array(preds_orig).shape, np.array(test_labels_orig).shape)
+    print(len(ground_truth))
     
-    pickle.dump([preds, preds_orig], open("preds_{0}.pkl".format(split), "wb"))
+    
+    
+    #x = np.array([preds, preds_orig])
+    #print(type(x), x.shape)
+    #np.save(open("preds_{0}.npy".format(split), "wb"), x)
+    pickle.dump([text_preds, text_preds_orig, ground_truth], open("preds_{0}.pkl".format(split), "wb"))
 
     gts = test_labels
-    print(len(test_documents), len(preds), len(preds_orig), len(gts))
-    print(test_documents[0])
-    
+    gts_orig = test_labels_orig
+    print(len(test_documents), len(preds), len(preds_orig), len(gts), len(gts_orig), len(ground_truth), len(text_preds), len(text_preds_orig))
+
     get_preds_scores(preds, gts)
     print()
-    get_preds_scores(preds_orig, gts)
-
+    get_preds_scores(preds_orig, gts_orig)
     
-        

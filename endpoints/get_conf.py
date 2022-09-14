@@ -13,6 +13,8 @@ from collections import defaultdict
 import unidecode
 import json
 from fuzzywuzzy import fuzz
+from os import listdir
+from os.path import isfile, join
 
 
 _CONFIG = {
@@ -21,18 +23,11 @@ _CONFIG = {
 
 
 # File paths
-# Debug
-INSTITUTION_LIST_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\nomenclator institutii publice.txt'
-ORGANIZATION_LIST_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\organizatii.txt'
-CONF_REGEX_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\conf_regex.json'
-PREFIX_INSTITUTION_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\prefix_institutii.txt'   
-CASE_NOCONF_DEBUG = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\case_noconf.txt'            
-# Prod
-INSTITUTION_LIST_PROD = 'C:\\allan_data\\2022.01.26\\nomenclator institutii publice.txt'
-ORGANIZATION_LIST_PROD = 'C:\\allan_data\\2022.01.26\\organizatii.txt'
-CONF_REGEX_PROD = 'C:\\allan_data\\2022.03.07\\conf_regex.json'
-PREFIX_INSTITUTION_PROD = 'C:\\allan_data\\2022.01.26\\prefix_institutii.txt'   
-CASE_NOCONF_PROD = 'C:\\allan_data\\2022.07.19\\case_noconf.txt'            
+INSTITUTION_LIST = '..\\allan_data\\ConfFiles\\nomenclator institutii publice.txt'
+ORGANIZATION_LIST = '..\\allan_data\\ConfFiles\\organizatii.txt'
+CONF_REGEX = '..\\allan_data\\ConfFiles\\conf_regex.json'
+PREFIX_INSTITUTION = '..\\allan_data\\ConfFiles\\prefix_institutii.txt'   
+CASE_NOCONF = '..\\allan_data\\ConfFiles\\case_noconf.txt'                     
 
 
 # CNP 
@@ -170,7 +165,7 @@ SPACE_AND_PUNCTUATION = punctuation + ' '
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.8.2'
+__VER__='1.0.8.3'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1677,7 +1672,8 @@ class GetConfWorker(FlaskWorker):
             data_dict[code].append(name)
     
         lists = list(data_dict.items())
-        print(lists)    
+                
+        return lists
 
 
     
@@ -1780,6 +1776,109 @@ class GetConfWorker(FlaskWorker):
             except KeyError:
                 print('Incorrect keys for command: {}'.format(command))    
     
+
+
+    
+    
+    ##################
+    # Client testing #
+    ##################
+    
+    def read_user_code_lists(self, name_lists_path):
+        """ Read the lists of names that represent the same code """
+        
+        name_lists_file = open(name_lists_path, 'r', encoding='utf-8')
+        texts = name_lists_file.read().splitlines()
+        
+        user_name_lists = []
+        for line in texts:
+            line = line.strip('##')
+            names = line.split('##')
+            user_name_lists.append(names)
+            
+        return user_name_lists
+
+    def find_group(self, name, name_lists):
+        
+        for group, list in enumerate(name_lists):
+            for name2 in list:
+                if name == name2:
+                    return group
+                
+        return -1
+    
+    
+    def deduplication_score_lists(self, user_name_lists, code_lists):
+        """ Calculate deduplication scores for the lists of names. """
+        
+        flat_code_list = [n for c in code_lists for n in c]
+        flat_user_code_list = [n for list in user_name_lists for n in list]        
+    
+        common_codes = []
+    
+        for name in flat_code_list:
+            name = unidecode.unidecode(name.lower())
+    
+            for user_name in flat_user_code_list:
+    
+                if name == user_name:
+                    common_codes.append(name)
+                    break
+        
+        precision = 0
+        nP = 0
+        recall = 0
+        nR = 0
+    
+        for i, name1 in enumerate(common_codes):
+    
+            C1 = self.find_group(name1, code_lists)
+            L1 = self.find_group(name1, user_name_lists)
+    
+            avgC = 0
+            nC = 0
+            avgL = 0
+            nL = 0
+    
+            for j, name2 in enumerate(common_codes):
+    
+                if i != j:
+                    C2 = self.find_group(name2, code_lists)
+                    L2 = self.find_group(name2, user_name_lists)
+    
+                    correctness = 0
+                    if L1 == L2 and C1 == C2:
+                        correctness = 1
+    
+                    if C1 == C2:
+                        avgC += correctness
+                        nC += 1
+    
+                    if L1 == L2:
+                        avgL += correctness
+                        nL += 1
+    
+            if nC:
+                avgC = avgC / nC
+                precision += avgC
+                nP += 1
+    
+            if nL:
+                avgL = avgL / nL
+                recall += avgL
+                nR += 1
+    
+        if nP:
+            precision = precision * 100 / nP
+        if nR:
+            recall = recall * 100 / nR
+        if precision + recall:
+            F_score = (2 * precision * recall) / (precision + recall)
+    
+        return precision, recall, F_score, len(common_codes)
+    
+    
+
     
     
     
@@ -1787,19 +1886,14 @@ class GetConfWorker(FlaskWorker):
         
         self.debug = bool(inputs.get('DEBUG', False))
         
+        self.user_names_path = inputs.get('USER_NAMES', None)
+        
         # Read files
-        if self.debug:
-            self.institution_path = INSTITUTION_LIST_DEBUG
-            self.organization_path = ORGANIZATION_LIST_DEBUG
-            self.prefix_institution_path = PREFIX_INSTITUTION_DEBUG
-            self.regex_path = CONF_REGEX_DEBUG
-            self.case_noconf_path = CASE_NOCONF_DEBUG
-        else:
-            self.institution_path = INSTITUTION_LIST_PROD
-            self.organization_path = ORGANIZATION_LIST_PROD
-            self.prefix_institution_path = PREFIX_INSTITUTION_PROD
-            self.regex_path = CONF_REGEX_PROD
-            self.case_noconf_path = CASE_NOCONF_PROD
+        self.institution_path = INSTITUTION_LIST
+        self.organization_path = ORGANIZATION_LIST
+        self.prefix_institution_path = PREFIX_INSTITUTION
+        self.regex_path = CONF_REGEX
+        self.case_noconf_path = CASE_NOCONF
             
         
         
@@ -1960,8 +2054,9 @@ class GetConfWorker(FlaskWorker):
         # Set the codes for the names
         name_code_dict = self.set_name_codes(text)  
             
+        code_lists = self.print_name_codes(name_code_dict) 
         if self.debug:
-            self.print_name_codes(name_code_dict)   
+            print(code_lists)
         
         # Replace names with their codes, starting with longer names (which might include the shorter ones)
         for name in sorted(name_code_dict, key=len, reverse=True):
@@ -1987,12 +2082,21 @@ class GetConfWorker(FlaskWorker):
     
         # Clean punctuation again, after the matches have been replaces
         hidden_doc = self.clean_punctuation(hidden_doc) 
+                    
+        
+        # Evaluare client name lists
+        if self.user_names_path:
+            mod_code_lists = [[unidecode.unidecode(c.lower()) for c in l[1]] for l in code_lists]        
+            user_name_lists = self.read_user_code_lists(self.user_names_path)  
             
-            
+            prec, rec, F, n_common = self.deduplication_score_lists(user_name_lists, mod_code_lists)   
+            print('Scores = {:.2f} {:.2f} {:.2f}, n_common = {}'.format(prec, rec, F, n_common))
+        
+        
         res = {}
         res['positions'] = match_tuples
         res['name_codes'] = name_code_dict
-        res['output'] = hidden_doc
+        res['output'] = hidden_doc   
         
         # if self.debug:
         #     print(hidden_doc)
@@ -2006,9 +2110,10 @@ if __name__ == '__main__':
   l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
   eng = GetConfWorker(log=l, default_config=_CONFIG, verbosity_level=1)
   
-  path = "C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29\\0204 SC dec nr.1558-2021 ds.6822-99-2016-doc.txt"
+  text_path = "C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29\\0204 SC dec nr.1558-2021 ds.6822-99-2016-doc.txt"
+  user_names_path = "C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29\\0204 SC dec nr.1558-2021 ds.6822-99-2016.txt"
 
-  file = open(path, 'r', encoding='utf-8')
+  file = open(text_path, 'r', encoding='utf-8')
   full_doc = file.read()
   
   test = {
@@ -2106,9 +2211,9 @@ if __name__ == '__main__':
     # 'DOCUMENT' : """Mandatul european de arestare este o decizie judiciară emisă de autoritatea judiciară competentă a unui stat membru al Uniunii Europene, în speţă cea română, în vederea arestării şi predării către un alt stat membru, respectiv Austria, Procuratura Graz, a unei persoane solicitate, care se execută în baza principiului recunoașterii reciproce, în conformitate cu dispoziţiile Deciziei – cadru a Consiliului nr. 2002/584/JAI/13.06.2002, cât şi cu respectarea drepturilor fundamentale ale omului, aşa cum acestea sunt consacrate de art. 6 din Tratatul privind Uniunea Europeană.""",
     # 'DOCUMENT' : """Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite.""",
         
-    'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan""",
+    # 'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan""",
     
-    # 'DOCUMENT' : full_doc,
+    'DOCUMENT' : full_doc,
     
     'COMMANDS' : [
         # {"action" : "merge", "words" : "Ciortea", "entity" : "A", "position" : "pre"},
@@ -2119,10 +2224,44 @@ if __name__ == '__main__':
         # {"action" : "add", "type" : "inst_name", "entity" : "tribunalul Suceava"},
         # {"action" : "add", "type" : "inst_prefix", "entity" : "Secție"},
         # {"action": "add", "type" : "noconf_case", "entity" : "decizie penală"},
-        {"action": "assign", "entity" : "Silviu Mihail", "code" : "C"}
+        # {"action": "assign", "entity" : "Silviu Mihail", "code" : "C"}
         ]
     
       }
   
-  res = eng.execute(inputs=test, counter=1)
-  print(res)
+  # res = eng.execute(inputs=test, counter=1)
+  # print(res)
+  
+  
+  #####################
+  # CLIENT NAME TESTS #
+  #####################
+  
+  path = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29'
+  all_files = [path + "\\" + f for f in listdir(path) if isfile(join(path, f)) and '.txt' in f]
+    
+  doc_files = []
+  name_files = []
+    
+  for file in all_files:
+      if '-doc' in file:
+          doc_files.append(file)
+      else:
+          name_files.append(file)
+            
+          
+  for i in range(len(doc_files)):
+      text_path = doc_files[i]
+      user_names_path = name_files[i]
+
+      file = open(text_path, 'r', encoding='utf-8')
+      full_doc = file.read()
+      
+      test = {
+          'DEBUG' : False,
+          'DOCUMENT' : full_doc,
+          'USER_NAMES' : user_names_path        
+          }
+      
+      res = eng.execute(inputs=test, counter=1)
+      # print(res)

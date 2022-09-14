@@ -6,12 +6,11 @@ import spacy
 import unidecode
 import string
 import pandas as pd
-import difflib
 
 _CONFIG = {
   'SPACY_MODEL' : 'ro_core_news_lg',
   # The first model is used when Ensamble is turned off
-  'NER_MODELS' : ['..\\allan_data\\MergeNER\\model-best-3415-150-150',
+  'NER_MODELS' : ['..\\allan_data\\MergeNER\\model-best-4735-150-150',
                   '..\\allan_data\\MergeNER\\model-best-2299-150-150-d0.1',
                   '..\\allan_data\\MergeNER\\model-best-931-150-150-d0.1',
                   '..\\allan_data\\MergeNER\\model-best-1000',
@@ -830,8 +829,8 @@ if __name__ == '__main__':
         # 'ACTIV' : """Data specificată în secţiunea 2.03 din articolul 2 al acordului de împrumut se modifică şi devine 30 septembrie 1998.""",
           
         # se proroga pana
-        'PASIV' : """Compania are obligaţia de a plăti obligaţiile restante prevăzute la alin. (2) până la data de 30 noiembrie 2012.""",
-        'ACTIV' : """Termenele prevăzute la art. 1 alin. (1) şi (7) se prorogă până la 20 decembrie 2012 inclusiv.""",
+        # 'PASIV' : """Compania are obligaţia de a plăti obligaţiile restante prevăzute la alin. (2) până la data de 30 noiembrie 2012.""",
+        # 'ACTIV' : """Termenele prevăzute la art. 1 alin. (1) şi (7) se prorogă până la 20 decembrie 2012 inclusiv.""",
           
         # devine
         # 'PASIV' : """Obligaţiunile de tezaur exprimate în dolari S.U.A. cu dobândă sunt scadente la data de 13 august 1997.""",
@@ -853,13 +852,24 @@ if __name__ == '__main__':
         # 'PASIV' : """art. 4   (4) În cazul în care se constată că beneficiarii nu au respectat criteriile de eligibilitate şi angajamentele prevăzute în ghidurile de finanţare care constituie Programul \"ELECTRIC UP\" privind finanţarea întreprinderilor mici şi mijlocii pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică şi a staţiilor de reîncărcare pentru vehicule electrice şi electrice hibrid plug-in, au făcut declaraţii incomplete sau neconforme cu realitatea pentru a obţine ajutorul de minimis sau au schimbat destinaţia acestuia ori se constată că nu au respectat obligaţiile prevăzute în contractul de finanţare, se recuperează, potrivit dreptului comun în materie, ajutorul de minimis acordat, cu respectarea normelor naţionale şi europene în materia ajutorului de stat de către Ministerul Economiei, Energiei şi Mediului de Afaceri în calitate de furnizor.""",
         # 'ACTIV' : """În cuprinsul Ordonanţei de urgenţă a Guvernului nr. 159/2020 privind finanţarea întreprinderilor mici şi mijlocii şi domeniului HORECA pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică cu o putere instalată cuprinsă între 27 kWp şi 100 kWp necesară consumului propriu şi livrarea surplusului în Sistemul energetic naţional, precum şi a staţiilor de reîncărcare de minimum 22 kW pentru vehicule electrice şi electrice hibrid plug-in, prin Programul de finanţare \"ELECTRIC UP\", sintagma \"Ministerul Economiei, Energiei şi Mediului de Afaceri\" se înlocuieşte cu sintagma \"Ministerul Energiei\".""",
 
+        # test 1 client
+        # 'PASIV' : """Modelul-cadru al atestatului de persoană sau familie aptă să adopte, precum şi modelul şi conţinutul unor formulare, instrumente şi documente utilizate în procedura adopţiei se aprobă prin ordin a preşedintelui Oficiului.""",
+        # 'ACTIV' : """În cuprinsul Legii nr. 273/2004 privind procedura adopției, republicată, cu modificările și completările ulterioare, precum și în cuprinsul actelor normative în vigoare din domeniul adopției, sintagma "deschiderea procedurii adopției interne" se înlocuiește cu sintagma "deschiderea procedurii adopției", denumirea "Oficiul" se înlocuiește cu denumirea "A.N.P.D.C.A.", sintagma "potrivire teoretică" se înlocuiește cu sintagma "potrivire inițială" și termenul "ordin" se înlocuiește cu termenul "decizie".""",
+        
+        # test 2 client
+        # 'PASIV' : """Dacă, în urma admiterii acțiunii, autoritatea administrativă este obligată să înlocuiască sau să modifice actul administrativ, să elibereze un certificat, o adeverință sau orice alt înscris, executarea hotărârii definitive se va face în termenul prevăzut în cuprinsul ei, iar în lipsa unui astfel de termen, în cel mult 30 de zile de la data rămînerii definitive a hotărîrii.""",
+        # 'ACTIV' : """La articolul 16 alineatul 1, noțiunea "hotarârea definitivă" se înlocuiește cu "hotărârea irevocabilă".""",
          
-        'ENSAMBLE': False,
+        # test 3 client
+        'PASIV' : """Fondul Proprietății de Stat şi celelalte instituţii publice abilitate să efectueze operaţiuni în cadrul procesului de restructurare şi privatizare au obligaţia să deruleze fondurile rezultate, prin conturi deschise la trezoreria statului.""",
+        'ACTIV' : """În tot cuprinsul ordonanței de urgență sintagma Fondul Proprietății de Stat se înlocuiește cu sintagma Autoritatea pentru Privatizare şi Administrarea Participaţiilor Statului.""",
+        
+        'ENSAMBLE': True,
         'DEBUG': True
       }
           
-    # res = eng.execute(inputs=test, counter=1)
-    # print(res)
+    res = eng.execute(inputs=test, counter=1)
+    print(res)
     
 
     
@@ -869,61 +879,61 @@ if __name__ == '__main__':
     ################    
     
         
-    testsFile = "C:\\Proiecte\\LegeAI\\Date\\Task9\\teste_client\\minim 5 exemple cu diferite acţiuni_mod.xlsx"
-    NUM_ACTIV = 3
-    NUM_PASIV = 4
-    NUM_TRANSF = 5
+    # testsFile = "C:\\Proiecte\\LegeAI\\Date\\Task9\\teste_client\\minim 5 exemple cu diferite acţiuni_mod.xlsx"
+    # NUM_ACTIV = 3
+    # NUM_PASIV = 4
+    # NUM_TRANSF = 5
         
-    testSheets = pd.read_excel(testsFile, sheet_name=None)
+    # testSheets = pd.read_excel(testsFile, sheet_name=None)
     
-    nCor, nIncor, nFail = 0, 0, 0
+    # nCor, nIncor, nFail = 0, 0, 0
     
-    for sheet in testSheets:
-        sheetDf = testSheets[sheet]
+    # for sheet in testSheets:
+    #     sheetDf = testSheets[sheet]
         
-        nCorSh, nIncorSh, nFailSh = 0, 0, 0
+    #     nCorSh, nIncorSh, nFailSh = 0, 0, 0
             
-        # No NaN values in Pasiv, Activ or Transf
-        sheetDf = sheetDf[~sheetDf.iloc[:, [NUM_ACTIV, 
-                                            NUM_PASIV, 
-                                            NUM_TRANSF]].isnull().any(axis=1)]
+    #     # No NaN values in Pasiv, Activ or Transf
+    #     sheetDf = sheetDf[~sheetDf.iloc[:, [NUM_ACTIV, 
+    #                                         NUM_PASIV, 
+    #                                         NUM_TRANSF]].isnull().any(axis=1)]
             
-        for i, row in sheetDf.iterrows():
-            pasiv = row[NUM_PASIV]
-            activ = row[NUM_ACTIV]
-            transf = row[NUM_TRANSF]
+    #     for i, row in sheetDf.iterrows():
+    #         pasiv = row[NUM_PASIV]
+    #         activ = row[NUM_ACTIV]
+    #         transf = row[NUM_TRANSF]
             
-            test = {                 
-                'PASIV' : pasiv,
-                'ACTIV' : activ,
-                'ENSAMBLE': True,
-                'DEBUG': False
-              }
+    #         test = {                 
+    #             'PASIV' : pasiv,
+    #             'ACTIV' : activ,
+    #             'ENSAMBLE': True,
+    #             'DEBUG': False
+    #           }
             
-            res = eng.execute(inputs=test, counter=i)
+    #         res = eng.execute(inputs=test, counter=i)
                 
-            if not 'success' in res:
-                # print('Error', i)
-                continue
-            else: 
-                if res['success'] == True:
-                    # print(res)
-                    if res['result'].strip(" \n\t") == transf.strip(" \n\t"):
-                        # print('Correct')
-                        nCor += 1
-                        nCorSh += 1
-                    else:
-                        # print('Incorrect')
-                        nIncor += 1
-                        nIncorSh += 1
-                else:
-                    # print(res)
-                    # print('Fail')
-                    nFail += 1
-                    nFailSh += 1
+    #         if not 'success' in res:
+    #             # print('Error', i)
+    #             continue
+    #         else: 
+    #             if res['success'] == True:
+    #                 # print(res)
+    #                 if res['result'].strip(" \n\t") == transf.strip(" \n\t"):
+    #                     # print('Correct')
+    #                     nCor += 1
+    #                     nCorSh += 1
+    #                 else:
+    #                     # print('Incorrect')
+    #                     nIncor += 1
+    #                     nIncorSh += 1
+    #             else:
+    #                 # print(res)
+    #                 # print('Fail')
+    #                 nFail += 1
+    #                 nFailSh += 1
         
-        total = nCorSh + nIncorSh + nFailSh
-        print('{} - {} / {}; {} incorrect'.format(sheet, nCorSh, total, nIncorSh))
+    #     total = nCorSh + nIncorSh + nFailSh
+    #     print('{} - {} / {}; {} incorrect'.format(sheet, nCorSh, total, nIncorSh))
         
-    total = nCor + nIncor + nFail
-    print('Total: {} / {}, {:.2f}%'.format(nCor, total, nCor * 100 / total))
+    # total = nCor + nIncor + nFail
+    # print('Total: {} / {}, {:.2f}%'.format(nCor, total, nCor * 100 / total))
