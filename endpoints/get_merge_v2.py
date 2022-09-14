@@ -48,6 +48,8 @@ ACTION_CU = 9
 KEYWORD_CU = 'cu'
 ACTION_MODIFICA = 10
 KEYWORDS_MODIFICA = ['modifica', 'modifică']
+ACTION_ADAUGA = 11
+KEYWORDS_ADAUGA = ['adaugă', 'adauga']
 
 SAME_ACTION_GROUPS = [[ACTION_INLOCUIESTE, ACTION_CU, ACTION_CITESTE, ACTION_MODIFICA],
                       [ACTION_PRELUNGESTE_PANA, ACTION_PROROGA_PANA],
@@ -85,7 +87,7 @@ MODIFICA_CUPRINS_KEYS = ['se modifică şi va avea următorul cuprins', 'se modi
                          'se modifică şi vor avea următorul cuprins', 'se modifica si vor avea urmatorul cuprins']
 
 
-__VER__='1.1.0.0'
+__VER__='1.2.0.0'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -324,6 +326,10 @@ class GetMergeV2Worker(FlaskWorker):
         for key in KEYWORDS_MODIFICA:
             if key in cleanAction:
                 return ACTION_MODIFICA
+            
+        for key in KEYWORDS_ADAUGA:
+            if key in cleanAction:
+                return ACTION_ADAUGA
         
         if cleanAction == KEYWORD_CU:
             return ACTION_CU
@@ -581,6 +587,27 @@ class GetMergeV2Worker(FlaskWorker):
                 transformed, actionApplied = self.action_prelungeste_pana(pasiv, activ, action, olds, news)
     
         return transformed, actionApplied
+        
+    def action_adauga(self, pasiv, activ, action, olds, news):
+        ''' Heuiristic method for action Adauga. '''
+            
+        actionApplied = False
+        transformed = pasiv
+        
+        if len(olds) + len(news) == 1:
+            # If there was only one New or Old identified
+            
+            if len(olds) == 1:
+                # If there was an Old identified, we assume it was actually a mislabeled New
+                new = olds[0]
+            else:
+                new = news[0]
+                
+            # The heuristic is that we just add the New to the end of the Pasiv
+            transformed += new
+            actionApplied = True                
+    
+        return transformed, actionApplied
     
     
     def transform(self, activ_ner, pasiv, activ):
@@ -644,6 +671,10 @@ class GetMergeV2Worker(FlaskWorker):
         elif action_type == ACTION_MODIFICA:
             # Apply Inlocuieste cu
             transformed, actionApplied = self.action_inlocuieste(pasiv, activ, action, olds, news)
+
+        elif action_type == ACTION_ADAUGA:
+            # Apply Adauga
+            transformed, actionApplied = self.action_adauga(pasiv, activ, action, olds, news)
     
         if actionApplied:
             # Clean any possible punctuation mistakes after the transformation
@@ -846,7 +877,10 @@ if __name__ == '__main__':
         
         # se modifică şi va avea următorul cuprins        
         # 'PASIV' : """(3) Cifra de şcolarizare pentru rezidenţiat este cel puţin egală cu numărul de locuri reprezentând totalul absolvenţilor de medicină, medicină dentară şi farmacie cu diplomă de licenţă din promoţia anului în curs, cumulat cu numărul de posturi conform art. 18, stabilită prin ordin al ministrului sănătăţii. În cazul în care numărul candidaţilor pentru domeniul medicină care promovează examenul de rezidenţiat este mai mare decât cifra de şcolarizare iniţial anunţată, aceasta se poate suplimenta până la repartiţia candidaţilor, astfel încât toţi candidaţii promovaţi să poată accesa un loc sau un post de rezidenţiat. Ministerul Finanţelor asigură resursele financiare necesare şcolarizării prin rezidenţiat la nivelul cifrelor de şcolarizare aprobate.  """,
-        # 'ACTIV' : """   1. La articolul 2, alineatul (3) se modifică şi va avea următorul cuprins: " (3) Cifra de şcolarizare pentru rezidenţiat este stabilită anual prin ordin al ministrului sănătăţii. La stabilirea cifrei de şcolarizare se are în vedere capacitatea de pregătire disponibilă comunicată de instituţiile de învăţământ superior cu profil medical acreditate, până cel târziu la data de 1 august a fiecărui an. Pentru domeniul medicină, cifra de şcolarizare este cel puţin egală cu numărul absolvenţilor cu diplomă de licenţă din promoţia anului în curs." """,
+        
+        # se adauga urmatoarea teza
+        # 'PASIV' : """(3) Europol furnizează analize strategice şi evaluări ale ameninţărilor cu scopul de a acorda asistenţă în ceea ce priveşte utilizarea eficientă şi eficace a resurselor disponibile la nivel naţional şi la nivelul Uniunii pentru activităţi operaţionale şi pentru susţinerea acestor activităţi. """,
+        # 'ACTIV' : """  (b) la alineatul (3) primul paragraf, se adaugă următoarea teză:  " În acest scop, verificatorul monitorizează riscurile în ceea ce priveşte imparţialitatea şi ia măsurile adecvate pentru a face faţă acestor riscuri.";  """,
         
         
         # 'PASIV' : """art. 4   (4) În cazul în care se constată că beneficiarii nu au respectat criteriile de eligibilitate şi angajamentele prevăzute în ghidurile de finanţare care constituie Programul \"ELECTRIC UP\" privind finanţarea întreprinderilor mici şi mijlocii pentru instalarea sistemelor de panouri fotovoltaice pentru producerea de energie electrică şi a staţiilor de reîncărcare pentru vehicule electrice şi electrice hibrid plug-in, au făcut declaraţii incomplete sau neconforme cu realitatea pentru a obţine ajutorul de minimis sau au schimbat destinaţia acestuia ori se constată că nu au respectat obligaţiile prevăzute în contractul de finanţare, se recuperează, potrivit dreptului comun în materie, ajutorul de minimis acordat, cu respectarea normelor naţionale şi europene în materia ajutorului de stat de către Ministerul Economiei, Energiei şi Mediului de Afaceri în calitate de furnizor.""",
@@ -861,15 +895,15 @@ if __name__ == '__main__':
         # 'ACTIV' : """La articolul 16 alineatul 1, noțiunea "hotarârea definitivă" se înlocuiește cu "hotărârea irevocabilă".""",
          
         # test 3 client
-        'PASIV' : """Fondul Proprietății de Stat şi celelalte instituţii publice abilitate să efectueze operaţiuni în cadrul procesului de restructurare şi privatizare au obligaţia să deruleze fondurile rezultate, prin conturi deschise la trezoreria statului.""",
-        'ACTIV' : """În tot cuprinsul ordonanței de urgență sintagma Fondul Proprietății de Stat se înlocuiește cu sintagma Autoritatea pentru Privatizare şi Administrarea Participaţiilor Statului.""",
+        # 'PASIV' : """Fondul Proprietății de Stat şi celelalte instituţii publice abilitate să efectueze operaţiuni în cadrul procesului de restructurare şi privatizare au obligaţia să deruleze fondurile rezultate, prin conturi deschise la trezoreria statului.""",
+        # 'ACTIV' : """În tot cuprinsul ordonanței de urgență sintagma Fondul Proprietății de Stat se înlocuiește cu sintagma Autoritatea pentru Privatizare şi Administrarea Participaţiilor Statului.""",
         
         'ENSAMBLE': True,
         'DEBUG': True
       }
           
-    res = eng.execute(inputs=test, counter=1)
-    print(res)
+    # res = eng.execute(inputs=test, counter=1)
+    # print(res)
     
 
     
@@ -879,61 +913,61 @@ if __name__ == '__main__':
     ################    
     
         
-    # testsFile = "C:\\Proiecte\\LegeAI\\Date\\Task9\\teste_client\\minim 5 exemple cu diferite acţiuni_mod.xlsx"
-    # NUM_ACTIV = 3
-    # NUM_PASIV = 4
-    # NUM_TRANSF = 5
+    testsFile = "C:\\Proiecte\\LegeAI\\Date\\Task9\\teste_client\\minim 5 exemple cu diferite acţiuni_mod.xlsx"
+    NUM_ACTIV = 3
+    NUM_PASIV = 4
+    NUM_TRANSF = 5
         
-    # testSheets = pd.read_excel(testsFile, sheet_name=None)
+    testSheets = pd.read_excel(testsFile, sheet_name=None)
     
-    # nCor, nIncor, nFail = 0, 0, 0
+    nCor, nIncor, nFail = 0, 0, 0
     
-    # for sheet in testSheets:
-    #     sheetDf = testSheets[sheet]
+    for sheet in testSheets:
+        sheetDf = testSheets[sheet]
         
-    #     nCorSh, nIncorSh, nFailSh = 0, 0, 0
+        nCorSh, nIncorSh, nFailSh = 0, 0, 0
             
-    #     # No NaN values in Pasiv, Activ or Transf
-    #     sheetDf = sheetDf[~sheetDf.iloc[:, [NUM_ACTIV, 
-    #                                         NUM_PASIV, 
-    #                                         NUM_TRANSF]].isnull().any(axis=1)]
+        # No NaN values in Pasiv, Activ or Transf
+        sheetDf = sheetDf[~sheetDf.iloc[:, [NUM_ACTIV, 
+                                            NUM_PASIV, 
+                                            NUM_TRANSF]].isnull().any(axis=1)]
             
-    #     for i, row in sheetDf.iterrows():
-    #         pasiv = row[NUM_PASIV]
-    #         activ = row[NUM_ACTIV]
-    #         transf = row[NUM_TRANSF]
+        for i, row in sheetDf.iterrows():
+            pasiv = row[NUM_PASIV]
+            activ = row[NUM_ACTIV]
+            transf = row[NUM_TRANSF]
             
-    #         test = {                 
-    #             'PASIV' : pasiv,
-    #             'ACTIV' : activ,
-    #             'ENSAMBLE': True,
-    #             'DEBUG': False
-    #           }
+            test = {                 
+                'PASIV' : pasiv,
+                'ACTIV' : activ,
+                'ENSAMBLE': True,
+                'DEBUG': False
+              }
             
-    #         res = eng.execute(inputs=test, counter=i)
+            res = eng.execute(inputs=test, counter=i)
                 
-    #         if not 'success' in res:
-    #             # print('Error', i)
-    #             continue
-    #         else: 
-    #             if res['success'] == True:
-    #                 # print(res)
-    #                 if res['result'].strip(" \n\t") == transf.strip(" \n\t"):
-    #                     # print('Correct')
-    #                     nCor += 1
-    #                     nCorSh += 1
-    #                 else:
-    #                     # print('Incorrect')
-    #                     nIncor += 1
-    #                     nIncorSh += 1
-    #             else:
-    #                 # print(res)
-    #                 # print('Fail')
-    #                 nFail += 1
-    #                 nFailSh += 1
+            if not 'success' in res:
+                # print('Error', i)
+                continue
+            else: 
+                if res['success'] == True:
+                    # print(res)
+                    if res['result'].strip(" .\n\t") == transf.strip(" .\n\t"):
+                        # print('Correct')
+                        nCor += 1
+                        nCorSh += 1
+                    else:
+                        # print('Incorrect')
+                        nIncor += 1
+                        nIncorSh += 1
+                else:
+                    # print(res)
+                    # print('Fail')
+                    nFail += 1
+                    nFailSh += 1
         
-    #     total = nCorSh + nIncorSh + nFailSh
-    #     print('{} - {} / {}; {} incorrect'.format(sheet, nCorSh, total, nIncorSh))
+        total = nCorSh + nIncorSh + nFailSh
+        print('{} - {} / {}; {} incorrect'.format(sheet, nCorSh, total, nIncorSh))
         
-    # total = nCor + nIncor + nFail
-    # print('Total: {} / {}, {:.2f}%'.format(nCor, total, nCor * 100 / total))
+    total = nCor + nIncor + nFail
+    print('Total: {} / {}, {:.2f}%'.format(nCor, total, nCor * 100 / total))
