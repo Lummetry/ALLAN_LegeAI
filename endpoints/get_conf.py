@@ -45,7 +45,7 @@ PERSON_UPPERCASE = 1
 PERSON_PROPN = 2
 PERSON_TWO_WORDS = 3
 MAX_LEV_DIST = 3
-SAME_NAME_THRESHOLD = 90
+SAME_NAME_THRESHOLD = 92
 CHECK_SON_OF_INTERVAL = 40
 SON_OF_PHRASES = ["fiul lui", "fiica lui"]
 NEE_PHRASES = ['fostă', 'fosta', 'fost', 'nascuta', 'nascut', 'născut']
@@ -165,7 +165,7 @@ SPACE_AND_PUNCTUATION = punctuation + ' '
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.8.3'
+__VER__='1.0.8.4'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1660,6 +1660,10 @@ class GetConfWorker(FlaskWorker):
             start, end = re_match.span()
             # Remove extra dots
             text = text[:start] + ' ' + text[end:]
+            
+            
+        # 6. CNP tied to number
+        text = text.replace("CNPx", "CNP x")
           
         return text  
     
@@ -1787,7 +1791,7 @@ class GetConfWorker(FlaskWorker):
     def read_user_code_lists(self, name_lists_path):
         """ Read the lists of names that represent the same code """
         
-        name_lists_file = open(name_lists_path, 'r', encoding='utf-8')
+        name_lists_file = open(name_lists_path, 'r')
         texts = name_lists_file.read().splitlines()
         
         user_name_lists = []
@@ -2086,8 +2090,8 @@ class GetConfWorker(FlaskWorker):
         
         # Evaluare client name lists
         if self.user_names_path:
-            mod_code_lists = [[unidecode.unidecode(c.lower()) for c in l[1]] for l in code_lists]        
-            user_name_lists = self.read_user_code_lists(self.user_names_path)  
+            mod_code_lists = [[unidecode.unidecode(c.lower()) for c in l[1]] for l in code_lists]
+            user_name_lists = self.read_user_code_lists(self.user_names_path)
             
             prec, rec, F, n_common = self.deduplication_score_lists(user_name_lists, mod_code_lists)   
             print('Scores = {:.2f} {:.2f} {:.2f}, n_common = {}'.format(prec, rec, F, n_common))
@@ -2110,11 +2114,11 @@ if __name__ == '__main__':
   l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
   eng = GetConfWorker(log=l, default_config=_CONFIG, verbosity_level=1)
   
-  text_path = "C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29\\0204 SC dec nr.1558-2021 ds.6822-99-2016-doc.txt"
-  user_names_path = "C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29\\0204 SC dec nr.1558-2021 ds.6822-99-2016.txt"
+  # text_path = "C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29\\0204 SC dec nr.1558-2021 ds.6822-99-2016-doc.txt"
+  # user_names_path = "C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29\\0204 SC dec nr.1558-2021 ds.6822-99-2016.txt"
 
-  file = open(text_path, 'r', encoding='utf-8')
-  full_doc = file.read()
+  # file = open(text_path, 'r', encoding='utf-8')
+  # full_doc = file.read()
   
   test = {
       'DEBUG' : True,
@@ -2163,7 +2167,7 @@ if __name__ == '__main__':
     
     # DE LA CLIENT
     
-    # 'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
+    'DOCUMENT' : """Ciortea Dorin, fiul lui Dumitru şi Alexandra, născut la 20.07.1972 în Dr.Tr.Severin, jud. Mehedinţi, domiciliat în Turnu Severin, B-dul Mihai Viteazul nr. 6, bl.TV1, sc.3, et.4, apt.14, jud. Mehedinţi, CNP1720720250523, din infracțiunea prevăzută de art. 213 alin.1, 2 şi 4 Cod penal în infracțiunea prevăzută de art. 213 alin. 1 şi 4 cu aplicarea art.35 alin. 1 Cod penal (persoane vătămate Zorliu Alexandra Claudia şi Jianu Ana Maria).""",
     
     # 'DOCUMENT' : """II. Eşalonul secund al grupului infracţional organizat este reprezentat de inculpaţii Ruse Adrian, Fotache Victor, Adrian Fotea, Costea Sorina şi Cristescu Dorel in compania SC Minaur SRL""",
     
@@ -2213,7 +2217,9 @@ if __name__ == '__main__':
         
     # 'DOCUMENT' : """Silviu Mihai si Silviu Mihail au mers impreuna la tribunal, la Sectia 2, sa se judece pe o bucata de pamanat din comuna Pantelimon, teren care apartine subsemnatului Pantelimon Marin-Ioan""",
     
-    'DOCUMENT' : full_doc,
+    # 'DOCUMENT' : """Contractul comercial nr. 23/14 februarie 2014 încheiat între SC Sady Com SRL şi SC Managro SRL, prin care prima societate a vândut celei de-a doua cantitatea de 66 tone azotat de amoniu la preţul de 93.720 RON, precum şi factum proforma emisă de reprezentantul SC Sady Com SRL pentru suma de 93.720 RON.""",
+    
+    # 'DOCUMENT' : full_doc,
     
     'COMMANDS' : [
         # {"action" : "merge", "words" : "Ciortea", "entity" : "A", "position" : "pre"},
@@ -2229,39 +2235,40 @@ if __name__ == '__main__':
     
       }
   
-  # res = eng.execute(inputs=test, counter=1)
-  # print(res)
+  res = eng.execute(inputs=test, counter=1)
+  print(res)
   
   
   #####################
   # CLIENT NAME TESTS #
   #####################
   
-  path = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29'
-  all_files = [path + "\\" + f for f in listdir(path) if isfile(join(path, f)) and '.txt' in f]
+  # path = 'C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29'
+  # all_files = [path + "\\" + f for f in listdir(path) if isfile(join(path, f)) and '.txt' in f]
     
-  doc_files = []
-  name_files = []
+  # doc_files = []
+  # name_files = []
     
-  for file in all_files:
-      if '-doc' in file:
-          doc_files.append(file)
-      else:
-          name_files.append(file)
-            
+  # for file in all_files:
+  #     if '-doc' in file:
+  #         doc_files.append(file)
+  #     else:
+  #         name_files.append(file)
           
-  for i in range(len(doc_files)):
-      text_path = doc_files[i]
-      user_names_path = name_files[i]
+  # for i in range(len(doc_files)):
+  #     text_path = doc_files[i]
+  #     user_names_path = name_files[i]
+      
+  #     print(text_path)
 
-      file = open(text_path, 'r', encoding='utf-8')
-      full_doc = file.read()
+  #     file = open(text_path, 'r', encoding='utf-8')
+  #     full_doc = file.read()
       
-      test = {
-          'DEBUG' : False,
-          'DOCUMENT' : full_doc,
-          'USER_NAMES' : user_names_path        
-          }
+  #     test = {
+  #         'DEBUG' : False,
+  #         'DOCUMENT' : full_doc,
+  #         'USER_NAMES' : user_names_path        
+  #         }
       
-      res = eng.execute(inputs=test, counter=1)
-      # print(res)
+  #     res = eng.execute(inputs=test, counter=1)
+  #     # print(res)
