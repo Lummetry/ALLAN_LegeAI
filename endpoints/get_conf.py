@@ -165,7 +165,7 @@ SPACE_AND_PUNCTUATION = punctuation + ' '
 SPACY_LABELS = ['NUME', 'ADRESA', 'INSTITUTIE', 'NASTERE', 'BRAND']
 
 
-__VER__='1.0.8.4'
+__VER__='1.0.8.5'
 class GetConfWorker(FlaskWorker):
     """
     Implementation of the worker for GET_CONFIDENTIAL endpoint
@@ -1538,10 +1538,12 @@ class GetConfWorker(FlaskWorker):
         # Search for 'alin' sequences
         for match in re.finditer(ALIN_REG, text):
             alin_text = match.group()
+            print('alin', alin_text)
             span_start, span_end = match.span()
             
             for number_match in re.finditer(ALIN_NUMBER_REG, alin_text):
                 number_text = number_match.group()
+                print(number_text)
                 number_start, number_end = number_match.span()
                 
                 replace_list.append((span_start + number_start, span_start + number_end, number_text))
@@ -1562,7 +1564,7 @@ class GetConfWorker(FlaskWorker):
                 
         # Add paranthesis to numbers
         for (start, end, match_text) in replace_list:
-            text = text[:start] + match_text + ')' + text[end:]
+            text = text[:start] + '(' + match_text + ')' + text[end:]
                 
         return text
     
