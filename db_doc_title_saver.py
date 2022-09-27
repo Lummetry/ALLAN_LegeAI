@@ -25,13 +25,14 @@ import numpy as np
 import sys
 from collections import deque
 import time
+import pandas as pd
 
 from libraries import Logger
 from libraries.db_conn.odbc_conn import ODBCConnector
 
 from utils.utils import raw_text_to_words, clean_words_list
 
-if __name__ == '__main__':
+def generate_data(debug = False, debug_save_count = 3500, source="from_db"):
   log = Logger(
     lib_name='DBSV', base_folder='.', app_folder='_cache',
     TF_KERAS=False
@@ -42,7 +43,8 @@ if __name__ == '__main__':
       'DRIVER' : '{ODBC Driver 17 for SQL Server}',
       'SERVER' : '195.60.78.50',
       'PORT' : 1433,
-      'DATABASE' : 'LegeV_New',
+      #'DATABASE' : 'LegeV_New',
+      'DATABASE' : 'legeV',
       'Uid' : 'damian',
       'Pwd' : '4Esoft1234!@#$2021',
     },
@@ -50,7 +52,26 @@ if __name__ == '__main__':
     'QUERY_PARAMS' : None
   }
   
-  qry_docs = 'select distinct id_document  from vw_docs'
+  qry_docs = 'SELECT distinct vw4.id_document \
+              FROM        (SELECT     legeV.dbo.entitate_x_tematica.id_document, legeV.dbo.entitate_x_tematica.id_tip_tematica, legeV.dbo.paragraf.id AS id_paragraf, legeV.dbo.paragraf.continut, DATALENGTH(legeV.dbo.paragraf.continut) AS txt_size \
+                   FROM        legeV.dbo.entitate_x_tematica LEFT OUTER JOIN \
+                                     legeV.dbo.paragraf ON legeV.dbo.entitate_x_tematica.id_document = legeV.dbo.paragraf.id_document \
+                   WHERE     (legeV.dbo.entitate_x_tematica.id_document IN \
+                                         (SELECT     id_document \
+                                          FROM        (SELECT     id_document, COUNT(id_tip_tematica) AS cnt_tematica \
+                                                             FROM        (SELECT     id_document, id_tip_tematica \
+                                                                                FROM        legeV.dbo.entitate_x_tematica AS entitate_x_tematica_2 \
+                                                                                WHERE     (id_tip_tematica IN \
+                                                                                                      (SELECT     id_tip_tematica \
+                                                                                                       FROM        (SELECT     id_tip_tematica, COUNT(id_document) AS cnt \
+                                                                                                                          FROM        legeV.dbo.entitate_x_tematica AS entitate_x_tematica_1 \
+                                                                                                                          GROUP BY id_tip_tematica) AS vw1 \
+                                                                                                       WHERE     (cnt > 1000)))) AS vw3 \
+                                                             GROUP BY id_document) AS vw4_1 \
+                                          WHERE     (cnt_tematica > 1)))) AS vw4 \
+                WHERE     vw4.txt_size > 100'
+
+
   qry_txt = 'select titlu from document where id={}'
   qry_lbl = """
   select tip_tematica.nume2 from 
@@ -60,23 +81,28 @@ if __name__ == '__main__':
 
   conn = ODBCConnector(log=log, verbose=False, config=config)
   conn.connect(nr_retries=5)
-  
-  df_docs = conn.get_data(sql_query=qry_docs)
 
+
+  if source == "from_db":
+    df_docs = conn.get_data(sql_query=qry_docs)
+  
+  elif source.endswith(".csv"):
+    df_docs = pd.read_csv(source)
+  
   lst_X_docs = []
   lst_y_labels = []
   unique_labels = set()
-  DEBUG = len(sys.argv) > 1 and sys.argv[1].upper() == 'DEBUG'
-  log.P("Running params: {}. Debug mode {}".format(sys.argv, "ON" if DEBUG else "OFF"))
+  log.P("Running params: {}. Debug mode {}".format(sys.argv, "ON" if debug else "OFF"))
   n_iters = df_docs.shape[0]
   timings = deque(maxlen=10)
+  print(n_iters)
+
   for idx_doc in range(n_iters):
     t0 = time.time()
     id_doc = df_docs.iloc[idx_doc,0]
     
     # process text
     df_text = conn.get_data(sql_query=qry_txt.format(id_doc))
-
     lst_doc_txt = []
     for idx_txt in range(df_text.shape[0]):
       txt = df_text.iloc[idx_txt,0]
@@ -88,6 +114,10 @@ if __name__ == '__main__':
     df_labels = conn.get_data(sql_query=qry_lbl.format(id_doc))
     lst_raw_labels = [df_labels.iloc[iii, 0] for iii in range(df_labels.shape[0])]
     lst_labels = clean_words_list(lst_raw_labels)
+
+    if len(doc_str) == 0 or len(lst_labels) == 0:
+        continue
+
     for lbl in lst_labels:
       unique_labels.add(lbl)
     
@@ -98,7 +128,7 @@ if __name__ == '__main__':
     timings.append(lap_time)
     mean_time = np.mean(timings)
     remaining_time = (n_iters - (idx_doc + 1)) * mean_time
-    if (idx_doc % 10) == 0:
+    if (idx_doc % 100) == 0:
       print("\rProcessed {}/{} documents ({:.1f}%). Remaining time {:.0f}s/{} ({:.1f}s/doc\r".format(
         idx_doc+1, n_iters, 
         (idx_doc+1) / df_docs.shape[0] * 100, 
@@ -108,21 +138,21 @@ if __name__ == '__main__':
         ),
         end='', flush=True)    
     
-    if ((idx_doc + 1) % 10000) == 0 or (DEBUG and idx_doc > 100):
+    if ((idx_doc + 1) % 100000) == 0:
       log.save_pickle(
         data=lst_X_docs,
-        fn='x_data_{}K.pkl'.format((idx_doc + 1) // 1000),
+        fn='x_data_{}.pkl'.format((idx_doc + 1) // 1000000),
         folder='data',
         use_prefix=True,
         )
     
       log.save_pickle(
         data=lst_y_labels,
-        fn='y_data_{}K.pkl'.format((idx_doc + 1) // 1000),
+        fn='y_data_{}.pkl'.format((idx_doc + 1) // 1000000),
         folder='data',
         use_prefix=True,
         )  
-      if DEBUG and idx_doc > 100:
+    if debug and idx_doc > debug_save_count:
         break
       
 
@@ -130,14 +160,14 @@ if __name__ == '__main__':
   log.P("Obtained {} documents:".format(len(lst_X_docs)))
   log.show_text_histogram(lens, show_both_ends=True, caption='Words per document')
   log.P("Hist:\n{}".format(np.histogram(lens)))
-  log.save_pickle(
+  data = log.save_pickle(
     data=lst_X_docs,
     fn='x_data.pkl',
     folder='data',
     use_prefix=True,
     )
 
-  log.save_pickle(
+  labels = log.save_pickle(
     data=lst_y_labels,
     fn='y_data.pkl',
     folder='data',
@@ -150,11 +180,17 @@ if __name__ == '__main__':
   log.P("Obtained {} labels:".format(len(dct_labels)))
   log.show_text_histogram(n_labels, show_both_ends=True, caption='Labels per observation')
 
-  log.save_pickle(
+  dict_label = log.save_pickle(
     data=dct_labels,
     fn='labels_dict.pkl',
     folder='data',
     use_prefix=True,
     )  
-
+   
+  return data, labels, dict_label
   
+
+
+if __name__ == '__main__':
+
+    pass
