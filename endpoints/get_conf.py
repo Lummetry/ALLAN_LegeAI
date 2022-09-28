@@ -2111,7 +2111,7 @@ if __name__ == '__main__':
   from libraries import Logger
 
   l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
-  eng = GetConfWorker(log=l, default_config=_CONFIG, verbosity_level=1)
+  eng = GetConfWorker(log=l, default_config=_CONFIG, verbosity_level=1, worker_id=1)
   
   # text_path = "C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29\\0204 SC dec nr.1558-2021 ds.6822-99-2016-doc.txt"
   # user_names_path = "C:\\Proiecte\\LegeAI\\Date\\Task6\\teste_client\\06_29\\0204 SC dec nr.1558-2021 ds.6822-99-2016.txt"

@@ -6,6 +6,7 @@ import spacy
 import unidecode
 import string
 import pandas as pd
+import os
 
 _CONFIG = {
   'SPACY_MODEL' : 'ro_core_news_lg',
@@ -15,7 +16,8 @@ _CONFIG = {
                   '..\\allan_data\\MergeNER\\model-best-931-150-150-d0.1',
                   '..\\allan_data\\MergeNER\\model-best-1000',
                   '..\\allan_data\\MergeNER\\model-best-400',
-                  ]
+                  ],
+  'NER_FOLDER' : '..\\allan_data\\MergeNER'
  }
 
 
@@ -87,7 +89,7 @@ MODIFICA_CUPRINS_KEYS = ['se modifică şi va avea următorul cuprins', 'se modi
                          'se modifică şi vor avea următorul cuprins', 'se modifica si vor avea urmatorul cuprins']
 
 
-__VER__='1.2.0.0'
+__VER__='1.2.1.0'
 class GetMergeV2Worker(FlaskWorker):
     """
     Second implementation of the worker for GET_MERGE endpoint.
@@ -110,13 +112,23 @@ class GetMergeV2Worker(FlaskWorker):
         self._create_notification('LOAD', 'Loaded spaCy model')
         
         # Load NER models
+        max_timestamp = 0
+        newest_model = None
         self.activ_ners = []
-        for ner_path in self.config_worker['NER_MODELS']:
-            self.activ_ners.append(spacy.load(ner_path))
+        for file in os.listdir(self.config_worker['NER_FOLDER']):
+            ner_path = os.path.join(self.config_worker['NER_FOLDER'], file)
+            model = spacy.load(ner_path)
+            self.activ_ners.append(model)
             print('Loaded NER model {}'.format(ner_path))
+            
+            # Get last change time for model    
+            timestamp = os.path.getmtime(ner_path) 
+            if timestamp > max_timestamp:
+                max_timestamp = timestamp
+                newest_model = model
                 
-        # The first NER model is used if Ensamble is turned off
-        self.activ_ner = self.activ_ners[0]
+        # The newest NER model is used if Ensamble is turned off
+        self.activ_ner = newest_model
     
         return 
     
@@ -825,7 +837,7 @@ if __name__ == '__main__':
     from libraries import Logger
     
     l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
-    eng = GetMergeV2Worker(log=l, default_config=_CONFIG, verbosity_level=1)
+    eng = GetMergeV2Worker(log=l, default_config=_CONFIG, verbosity_level=1, worker_id=1)
   
     test = {      
         # 'PASIV' : """Veniturile nete lunare prevăzute la alin. (1) şi (2) se majorează cu 5.000 lei pentru fiecare membru din familie care face dovada că lucrează în baza unui contract individual de muncă, a unei convenţii civile sau că realizează venituri din activităţi pe cont propriu.""",
