@@ -34,11 +34,6 @@
 			"NR_WORKERS" : 1,
 			"HOST" : "127.0.0.1"
 		},
-		
-		"get_sum2" : {
-			"NR_WORKERS" : 1,
-			"HOST" : "127.0.0.1"
-		},
 
 		"get_conf" : {
 			"NR_WORKERS" : 2,
@@ -46,11 +41,6 @@
 		},
 
 		"get_merge" : {
-			"NR_WORKERS" : 2,
-			"HOST" : "127.0.0.1"
-		},
-
-		"get_merge_v2" : {
 			"NR_WORKERS" : 2,
 			"HOST" : "127.0.0.1"
 		},
