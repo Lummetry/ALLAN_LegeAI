@@ -1538,12 +1538,10 @@ class GetConfWorker(FlaskWorker):
         # Search for 'alin' sequences
         for match in re.finditer(ALIN_REG, text):
             alin_text = match.group()
-            print('alin', alin_text)
             span_start, span_end = match.span()
             
             for number_match in re.finditer(ALIN_NUMBER_REG, alin_text):
                 number_text = number_match.group()
-                print(number_text)
                 number_start, number_end = number_match.span()
                 
                 replace_list.append((span_start + number_start, span_start + number_end, number_text))
@@ -2174,7 +2172,7 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """Prin decizia penală nr.208 din 02 noiembrie 2020 pronunţată în dosarul nr. 2187/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători a fost respins, ca inadmisibil, apelul formulat de petentul Dumitrescu Iulian împotriva deciziei penale nr.111 din 06 iulie 2020 pronunţată în dosarul nr. 1264/1/2020 al Înaltei Curţi de Casaţie şi Justiţie, Completul de 5 Judecători.""",
     
-    'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
+    # 'DOCUMENT' : """În momentul revânzării imobilului BIG Olteniţa către Ruse Adrian pe SC Casa Andreea , preţul trecut în contract a fost de 1.500.000 lei, însă preţul a fost fictiv, acesta nu a fost predat în fapt lui Ruse Adrian.""",
     
 #     'DOCUMENT' : """intimatul Ionescu Lucian Florin (fiul lui Eugen şi Anicuţa, născut la data de 30.09.1984 în municipiul Bucureşti, domiciliat în municipiul Bucureşti, str. Petre Păun, nr. 3 bl. G9D, sc. 3, et. 8, ap. 126, sector 5, CNP 1840930420032, prin sentinţa penală nr. 169 din 29.10.2015 a Tribunalului Călăraşi, definitivă prin decizia penală nr. 1460/A din 07.10.2016 a Curţii de Apel Bucureşti - Secţia a II-a Penală sunt concurente cu cele pentru a căror săvârşire a fost condamnat acelaşi intimat prin sentinţa penală nr. 106/F din 09.06.2016 pronunţată de Ionescu Florin.
 # în mod corect şi motivat, Ionescu Lucian a fost declarat
@@ -2188,9 +2186,9 @@ if __name__ == '__main__':
     
     # 'DOCUMENT' : """În temeiul art. 112 alin. 1 lit. b) s-a dispus confiscarea telefonului marca Samsung model G850F, cu IMEI 357466060636794 si a cartelei SIM seria 8940011610660227721, folosit de inculpat în cursul activităţii infracţionale.""",
     
-    # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici."""
+    # 'DOCUMENT' : """Relevant în cauză este procesul-verbal de predare-primire posesie autovehicul cu nr. 130DT/11.10.2018, încheiat între Partidul Social Democrat (în calitate de predator) și Drăghici Georgiana (în calitate de primitor) din care rezultă că la dată de 08 octombrie 2018 s-a procedat la predarea fizică către Drăghici Georgiana a autoturismului Mercedes Benz P.K.W model GLE 350 Coupe, D4MAT, serie șasiu WDC 2923241A047452, serie motor 64282641859167AN 2016 Euro 6, stare funcționare second hand – bună, precum și a ambelor chei. La rubrica observații, Partidul Social Democrat, prin Serviciul Contabilitate a constatat plata, la data de 08 octombrie 2018, a ultimei tranșe a contravalorii autovehiculului a dat catre Georgiana Drăghici.""",
     
-    # 'DOCUMENT' : """Prin cererea de chemare în judecată înregistrată pe rolul Curţii de Apel Bucureşti – Secţia a VIII- a Contencios Administrativ şi Fiscal sub numărul 2570/2/2017, reclamantul Curuti  Ionel, a solicitat, în contradictoriu cu pârâta Agenţia Naţională de Integritate anularea Raportului de evaluare nr. 9756/G/II/17.03.2017 întocmit de ANI - Inspecţia de Integritate şi obligarea pârâtei la plata cheltuielilor de judecata ocazionate.""",
+    'DOCUMENT' : """Prin cererea de chemare în judecată înregistrată pe rolul Curţii de Apel Bucureşti – Secţia a VIII- a Contencios Administrativ şi Fiscal sub numărul 2570/2/2017, reclamantul Curuti  Ionel, a solicitat, în contradictoriu cu pârâta Agenţia Naţională de Integritate anularea Raportului de evaluare nr. 9756/G/II/17.03.2017 întocmit de ANI - Inspecţia de Integritate şi obligarea pârâtei la plata cheltuielilor de judecata ocazionate.""",
     # 'DOCUMENT' : """S-au luat în examinare recursurile formulate de reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A. și chemata în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.) împotriva Sentinţei nr. 97 din 12 aprilie 2017 pronunţată de Curtea de Apel Ploiești – Secţia a II-a Civilă, de Contencios Administrativ şi Fiscal. La apelul nominal, făcut în şedinţă publică, răspunde recurenta- reclamantă S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin consilier juridic Niţă Vasile Laurenţiu, care depune delegaţie de reprezentare la dosar, recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L. (fostă S.C. Fichtner Environment S.R.L.), prin consilier juridic Marinela Vladescu, care depune delegaţie de reprezentare la dosarul cauzei, lipsă fiind intimatul-pârât Ministerul Investiţiilor şi Proiectelor Europene (fostul Ministerul Fondurilor Europene). Procedura de citare este legal îndeplinită. Se prezintă referatul cauzei, magistratul – asistent învederând că recurenta-reclamantă a formulat o cerere de renunţare la cererea de chemare în judecată precum şi la cererea de chemare în garanţie, cu privire la care s-a depus punct de vedere în sensul de a se lua act de cererea de renunţare la judecată. Reclamanta S.C. Compania de Apă Târgoviște Dâmbovița S.A., prin avocat, conform art. 406 alin. 5 Cod procedură civilă, solicită a se lua act de cererea de renunţare la judecată, respectiv de chemare în garanţie, cu consecinţa anulării hotărârilor pronunţate de Curtea de Apel Ploieşti. Recurenta - chemată în garanție S.C. Tadeco Consulting S.R.L., prin consilier juridic, precizează că nu se opune renunţării la judecată, astfel cum a fost solicitată de recurenta-reclamantă, apreciind că sunt îndeplinite condiţiile prevăzute de dispozițiile art. 406 Cod procedură civilă.""",
     # 'DOCUMENT' : """Decizia nr. 12996 din 18.02.2016, înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 8260/23.02.2016 ce priveşte soluţionarea contestaţiei formulata de Compania de Apa Târgovişte Dâmboviţa SA împotriva notei de constatare a neregulilor si de stabilire a corecţiilor financiare nr.3966/19.01.2016; Nota de constatare a neregulilor a neregulilor si de stabilire a corecţiilor financiare nr. 3966 din 19.01.2016 înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 15178 din 30.04.201 5 şi Notificării cu privire la debit nr. 3968 din 19.01.2016 înregistrata la Compania de Apa Târgovişte Dâmboviţa SA sub nr. 3663/311-UIP din 22.01.2016.""",
     # 'DOCUMENT' : """Totodată, a notificat beneficiarii PNDL cu privire la epuizarea creditelor bugetare în proporţie de 80% pentru PNDL 1, ultimele transferuri efectuându-se parţial pentru solicitările de finanţare depuse până în data de 08.11.2017 (adresa nr. 155732/18.12.2017).""",
@@ -2227,9 +2225,9 @@ if __name__ == '__main__':
         # {"action" : "merge", "words" : "Geo", "entity" : "A", "position" : "post"},
         # {"action" : "replace", "entities" : ["A", "B", "C"]},
         # {"action" : "add", "type" : "abbr", "entity" : "Cod penal: C. pen."},
-        # {"action" : "add", "type" : "org", "entity" : "PSD"},
-        # {"action" : "add", "type" : "inst_name", "entity" : "tribunalul Suceava"},
-        # {"action" : "add", "type" : "inst_prefix", "entity" : "Secție"},
+        # {"action" : "add", "type" : "org", "entity" : "SC Managro SRL"},
+        {"action" : "add", "type" : "inst_name", "entity" : "Inspecţia de Integritate"},
+        # {"action" : "add", "type" : "inst_prefix", "entity" : "Serviciul"},
         # {"action": "add", "type" : "noconf_case", "entity" : "decizie penală"},
         # {"action": "assign", "entity" : "Silviu Mihail", "code" : "C"}
         ]
