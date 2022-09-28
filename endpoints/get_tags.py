@@ -114,5 +114,6 @@ if __name__ == '__main__':
   ins = a._pre_process({"DOCUMENT": "Art. 63. - (1) Aerodromurile civile certificate din România pentru care există obligaţia realizării hărţilor strategice de zgomot şi a planurilor de acţiune aferente, precum şi criteriile care stau la baza realizării acestora, sunt stabilite prin hotărâre a Guvernului, la iniţiativa autorităţii publice centrale pentru protecţia mediului. (2) Administratorii aerodromurilor civile certificate din România prevăzute la alin. (1) au obligaţia ca, atunci când elaborează programe de dezvoltare a infrastructurii de aerodrom, să utilizeze cartarea zgomotului în vederea previzionării impactului activităţilor viitoare asupra vecinătăţilor aerodromurilor. (3) Autorităţile administraţiei publice locale au obligaţia integrării în documentaţiile de urbanism şi de amenajare a teritoriului a hărţilor strategice de zgomot prevăzute la alin. (1), precum şi a programelor de dezvoltare specificate la alin. (2), împreună cu rezultatele cartării zgomotului. (4) Metodologia de cartare a zgomotului în vederea previzionării impactului activităţilor existente şi viitoare de pe un aerodrom asupra vecinătăţilor acestuia, se aprobă prin hotărâre a Guvernului, la iniţiativa autorităţii publice centrale pentru protecţia mediului."})
   p = a._predict(ins)
   r = a._post_process(p)
+  
 
   print(r)

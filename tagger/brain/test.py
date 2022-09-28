@@ -35,7 +35,7 @@ _CONFIG_V2 = {
 
 
 data_path = "_cache/_data/tags_v1"
-split = "test"
+split = "dev"
 
 
 def multiclass_rec(y, y_hat, top_k=None):
@@ -402,10 +402,9 @@ def stats_pred():
     tb = 0
     to = 0
     for value, count in c.items():
-        if count < 3:
+        if count < 10:
             if bpreds.count(value) > opreds.count(value): 
-                print(value, count)
-                print("b", bpreds.count(value), "o", opreds.count(value))
+                print(value, count, bpreds.count(value), opreds.count(value))
             tg += count
             tb += bpreds.count(value)
             to += opreds.count(value)
@@ -414,8 +413,11 @@ def stats_pred():
     print(tg, tb, to)
 
 
-    labels = ["meteorologie"]
-
+    labels = ["eroi_nationali_comemorari"]
+    # label gt b o
+    #meteorologie , recursuri_in_interesul_legii_admitere 4 3 0 , jocuri_de_noroc 3 5 1  
+    
+    
     for i in range(len(dev[0])):
         bert_pred = dev[0][i][:3]
         orig_pred = dev[1][i][:3]
@@ -423,14 +425,15 @@ def stats_pred():
 
         for label in labels:
             if label in gt:
-                print(i)
-                print(bert_pred)
-                print(orig_pred)
-                print(gt)
-                print()
+                pass
+                #print(i)
+                #print(bert_pred)
+                #print(orig_pred)
+                #print(gt)
+                #print()
 
 
-
+    sys.exit()
     # for x in dev:
     #     print(x[0])
     #     print()
@@ -452,7 +455,7 @@ if __name__ == "__main__":
     # preprocess_titles()
     # sys.exit()
 
-    l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
+    # l = Logger('GESI', base_folder='.', app_folder='_cache', TF_KERAS=False)
     # worker_orig = GetTagsWorkerOrig(log=l, default_config=_CONFIG_V1, verbosity_level=0)
     # worker = GetTagsWorker(log=l, default_config=_CONFIG_V2, verbosity_level=0)
 
@@ -500,7 +503,7 @@ if __name__ == "__main__":
             break
            
     #print("next start_index", end_index, "value", test_indexes[end_index])
-    print(test_documents[4588])
+    print(test_documents[4558])
     sys.exit()
     del inputs
     print(len(test_documents))

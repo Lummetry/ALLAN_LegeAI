@@ -20,7 +20,7 @@ import json
 import pandas as pd
 import copy
 
-GPU_INDEX_FOR_TRAINING = 3
+GPU_INDEX_FOR_TRAINING = 0
 
 
 parser = argparse.ArgumentParser(description='Training and evaluation file for transformer-based document-level multilabel classifier')
@@ -36,6 +36,7 @@ parser.add_argument('-bert_frozen', default=False, action='store_true', help='fl
 parser.add_argument('-use_generator', default=False, action='store_true', help='flag to mark the usage of generators rather than loading all data in tf.data.Dataset')
 parser.add_argument('-k', nargs='+', help='List of k\'s to use for evaluating metrics @k', default=[1, 3, 5])
 parser.add_argument('-run_type', default="train", help='train or eval run')
+parser.add_argument('-save_each_epoch', default=True, help='whether to save the model at each epoch')
 args = parser.parse_args()
 
 if args.args_path != None:
@@ -167,7 +168,7 @@ def load_data_splits(inputs, labels):
 def load_data(tokenizer):
     # check if inputs are pre-processed (i.e. passed through tokenizer) for BERT-based model
     if not os.path.exists(args.data_path + "_x_data_inputs_len{0}.pkl".format(args.bert_max_seq_len)):
-        print("Building inputs file. This may take a while.")
+        print("###################### Building inputs file for BERT tokenizer. This may take a while. ######################")
         documents = pickle.load(open(args.data_path + "_x_data.pkl", "rb"))
         inputs = tokenizer(documents, padding="max_length", truncation=True, max_length=args.bert_max_seq_len, is_split_into_words=True)
         pickle.dump([inputs["input_ids"], inputs["attention_mask"]], open(args.data_path+"_x_data_inputs_len{0}.pkl".format(args.bert_max_seq_len), "wb"))
@@ -248,7 +249,7 @@ if __name__ == "__main__":
         tokenizer = AutoTokenizer.from_pretrained(args.bert_backbone, use_fast=False)
 
         train_inputs, train_labels, dev_inputs, dev_labels, test_inputs, test_labels, labels_dict = load_data(tokenizer)
-
+        print(len(train_labels), len(dev_labels), len(test_labels))
         if 'train' in args.run_type:
             if args.run_type == 'train_dev':
                 train_inputs[0].extend(dev_inputs[0])
@@ -273,10 +274,17 @@ if __name__ == "__main__":
         model = build_model(bert_model, len(labels_dict))
 
         if 'train' in args.run_type:
-            checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath=args.model_path+"/weights/{epoch:02d}", save_weights_only = True)
+            if "_dev" in args.run_type or "_full" in args.run_type:
+                print("###################### Reminder: scores are computed on the dev set that is part of training for this particular instance! ######################")
+            
 
-            history = model.fit(train_dataset, epochs=args.epochs, callbacks=[dev_callback, checkpoint_callback])
-
+            if args.save_each_epoch == True:
+                checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath=args.model_path+"/weights/{epoch:02d}", save_weights_only = True)
+                history = model.fit(train_dataset, epochs=args.epochs, callbacks=[dev_callback, checkpoint_callback])
+            else:
+                history = model.fit(train_dataset, epochs=args.epochs, callbacks=[dev_callback])
+                model.save_weights(args.model_path+"/weights/{0}".format(args.epochs))
+                
             hist_df = pd.DataFrame(history.history)
             hist_json_file = '{0}/history.json'.format(args.model_path)
             with open(hist_json_file, mode='w') as f:
@@ -302,5 +310,4 @@ if __name__ == "__main__":
             save_path = os.path.join(path_parts[0], path_parts[1][1:])
             bert_model.save_pretrained(save_path)
             tokenizer.save_pretrained(save_path)
-    #endwith
 
