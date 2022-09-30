@@ -27,6 +27,7 @@ import os
 import sys
 import subprocess
 import argparse
+from build_test_corpus import build_corpus
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--base_folder', type=str, default="_cache")
@@ -162,6 +163,10 @@ if __name__ == "__main__":
     model_version = get_last_model_version()
     model_path = args.base_folder + "/_models/{0}_{1}_full".format(model_prefix, model_version + 1)
     #endregion paths
+    
+    #region test corpus
+    build_corpus("test_samples_{0}.csv".format(args.task[len("get_"):]))
+    #endregion test corpus
     
     
     #region training
