@@ -36,8 +36,10 @@ parser.add_argument('-bert_frozen', default=False, action='store_true', help='fl
 parser.add_argument('-use_generator', default=False, action='store_true', help='flag to mark the usage of generators rather than loading all data in tf.data.Dataset')
 parser.add_argument('-k', nargs='+', help='List of k\'s to use for evaluating metrics @k', default=[1, 3, 5])
 parser.add_argument('-run_type', default="train", help='train or eval run')
-parser.add_argument('-save_each_epoch', default=True, help='whether to save the model at each epoch')
+parser.add_argument('-dev_run', default="True", help='whether to save the model at each epoch')
 args = parser.parse_args()
+
+args.dev_run = eval(args.dev_run)
 
 if args.args_path != None:
     with open(args.args_path, 'r') as f:
@@ -222,8 +224,12 @@ class MetricsCallback(keras.callbacks.Callback):
 
             f1 = 2 * prec * rec / (prec + rec)
             acc = 1.0 * correct / total
-            print("Recall: {0:.4f} Precision: {1:.4f} F1: {2:.4f} Acc: {3:.4f} @{4}".format(rec, prec, f1, acc, k))
-
+            
+            if args.dev_run == False and k == 3:
+                print("Recall: {0:.4f} Precision: {1:.4f} F1: {2:.4f} Acc: {3:.4f} @{4}".format(rec, prec, f1, acc, k))
+            elif args.dev_run == True:
+                print("Recall: {0:.4f} Precision: {1:.4f} F1: {2:.4f} Acc: {3:.4f} @{4}".format(rec, prec, f1, acc, k))
+                
             rec = round(rec, 4)
             prec = round(prec, 4)
             f1 = round(f1, 4)
@@ -266,7 +272,7 @@ if __name__ == "__main__":
 
             train_dataset = build_dataset(train_inputs, train_labels, labels_dict, tokenizer).shuffle(40000).batch(args.batch_size)
         dev_dataset = build_dataset(dev_inputs, dev_labels, labels_dict, tokenizer).batch(args.batch_size)
-        if args.run_type == 'eval':
+        if args.run_type == 'eval' or args.dev_run == False:
             test_dataset = build_dataset(test_inputs, test_labels, labels_dict, tokenizer).batch(args.batch_size)
             test_callback = MetricsCallback(test_dataset)
 
@@ -274,16 +280,19 @@ if __name__ == "__main__":
         model = build_model(bert_model, len(labels_dict))
 
         if 'train' in args.run_type:
-            if ("_dev" in args.run_type or "_full" in args.run_type) and args.save_each_epoch == True:
+            if ("_dev" in args.run_type or "_full" in args.run_type) and args.dev_run == True:
                 print("###################### Reminder: scores are computed on the dev set that is part of training for this particular instance! ######################")
             
 
-            if args.save_each_epoch == True:
+            if args.dev_run == True:
                 checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath=args.model_path+"/weights/{epoch:02d}", save_weights_only = True)
                 history = model.fit(train_dataset, epochs=args.epochs, callbacks=[dev_callback, checkpoint_callback])
             else:
                 history = model.fit(train_dataset, epochs=args.epochs, callbacks=[])
                 model.save_weights(args.model_path+"/weights/{:02d}".format(args.epochs))
+                test_callback.model = model
+                test_results = test_callback.on_epoch_end(0, {})
+                    
                 
             hist_df = pd.DataFrame(history.history)
             hist_json_file = '{0}/history.json'.format(args.model_path)

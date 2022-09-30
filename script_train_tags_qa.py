@@ -151,7 +151,7 @@ if __name__ == "__main__":
     #region data
     if args.data_source == "from_db" or args.data_source.endswith(".csv"):
         # get data from db
-        data_file, labels_file, dict_file = function_get_data(debug=False, debug_save_count = 10, source=args.data_source)
+        data_file, labels_file, dict_file = function_get_data(debug=False, debug_save_count = 10000, source=args.data_source)
         [data_file, labels_file, dict_file] = rename_files([data_file, labels_file, dict_file])
     else:
         data_file = os.path.join(os.path.join(args.base_folder, "_data"), args.data_source)
@@ -165,7 +165,7 @@ if __name__ == "__main__":
     
     
     #region training
-    command = "python tagger\\brain\\train_transformer_tagger.py -use_generator -data_path={0} -k 1 3 5 -epochs={1} -learning_rate=1e-5 -bert_max_seq_len={2} -batch_size={3} -bert_backbone=readerbench/jurBERT-base -run_type=train_full -model_path={4} -save_each_epoch=False".format(data_path, epochs, bert_max_seq_len, batch_size, model_path)
+    command = "python tagger\\brain\\train_transformer_tagger.py -use_generator -data_path={0} -k 1 3 5 -epochs={1} -learning_rate=1e-5 -bert_max_seq_len={2} -batch_size={3} -bert_backbone=readerbench/jurBERT-base -run_type=train_full -model_path={4} -dev_run=False".format(data_path, epochs, bert_max_seq_len, batch_size, model_path)
     subprocess.run(command)
     #endregion training
     
