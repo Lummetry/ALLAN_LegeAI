@@ -40,21 +40,28 @@ def generate_data(csv_file, debug=False):
     TF_KERAS=False
   )
 
-  with open("_cache/_data/tags_v1_labels_dict.pkl", "rb") as f:
+  folder = os.path.join('_cache', "_data")
+  files = os.listdir(folder)
+  
+  tags_files = list(filter(lambda x: x.startswith("tags_v"), files))
+    
+  versions = list(map(lambda x: int(x.split("_")[1][1:]), tags_files))
+  versions = list(set(versions))
+  versions.sort()
+
+  with open("_cache/_data/tags_v{0}_labels_dict.pkl".format(versions[-1]), "rb") as f:
     tags = set(own_pickle.load(f).keys())
-
-
-  with open("_cache/_data/tags_titles_v1_labels_dict.pkl", "rb") as f:
-    tags_titles = set(own_pickle.load(f).keys())
+    print(len(tags))
 
   df_docs = pd.read_csv(csv_file)
   
   lst_X_docs = []
   lst_y_labels = []
   unique_labels = set()
-  log.P("Running params: {}. Debug mode {}".format(sys.argv, "ON" if debug else "OFF"))
+  # log.P("Running params: {}. Debug mode {}".format(sys.argv, "ON" if debug else "OFF"))
   n_iters = df_docs.shape[0]
   timings = deque(maxlen=10)
+  rejected_labels = set()
 
   for idx_doc in range(n_iters):
     t0 = time.time()
@@ -77,7 +84,7 @@ def generate_data(csv_file, debug=False):
 
     for lbl in lst_labels:
       if lbl not in tags:
-        print(idx_doc+2, lbl, flush=True)
+        rejected_labels.add(lbl)
         continue
       unique_labels.add(lbl)
     
@@ -115,13 +122,14 @@ def generate_data(csv_file, debug=False):
      
   lens = [len(x) for x in lst_X_docs]  
   log.P("Obtained {} documents:".format(len(lst_X_docs)))
-  log.show_text_histogram(lens, show_both_ends=True, caption='Words per document')
-  log.P("Hist:\n{}".format(np.histogram(lens)))
+  # log.show_text_histogram(lens, show_both_ends=True, caption='Words per document')
+  # log.P("Hist:\n{}".format(np.histogram(lens)))
   data = log.save_pickle(
     data=lst_X_docs,
     fn='x_data.pkl',
     folder='data',
     use_prefix=True,
+    verbose = False
     )
 
   labels = log.save_pickle(
@@ -129,31 +137,36 @@ def generate_data(csv_file, debug=False):
     fn='y_data.pkl',
     folder='data',
     use_prefix=True,
+    verbose = False
     )  
   
   n_labels = [len(x) for x in lst_y_labels]
   
   dct_labels = {k:v for v,k in enumerate(unique_labels)}
   log.P("Obtained {} labels:".format(len(dct_labels)))
-  log.show_text_histogram(n_labels, show_both_ends=True, caption='Labels per observation')
+  # log.show_text_histogram(n_labels, show_both_ends=True, caption='Labels per observation')
 
   dict_label = log.save_pickle(
     data=dct_labels,
     fn='labels_dict.pkl',
     folder='data',
     use_prefix=True,
+    verbose = False
     )  
   
+  log.P("Labels not found in dict: {0}".format(rejected_labels))
+
   return data, labels, dict_label
   
 def build_corpus(csv_file):
 
   data_file, labels_file, dict_file = generate_data(csv_file)
 
-  task = csv_file[len("test_"):][:-len(".csv")]
+
+  task = csv_file[len("test_samples_"):][:-len(".csv")]
   if task != "qa" and task != "tags":
     print("Task not recognized {0}".format(task))
-    print("Expected task to be <qa> or <tags>. File must be named test_<task>.csv")
+    print("Expected task to be <qa> or <tags>. File must be named test_samples_<task>.csv")
     sys.exit()
 
   files = [data_file, labels_file, dict_file]
@@ -173,5 +186,5 @@ def build_corpus(csv_file):
 
 if __name__ == '__main__':
 
-  build_corpus("test_qa.csv")
+  build_corpus("test_samples_qa.csv")
     
