@@ -36,7 +36,7 @@ parser.add_argument('-bert_frozen', default=False, action='store_true', help='fl
 parser.add_argument('-use_generator', default=False, action='store_true', help='flag to mark the usage of generators rather than loading all data in tf.data.Dataset')
 parser.add_argument('-k', nargs='+', help='List of k\'s to use for evaluating metrics @k', default=[1, 3, 5])
 parser.add_argument('-run_type', default="train", help='train or eval run')
-parser.add_argument('-dev_run', default="True", help='whether to save the model at each epoch')
+parser.add_argument('-dev_run', default="True", help='whether it is a development run or production run (use all data, text external, less verbose etc)')
 args = parser.parse_args()
 
 args.dev_run = eval(args.dev_run)
@@ -44,6 +44,7 @@ args.dev_run = eval(args.dev_run)
 if args.args_path != None:
     with open(args.args_path, 'r') as f:
         args.__dict__ = json.load(f)
+
 
 if 'train' in args.run_type:
 
@@ -64,6 +65,7 @@ if 'train' in args.run_type:
 
     with open(args.model_path +"/eval_config.json", 'w') as f:
         json.dump(eval_args, f, indent = 2)
+
 
 def multiclass_rec(y, y_hat, top_k=None):
     m = tf.keras.metrics.Recall(top_k=top_k)
@@ -167,7 +169,22 @@ def load_data_splits(inputs, labels):
     return [train_input_ids, train_input_attention], train_labels, [dev_input_ids, dev_input_attention], dev_labels, [test_input_ids, test_input_attention], test_labels
 
 
-def load_data(tokenizer):
+def load_data(tokenizer, load_external = False):
+    # load external data for prod run
+    if load_external == True:
+        documents = pickle.load(open("_cache/_data/test_corpus_qa" + "_x_data.pkl", "rb"))
+        inputs = tokenizer(documents, padding="max_length", truncation=True, max_length=args.bert_max_seq_len, is_split_into_words=True)
+        inputs = [inputs["input_ids"], inputs["attention_mask"]]
+        labels = pickle.load(open("_cache/_data/test_corpus_qa" + "_y_data.pkl", "rb"))
+        labels_dict = pickle.load(open("_cache/_data/test_corpus_qa" + "_labels_dict.pkl", "rb"))
+        input_ids = []
+        input_attention = []
+        for x in range(len(documents)):
+            input_ids.append(inputs[0][x])
+            input_attention.append(inputs[1][x])
+        return inputs, labels, None, None, None, None, labels_dict
+
+    # we don't have external, we load data as usual (for dev run)
     # check if inputs are pre-processed (i.e. passed through tokenizer) for BERT-based model
     if not os.path.exists(args.data_path + "_x_data_inputs_len{0}.pkl".format(args.bert_max_seq_len)):
         print("###################### Building inputs file for BERT tokenizer. This may take a while. ######################")
@@ -275,6 +292,13 @@ if __name__ == "__main__":
         if args.run_type == 'eval' or args.dev_run == False:
             test_dataset = build_dataset(test_inputs, test_labels, labels_dict, tokenizer).batch(args.batch_size)
             test_callback = MetricsCallback(test_dataset)
+        
+        if args.dev_run == False:
+            external_inputs, external_labels, _, _, _, _, external_labels_dict = load_data(tokenizer, load_external = True)
+            print(len(external_labels), len(external_labels_dict), len(external_inputs[0]))
+            external_test_dataset = build_dataset(external_inputs, external_labels, external_labels_dict, tokenizer).batch(1)
+            external_test_callback = MetricsCallback(external_test_dataset)
+
 
         dev_callback = MetricsCallback(dev_dataset)
         model = build_model(bert_model, len(labels_dict))
@@ -290,8 +314,8 @@ if __name__ == "__main__":
             else:
                 history = model.fit(train_dataset, epochs=args.epochs, callbacks=[])
                 model.save_weights(args.model_path+"/weights/{:02d}".format(args.epochs))
-                test_callback.model = model
-                test_results = test_callback.on_epoch_end(0, {})
+                external_test_callback.model = model
+                external_test_results = external_test_callback.on_epoch_end(0, {})
                     
                 
             hist_df = pd.DataFrame(history.history)
