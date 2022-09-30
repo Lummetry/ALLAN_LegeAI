@@ -28,6 +28,8 @@ from collections import deque
 import time
 import pandas as pd
 import os
+from shutil import copyfile
+
 
 from libraries import Logger
 import pickle as own_pickle
@@ -42,16 +44,25 @@ def generate_data(csv_file, debug=False):
 
   folder = os.path.join('_cache', "_data")
   files = os.listdir(folder)
-  
-  tags_files = list(filter(lambda x: x.startswith("tags_v"), files))
-    
-  versions = list(map(lambda x: int(x.split("_")[1][1:]), tags_files))
-  versions = list(set(versions))
-  versions.sort()
 
-  with open("_cache/_data/tags_v{0}_labels_dict.pkl".format(versions[-1]), "rb") as f:
-    tags = set(own_pickle.load(f).keys())
-    print(len(tags))
+  if csv_file == "test_samples_tags.csv":
+    tags_files = list(filter(lambda x: x.startswith("tags_v"), files))
+    versions = list(map(lambda x: int(x.split("_")[1][1:]), tags_files))
+    versions = list(set(versions))
+    versions.sort()
+    dict_path = "_cache/_data/tags_v{0}_labels_dict.pkl".format(versions[-1])
+
+  
+  elif csv_file == "test_samples_qa.csv":
+    tags_files = list(filter(lambda x: x.startswith("tags_titles_v"), files))    
+    versions = list(map(lambda x: int(x.split("_")[2][1:]), tags_files))
+    versions = list(set(versions))
+    versions.sort()
+    dict_path = "_cache/_data/tags_titles_v{0}_labels_dict.pkl".format(versions[-1])
+
+  with open(dict_path, "rb") as f:
+    tags_labels = set(own_pickle.load(f).keys())
+  
 
   df_docs = pd.read_csv(csv_file)
   
@@ -83,11 +94,17 @@ def generate_data(csv_file, debug=False):
 
 
     for lbl in lst_labels:
-      if lbl not in tags:
+      if lbl not in tags_labels:
         rejected_labels.add(lbl)
         continue
       unique_labels.add(lbl)
     
+    new_lst_labels = []
+    for lbl in lst_labels:
+      if lbl not in rejected_labels:
+        new_lst_labels.append(lbl)
+    lst_labels = new_lst_labels
+
     lst_X_docs.append(doc_str)
     lst_y_labels.append(lst_labels)
 
@@ -154,6 +171,8 @@ def generate_data(csv_file, debug=False):
     verbose = False
     )  
   
+  copyfile(dict_path, dict_label)
+
   log.P("Labels not found in dict: {0}".format(rejected_labels))
 
   return data, labels, dict_label
@@ -186,5 +205,6 @@ def build_corpus(csv_file):
 
 if __name__ == '__main__':
 
-  build_corpus("test_samples_qa.csv")
+  pass
+  
     
