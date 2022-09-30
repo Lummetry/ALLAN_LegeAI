@@ -52,24 +52,23 @@ def generate_data(debug = False, debug_save_count = 3500, source="from_db"):
     'QUERY_PARAMS' : None
   }
   
-  qry_docs = 'SELECT distinct vw4.id_document \
-              FROM        (SELECT     legeV.dbo.entitate_x_tematica.id_document, legeV.dbo.entitate_x_tematica.id_tip_tematica, legeV.dbo.paragraf.id AS id_paragraf, legeV.dbo.paragraf.continut, DATALENGTH(legeV.dbo.paragraf.continut) AS txt_size \
-                   FROM        legeV.dbo.entitate_x_tematica LEFT OUTER JOIN \
-                                     legeV.dbo.paragraf ON legeV.dbo.entitate_x_tematica.id_document = legeV.dbo.paragraf.id_document \
-                   WHERE     (legeV.dbo.entitate_x_tematica.id_document IN \
-                                         (SELECT     id_document \
-                                          FROM        (SELECT     id_document, COUNT(id_tip_tematica) AS cnt_tematica \
-                                                             FROM        (SELECT     id_document, id_tip_tematica \
-                                                                                FROM        legeV.dbo.entitate_x_tematica AS entitate_x_tematica_2 \
-                                                                                WHERE     (id_tip_tematica IN \
-                                                                                                      (SELECT     id_tip_tematica \
-                                                                                                       FROM        (SELECT     id_tip_tematica, COUNT(id_document) AS cnt \
-                                                                                                                          FROM        legeV.dbo.entitate_x_tematica AS entitate_x_tematica_1 \
-                                                                                                                          GROUP BY id_tip_tematica) AS vw1 \
-                                                                                                       WHERE     (cnt > 1000)))) AS vw3 \
-                                                             GROUP BY id_document) AS vw4_1 \
-                                          WHERE     (cnt_tematica > 1)))) AS vw4 \
-                WHERE     vw4.txt_size > 100'
+  qry_docs = 'select * from \
+( \
+	select id_document, count(id_tip_tematica) cnt_tematica from \
+		( \
+			select id_document, id_tip_tematica from  LegeV.[dbo].[entitate_x_tematica] \
+			where id_tip_tematica in \
+				(select id_tip_tematica from \
+					(SELECT     id_tip_tematica, COUNT(id_document) AS cnt \
+					FROM        LegeV.dbo.entitate_x_tematica \
+					GROUP BY id_tip_tematica \
+					) vw1 \
+				where vw1.cnt > 1000 \
+				) \
+		) as vw3 \
+	group by vw3.id_document \
+) vw4 \
+where vw4.cnt_tematica > 1'
 
 
   qry_txt = 'select titlu from document where id={}'
@@ -95,7 +94,6 @@ def generate_data(debug = False, debug_save_count = 3500, source="from_db"):
   log.P("Running params: {}. Debug mode {}".format(sys.argv, "ON" if debug else "OFF"))
   n_iters = df_docs.shape[0]
   timings = deque(maxlen=10)
-  print(n_iters)
 
   for idx_doc in range(n_iters):
     t0 = time.time()
