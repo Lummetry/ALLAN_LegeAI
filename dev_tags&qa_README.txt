@@ -17,7 +17,7 @@ Endpoints:
 get_tags: model trained on corpus tags_v1
 get_tags_orig: original get tags model
 
-get_qa: model trained on tags_title_v1 with tags label; result is transformed to qa labels with matching "imposed" by clien
+get_qa: model trained on tags_title_v1 with tags labels
 get_qa_orig: original, not mine
 
 ####################################################
