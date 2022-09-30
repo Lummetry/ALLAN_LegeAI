@@ -274,7 +274,7 @@ if __name__ == "__main__":
         model = build_model(bert_model, len(labels_dict))
 
         if 'train' in args.run_type:
-            if "_dev" in args.run_type or "_full" in args.run_type:
+            if ("_dev" in args.run_type or "_full" in args.run_type) and args.save_each_epoch == True:
                 print("###################### Reminder: scores are computed on the dev set that is part of training for this particular instance! ######################")
             
 
@@ -282,8 +282,8 @@ if __name__ == "__main__":
                 checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath=args.model_path+"/weights/{epoch:02d}", save_weights_only = True)
                 history = model.fit(train_dataset, epochs=args.epochs, callbacks=[dev_callback, checkpoint_callback])
             else:
-                history = model.fit(train_dataset, epochs=args.epochs, callbacks=[dev_callback])
-                model.save_weights(args.model_path+"/weights/{0}".format(args.epochs))
+                history = model.fit(train_dataset, epochs=args.epochs, callbacks=[])
+                model.save_weights(args.model_path+"/weights/{:02d}".format(args.epochs))
                 
             hist_df = pd.DataFrame(history.history)
             hist_json_file = '{0}/history.json'.format(args.model_path)
