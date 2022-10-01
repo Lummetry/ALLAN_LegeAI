@@ -63,6 +63,7 @@ def generate_data(csv_file, debug=False):
   with open(dict_path, "rb") as f:
     tags_labels = set(own_pickle.load(f).keys())
   
+  print("Number of different labels:", len(tags_labels))
 
   df_docs = pd.read_csv(csv_file)
   
