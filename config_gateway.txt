@@ -16,8 +16,7 @@
 			"TAGGER_MODEL" : "_cache/_models/tags_titles_3_long_full_tags/weights/09",
 			"LABEL2ID" : "tags_titles_v1_labels_dict.pkl",
 			"BERT_BACKBONE" : "readerbench/jurBERT-base",
-			"BERT_MAX_SEQ_LEN" : 64,
-			"MAPPING_FILE" : "_cache/_data/tags_qa_mapping.csv"
+			"BERT_MAX_SEQ_LEN" : 64
 
 		},
         

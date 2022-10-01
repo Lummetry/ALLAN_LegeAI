@@ -50,23 +50,23 @@ class GetQAWorker(FlaskWorker):
     fn_label_to_id = self.config_worker['LABEL2ID']
     fn_bert_backbone = self.config_worker["BERT_BACKBONE"]
     fn_bert_max_seq_len = self.config_worker["BERT_MAX_SEQ_LEN"]
-    fn_mapping = self.config_worker["MAPPING_FILE"]
+    # fn_mapping = self.config_worker["MAPPING_FILE"]
 
     self.label_to_id = self.log.load_pickle_from_data(fn_label_to_id)
     self.id_to_label = {v: k for k, v in self.label_to_id.items()}
 
-    self.mappings = {}
-    with open(fn_mapping) as csv_file:
-      csv_reader = csv.reader(csv_file, delimiter=',')
-      for row_index, row in enumerate(csv_reader):
-          if row_index == 0:
-            continue
-          else:
-              tags_label = str(row[0])
-              qa_labels = str(row[1]).split(",")
-              qa_labels = list(map(lambda x: x.strip(), qa_labels))
-              qa_labels = list(filter(lambda x: x != "", qa_labels))
-              self.mappings[tags_label] = qa_labels
+    # self.mappings = {}
+    # with open(fn_mapping) as csv_file:
+    #   csv_reader = csv.reader(csv_file, delimiter=',')
+    #   for row_index, row in enumerate(csv_reader):
+    #       if row_index == 0:
+    #         continue
+    #       else:
+    #           tags_label = str(row[0])
+    #           qa_labels = str(row[1]).split(",")
+    #           qa_labels = list(map(lambda x: x.strip(), qa_labels))
+    #           qa_labels = list(filter(lambda x: x != "", qa_labels))
+    #           self.mappings[tags_label] = qa_labels
     
     bert_backbone =  TFBertModel.from_pretrained(fn_bert_backbone)
     self.tokenizer = AutoTokenizer.from_pretrained(fn_bert_backbone)
