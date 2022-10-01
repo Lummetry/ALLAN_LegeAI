@@ -95,7 +95,8 @@ def build_model(bert_model, number_of_labels):
 
     model = keras.Model(inputs=[input_ids, attention_mask], outputs=classifier_layer)
     model.build(input_shape=[(None, args.bert_max_seq_len), (None, args.bert_max_seq_len)])
-    model.summary()
+    if args.dev_run == True:
+        model.summary()
     model.compile(tf.keras.optimizers.Adam(lr=args.learning_rate), loss='binary_crossentropy', metrics=[])
 
     return model
@@ -214,8 +215,9 @@ class MetricsCallback(keras.callbacks.Callback):
             self.ks = [None]
         else:
             self.ks = list(map(lambda x: int(x), args.k))        
-        if None not in self.ks:
+        if None not in self.ks and args.dev_run == True:
             self.ks.append(None)
+            
         
     def on_epoch_end(self, epoch, logs=None):
 
@@ -225,11 +227,17 @@ class MetricsCallback(keras.callbacks.Callback):
         sorted_y_true = np.array([list(map(lambda x: x[1], z)) for z in sorted_zip])
         print(flush=True)
         for k in self.ks:
+            # based on tf notes this seems wrong (see link below)
+            # https://www.tensorflow.org/api_docs/python/tf/keras/metrics/Precision#update_state
+            # but, if y_pred are not all 1 and are actual preds (floats) it works as intended
+            # we can also use sorted_y_true and sorted_y_pred with exactly the same results
             rec = multiclass_rec(self.y_true, y_pred, top_k = k)
             prec = multiclass_prec(self.y_true, y_pred, top_k = k)
 
             correct = 0
             total = 0 
+
+            ones_g = 0
 
             if k == None:
                 k = len(y_pred[0])
@@ -238,15 +246,24 @@ class MetricsCallback(keras.callbacks.Callback):
                 binary_preds = (sorted_y_pred[i][:k] > 0.5).astype(np.uint8)
                 correct += (binary_preds==sorted_y_true[i][:k]).sum()
                 total += k
+                
+                for index in range(k):
+                    g = sorted_y_true[i][index]
+                    if g == 1:
+                        ones_g += 1
 
             f1 = 2 * prec * rec / (prec + rec)
             acc = 1.0 * correct / total
             
-            if args.dev_run == False and k == 3:
+            if args.dev_run == False:
+                print("We have a total of {0} test documents. For each document we make {1} predictions.".format(len(self.y_true), k))
+                print("Relevant predictions {0}/{1}".format(ones_g, len(self.y_true)*k))
+                print(round(prec * len(self.y_true)*k))
                 print("Recall: {0:.4f} Precision: {1:.4f} F1: {2:.4f} Acc: {3:.4f} @{4}".format(rec, prec, f1, acc, k))
-            elif args.dev_run == True:
+            else:
                 print("Recall: {0:.4f} Precision: {1:.4f} F1: {2:.4f} Acc: {3:.4f} @{4}".format(rec, prec, f1, acc, k))
-                
+            
+            
             rec = round(rec, 4)
             prec = round(prec, 4)
             f1 = round(f1, 4)
