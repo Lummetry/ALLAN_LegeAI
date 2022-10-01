@@ -30,13 +30,26 @@ import pandas as pd
 from libraries import Logger
 from libraries.db_conn.odbc_conn import ODBCConnector
 
-from utils.utils import raw_text_to_words, clean_words_list
+from utils.utils import raw_text_to_words, clean_words_list, preprocess_title
+import spacy
+
+
+REMOVE_PARAN = 0
+REMOVE_PREFIX = 1
+REMOVE_POS = 2
+REMOVE_STOPWORDS = 3
+REMOVE_DEP = 4
+REMOVE_NONALPHA = 5
+REMOVE_ENTITIES = 6
+
 
 def generate_data(debug = False, debug_save_count = 3500, source="from_db"):
   log = Logger(
     lib_name='DBSV', base_folder='.', app_folder='_cache',
     TF_KERAS=False
   )
+  
+
 
   config = {
     'CONNECT_PARAMS' : {
@@ -82,12 +95,15 @@ where vw4.cnt_tematica > 1'
   conn.connect(nr_retries=5)
 
 
-  if source == "from_db":
-    df_docs = conn.get_data(sql_query=qry_docs)
+  df_docs = conn.get_data(sql_query=qry_docs)
   
-  elif source.endswith(".csv"):
-    df_docs = pd.read_csv(source)
+  nlp = spacy.load('ro_core_news_lg')
+
   
+  if source.endswith(".csv"):
+    df_docs_csv = pd.read_csv(source)
+    df_docs = pd.concat([df_docs, df_docs_csv], axis=0, ignore_index=True)
+
   lst_X_docs = []
   lst_y_labels = []
   unique_labels = set()
@@ -115,6 +131,15 @@ where vw4.cnt_tematica > 1'
 
     if len(doc_str) == 0 or len(lst_labels) == 0:
         continue
+
+    title = " ".join(doc_str)
+    res = preprocess_title(title, nlp=nlp, proc=[REMOVE_PARAN, REMOVE_PREFIX, REMOVE_POS, REMOVE_DEP, REMOVE_NONALPHA, REMOVE_ENTITIES])
+    doc_str = res.split(" ")
+        
+    if len(doc_str) <= 2 or len(doc_str) > 20:
+        continue
+
+
 
     for lbl in lst_labels:
       unique_labels.add(lbl)
