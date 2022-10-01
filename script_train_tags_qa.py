@@ -28,6 +28,8 @@ import sys
 import subprocess
 import argparse
 from build_test_corpus import build_corpus
+import json
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--base_folder', type=str, default="_cache")
@@ -156,7 +158,14 @@ def get_user_input():
   
   return data_source, epochs, batch_size, bert_max_seq_len
   
-  
+def config_gateway(config_file_path, task, model_path, label_dict_path):
+    data = json.load(open(config_file_path))
+    data['CONFIG_ENDPOINTS'][task]['TAGGER_MODEL'] = model_path
+    data['CONFIG_ENDPOINTS'][task]["LABEL2ID"] = label_dict_path
+    with open(config_file_path, "w") as f:
+        json.dump(data, f, indent=4)
+
+
     
 
 if __name__ == "__main__":
@@ -207,6 +216,8 @@ if __name__ == "__main__":
     #region 
     print("Used corpus:", data_path)
     print("Trained model:", os.path.join(model_path, "weights/epoch{:02d}".format(epochs)))
+    # config_gateway("get_qa", "_cache/_models/tags_titles_4_full/weights/17", "tags_titles_v2_labels_dict.pkl")
+
     #endregion
     
     input("Press ENTER to exit.")
