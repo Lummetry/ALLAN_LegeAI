@@ -423,6 +423,7 @@ The single communication point is the gateway which can be accessed via `HTTP RE
         ```
         
         **Errors:**
+        ```python
         {
             "No Action identified." : no action could be identified,
             "Too many Actions identified. Can only handle a single Action." : several different types of actions were identified, but the model currently only handles single actions,
@@ -430,6 +431,7 @@ The single communication point is the gateway which can be accessed via `HTTP RE
             "Unknown action." : did not identify a known action,
             "Conditions for Old or New entities to apply Action not satisfied." : the entities identified as Old and New do not match the conditions required for the specific action
         }
+        ```
         
         
         
