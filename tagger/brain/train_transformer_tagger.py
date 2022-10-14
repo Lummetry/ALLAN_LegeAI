@@ -173,11 +173,16 @@ def load_data_splits(inputs, labels):
 def load_data(tokenizer, load_external = False):
     # load external data for prod run
     if load_external == True:
-        documents = pickle.load(open("_cache/_data/test_corpus_qa" + "_x_data.pkl", "rb"))
+        if "tags_titles" in args.data_path:
+            task = "qa"
+        elif "tags" in args.data_path:
+            task = "tags"
+            
+        documents = pickle.load(open("_cache/_data/test_corpus_{0}".format(task) + "_x_data.pkl", "rb"))
         inputs = tokenizer(documents, padding="max_length", truncation=True, max_length=args.bert_max_seq_len, is_split_into_words=True)
         inputs = [inputs["input_ids"], inputs["attention_mask"]]
-        labels = pickle.load(open("_cache/_data/test_corpus_qa" + "_y_data.pkl", "rb"))
-        labels_dict = pickle.load(open("_cache/_data/test_corpus_qa" + "_labels_dict.pkl", "rb"))
+        labels = pickle.load(open("_cache/_data/test_corpus_{0}".format(task) + "_y_data.pkl", "rb"))
+        labels_dict = pickle.load(open("_cache/_data/test_corpus_{0}".format(task) + "_labels_dict.pkl", "rb"))
         input_ids = []
         input_attention = []
         for x in range(len(documents)):
@@ -257,9 +262,7 @@ class MetricsCallback(keras.callbacks.Callback):
             
             if args.dev_run == False:
                 print("We have a total of {0} test documents. For each document we make {1} predictions.".format(len(self.y_true), k))
-                print("Relevant predictions {0}/{1}".format(ones_g, len(self.y_true)*k))
-                print(round(prec * len(self.y_true)*k))
-                print("Recall: {0:.4f} Precision: {1:.4f} F1: {2:.4f} Acc: {3:.4f} @{4}".format(rec, prec, f1, acc, k))
+                print("Relevant predictions {0}/{1} or {2:.2f}%".format(ones_g, len(self.y_true)*k, 100.0*ones_g/(len(self.y_true)*k)))
             else:
                 print("Recall: {0:.4f} Precision: {1:.4f} F1: {2:.4f} Acc: {3:.4f} @{4}".format(rec, prec, f1, acc, k))
             
@@ -354,10 +357,10 @@ if __name__ == "__main__":
             test_callback.model = model
             test_results = test_callback.on_epoch_end(0, {})
             print(test_results)
-
+            
             # save to hf format
-            path_parts = args.model_path.split("weights")
-            save_path = os.path.join(path_parts[0], path_parts[1][1:])
-            bert_model.save_pretrained(save_path)
-            tokenizer.save_pretrained(save_path)
+            # path_parts = args.model_path.split("weights")
+            # save_path = os.path.join(path_parts[0], path_parts[1][1:])
+            # bert_model.save_pretrained(save_path)
+            # tokenizer.save_pretrained(save_path)
 

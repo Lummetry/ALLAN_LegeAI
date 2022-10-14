@@ -45,6 +45,8 @@ def get_last_tags_dataset_version():
     files = os.listdir(folder)
     
     tags_files = list(filter(lambda x: x.startswith("tags_v"), files))
+    if len(tags_files) == 0:
+        return 1
     
     versions = list(map(lambda x: int(x.split("_")[1][1:]), tags_files))
     versions = list(set(versions))
@@ -57,6 +59,8 @@ def get_last_qa_dataset_version():
     files = os.listdir(folder)
     
     tags_files = list(filter(lambda x: x.startswith("tags_titles_v"), files))
+    if len(tags_files) == 0:
+        return 1
     
     versions = list(map(lambda x: int(x.split("_")[2][1:]), tags_files))
     versions = list(set(versions))
@@ -69,6 +73,8 @@ def get_last_tags_model_version():
     files = os.listdir(folder)
     
     tags_files = list(filter(lambda x: x.startswith("tags_") and "titles" not in x, files))
+    if len(tags_files) == 0:
+        return 0
     
     versions = list(map(lambda x: int(x.split("_")[1]), tags_files))
     versions = list(set(versions))
@@ -80,6 +86,8 @@ def get_last_qa_model_version():
     files = os.listdir(folder)
     
     tags_files = list(filter(lambda x: x.startswith("tags_titles"), files))
+    if len(tags_files) == 0:
+        return 0
     
     versions = list(map(lambda x: int(x.split("_")[2]), tags_files))
     versions = list(set(versions))
@@ -134,6 +142,7 @@ def get_user_input():
     input("Press ENTER to exit.")
     sys.exit()
   
+  k_eval = 3
   if args.task == "get_tags":
     epochs = 5
     batch_size = 4
@@ -152,11 +161,15 @@ def get_user_input():
   if batch_size_i != '':
     batch_size = int(batch_size_i)
   
-  bert_max_seq_len_i = input('Enter the size of BERT sequnce length (max 512) [{0}]: '.format(bert_max_seq_len))
+  bert_max_seq_len_i = input('Enter the size of BERT sequence length (max 512) [{0}]: '.format(bert_max_seq_len))
   if bert_max_seq_len_i != '':
     bert_max_seq_len = int(bert_max_seq_len_i)
+    
+  k_eval_i = input('How many predictions to evaluate? ONLY FOR EVALUATION PURPOSES [{0}]: '.format(k_eval))
+  if k_eval_i != '':
+    k_eval = int(k_eval_i)
   
-  return data_source, epochs, batch_size, bert_max_seq_len
+  return data_source, epochs, batch_size, bert_max_seq_len, k_eval
   
 def config_gateway(config_file_path, task, model_path, label_dict_path):
     data = json.load(open(config_file_path))
@@ -166,11 +179,9 @@ def config_gateway(config_file_path, task, model_path, label_dict_path):
         json.dump(data, f, indent=4)
 
 
-    
-
 if __name__ == "__main__":
 
-    data_source, epochs, batch_size, bert_max_seq_len = get_user_input()
+    data_source, epochs, batch_size, bert_max_seq_len, k_eval = get_user_input()
     #region config
     if args.task == "get_tags":
         function_get_data = db_doc_text_saver.generate_data
@@ -191,7 +202,7 @@ if __name__ == "__main__":
     #region data
     if data_source == "from_db" or data_source.endswith(".csv"):
         # get data from db
-        data_file, labels_file, dict_file = function_get_data(debug=False, debug_save_count = 5000, source=data_source)
+        data_file, labels_file, dict_file = function_get_data(debug=True, debug_save_count = 1000, source=data_source)
         [data_file, labels_file, dict_file] = rename_files([data_file, labels_file, dict_file])
     else:
         data_file = os.path.join(os.path.join(args.base_folder, "_data"), data_source)
@@ -209,15 +220,23 @@ if __name__ == "__main__":
     
     
     #region training
-    command = "python tagger\\brain\\train_transformer_tagger.py -use_generator -data_path={0} -k 3 -epochs={1} -learning_rate=1e-5 -bert_max_seq_len={2} -batch_size={3} -bert_backbone=readerbench/jurBERT-base -run_type=train_full -model_path={4} -dev_run=False".format(data_path, epochs, bert_max_seq_len, batch_size, model_path)
+    command = "python tagger\\brain\\train_transformer_tagger.py -use_generator -data_path={0} -k {5} -epochs={1} -learning_rate=1e-5 -bert_max_seq_len={2} -batch_size={3} -bert_backbone=readerbench/jurBERT-base -run_type=train_full -model_path={4} -dev_run=False".format(data_path, epochs, bert_max_seq_len, batch_size, model_path, k_eval)
     subprocess.run(command)
     #endregion training
     
     #region 
     print("Used corpus:", data_path)
-    print("Trained model:", os.path.join(model_path, "weights/epoch{:02d}".format(epochs)))
-    # config_gateway("get_qa", "_cache/_models/tags_titles_4_full/weights/17", "tags_titles_v2_labels_dict.pkl")
-
+    print("Trained model:", os.path.join(model_path, "weights/{:02d}".format(epochs)))
+    deploy = input("Want to replace the current model with this new model?[Y/N]")
+    if deploy.lower() == "y":
+        deploy = True
+        config_gateway("config_gateway.txt", args.task, os.path.join(model_path, "weights/{:02d}".format(epochs)), data_path.split("\\")[-1]+"_labels_dict.pkl")
+    elif deploy.lower() == "n":
+        deploy = False
     #endregion
     
-    input("Press ENTER to exit.")
+    input("Press ENTER to continue.")
+    if deploy == True:
+        command = "restart_gateway.bat"
+        subprocess.run(command, cwd='C:\\Users\\damian\\Desktop', shell=True)
+
