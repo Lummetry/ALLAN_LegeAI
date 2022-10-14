@@ -413,9 +413,27 @@ The single communication point is the gateway which can be accessed via `HTTP RE
         {
             "call_id" : <Integer>, # counter - the number of requests processed so far
             "signature" : <String>, # worker signature - which worker resolved the input,
-            "results" : <String> # the transformed paragraph
+            "success" : <Boolean> # True if the transformation was successful
+            "action" :  <List[String]> # the list of identified actions; can be empty,            
+            "old" :  <List[String]> # the list of phrases identified as Old; can be empty,             
+            "new" :  <List[String]> # the list of phrases identified as New; can be empty,   
+            "result" : <String> # the transformed paragraph; used only if success is True,
+            "error": <String> # the type of error which occured; used only if success is False
         }
         ```
+        
+        **Errors:**
+        ```python
+        {
+            "No Action identified." : no action could be identified,
+            "Too many Actions identified. Can only handle a single Action." : several different types of actions were identified, but the model currently only handles single actions,
+            "Incorrect number of Old and New entities identified." : the number of entities identified as Old and New does not match what was expected for the action,
+            "Unknown action." : did not identify a known action,
+            "Conditions for Old or New entities to apply Action not satisfied." : the entities identified as Old and New do not match the conditions required for the specific action
+        }
+        ```
+        
+        
         
         
 * ### 3\. Microservices configuration
