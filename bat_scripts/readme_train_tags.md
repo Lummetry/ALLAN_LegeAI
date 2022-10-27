@@ -1,5 +1,6 @@
 # Instructiuni train_tags
 
+## Parametri
 Scriptul de antrenare se regaseste ori pe Desktop, ori in folderul “bat_scripts” din repository si are numele “train_tags.bat”. In cadrul rularii acestui script, **utilizatorul trebuie sa ia urmatoarele decizii**: 
 1. Sursa datelor de antrenare:
     1. Din baza de date: se extrag documentele din baza de date, se preproceseaza si se salveaza in folderul “C:\allan\_cache/_data/” sub forma unor fisiere care incep cu “tags_vX” unde X este un numar (ex: fisierele pot incepe cu numele tags_v2).
@@ -16,7 +17,7 @@ La finalul antrenarii urmeaza cateva informatii legate de numele sub care au fos
 
 In final exista optiunea de a face deploy la modelul tocmai antrenat, astfel el ajunge “live”. 
 
-## Observatii:
+## Observatii
 - Antrenarea modelelor se face pe ~170,000 de exemple pentru get_tags. Testele pentru ‘test_samples_tags.csv’ contin foarte putine exemple.
 Chiar si acelasi model antrenat de doua ori pe aceleasi date, cu aceeasi parametri poate da rezultate diferite pe aceste teste.
 Avand foarte putin exemple, o predictie diferita cantareste foarte putin in performanta finala.
