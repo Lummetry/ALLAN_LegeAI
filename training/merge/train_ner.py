@@ -9,7 +9,7 @@ import numpy as np
 from spacy.tokens import DocBin
 from spacy.cli.train import train
 import shutil
-
+from time import sleep
 
 
 print('Loaded spacy model.')
@@ -119,8 +119,9 @@ if __name__ == '__main__':
     print('Read {} annotations.'.format(len(anns)))
     
     if abs(len(anns) - TRAIN_LEN) < MIN_NEW_ANNS:
-        print('Too few new annotations. Must be at least {}.'.format(MIN_NEW_ANNS))
-        
+        nr_sleep_seconds = 10
+        print('Too few new annotations. Must be at least {}. Sleeping {} seconds, then exitting'.format(MIN_NEW_ANNS, nr_sleep_seconds))
+        sleep(nr_sleep_seconds)
     else:
     
         # Train-test-dev split
