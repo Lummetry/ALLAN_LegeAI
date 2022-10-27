@@ -25,6 +25,7 @@ import numpy as np
 import sys
 from collections import deque
 import time
+import pandas as pd
 
 from libraries import Logger
 from libraries.db_conn.odbc_conn import ODBCConnector
