@@ -1,4 +1,4 @@
-# Instructiuni train_tags
+# Proces antrenare get_targs
 
 ## Parametri de antrenare
 Scriptul de antrenare se regaseste ori pe Desktop, ori in folderul “bat_scripts” din repository si are numele “train_tags.bat”. In cadrul rularii acestui script, **utilizatorul trebuie sa ia urmatoarele decizii**: 
