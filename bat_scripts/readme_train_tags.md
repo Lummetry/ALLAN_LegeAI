@@ -1,6 +1,6 @@
 # Instructiuni train_tags
 
-## Parametri
+## Parametri de antrenare
 Scriptul de antrenare se regaseste ori pe Desktop, ori in folderul “bat_scripts” din repository si are numele “train_tags.bat”. In cadrul rularii acestui script, **utilizatorul trebuie sa ia urmatoarele decizii**: 
 1. Sursa datelor de antrenare:
     1. Din baza de date: se extrag documentele din baza de date, se preproceseaza si se salveaza in folderul “C:\allan\_cache/_data/” sub forma unor fisiere care incep cu “tags_vX” unde X este un numar (ex: fisierele pot incepe cu numele tags_v2).
