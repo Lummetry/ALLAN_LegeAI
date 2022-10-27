@@ -1,6 +1,6 @@
 # Instructiuni train_qa
 
-## Parametri
+## Parametri de antrenare
 Scriptul de antrenare se regaseste ori pe Desktop, ori in folderul “bat_scripts” din repository si are numele “train_qa.bat”. In cadrul rularii acestui script, **utilizatorul trebuie sa ia urmatoarele decizii**: 
 
 1. Sursa datelor de antrenare:
