@@ -230,13 +230,13 @@ if __name__ == "__main__":
     deploy = input("Want to replace the current model with this new model?[Y/N]")
     if deploy.lower() == "y":
         deploy = True
-        config_gateway("config_gateway.txt", args.task, os.path.join(model_path, "weights/{:02d}".format(epochs)), data_path.split("\\")[-1]+"_labels_dict.pkl")
+        config_gateway("config_gateway.txt", args.task, os.path.join(model_path, "weights/{:02d}".format(epochs)), data_path.split("\\")[-1] + "_labels_dict.pkl")
     elif deploy.lower() == "n":
         deploy = False
     #endregion
     
     input("Press ENTER to continue.")
     if deploy == True:
-        command = "restart_gateway.bat"
-        subprocess.run(command, cwd='C:\\Users\\damian\\Desktop', shell=True)
+        command = "restart_serv.bat"
+        subprocess.run(command, cwd='.\\bat_scripts', shell=True)
 
