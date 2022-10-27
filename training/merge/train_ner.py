@@ -10,6 +10,7 @@ from spacy.tokens import DocBin
 from spacy.cli.train import train
 import shutil
 from time import sleep
+import argparse
 
 
 print('Loaded spacy model.')
@@ -94,86 +95,91 @@ def dataToDocBin(annotations, path):
     db.to_disk(path)
 
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--train_len', type=int, default=TRAIN_LEN)
+
+args = parser.parse_args()
+
 if __name__ == '__main__':
-    
-    # Read folder paths   
+
+    # Read folder paths
     path1 = input('Path train data folder [Default = {}]:'.format(train_folder_path))
     path2 = input('Path NER folder [Default = {}]:'.format(ner_folder))
     if path1 != '':
         train_folder_path = path1
     if path2 != '':
         ner_folder = path2
-            
-    
+
+
     # Read all jsonl files
     anns = []
-    
+
     for file in os.listdir(train_folder_path):
         if file.endswith(".jsonl"):
             train_file_path = os.path.join(train_folder_path, file)
-            
+
             # Parse file
             newAnns, unlabelled = parseActivs(train_file_path)
             anns.extend(newAnns)
-    
+
     print('Read {} annotations.'.format(len(anns)))
-    
-    if abs(len(anns) - TRAIN_LEN) < MIN_NEW_ANNS:
+
+    if abs(len(anns) - args.train_len) < MIN_NEW_ANNS:
         nr_sleep_seconds = 10
         print('Too few new annotations. Must be at least {}. Sleeping {} seconds, then exitting'.format(MIN_NEW_ANNS, nr_sleep_seconds))
         sleep(nr_sleep_seconds)
     else:
-    
+
         # Train-test-dev split
         nDev = 150
         nTest = 150
-        
+
         idxs = list(range(len(anns)))
         random.seed(42)
         random.shuffle(idxs)
-        
+
         anns = np.array(anns)
         trainAnn = anns[idxs[:-(nDev + nTest)]]
         devAnn = anns[idxs[-(nDev + nTest):-nTest]]
         testAnn = anns[idxs[-nTest:]]
-        
+
         print('Split: Train {} / Test {} / Dev {}'.format(len(trainAnn), len(devAnn), len(testAnn)))
-        
-        
+
+
         # Transform data
         dataToDocBin(trainAnn, trainPath)
         dataToDocBin(devAnn, devPath)
-        
-        
+
+
         # Check model folder
         min_timestamp = -1
         oldest_model = ''
         n = 0
         for file in os.listdir(ner_folder):
             ner_file_path = os.path.join(ner_folder, file)
-            timestamp = os.path.getmtime(ner_file_path) 
-            
-            # Ensure the models are not Read Only    
+            timestamp = os.path.getmtime(ner_file_path)
+
+            # Ensure the models are not Read Only
             os.chmod(ner_file_path, 0o777)
-            
+
             if min_timestamp == -1 or timestamp < min_timestamp:
                 min_timestamp = timestamp
                 oldest_model = ner_file_path
             n += 1
-        
+
         # If there are too many models
-        if n >= MAX_NERS - 1:    
+        if n >= MAX_NERS - 1:
             try:
                 # Delete the oldest model
                 shutil.rmtree(oldest_model)
             except Exception:
                 pass
-        
-        
+
+
         # Train model
         train(configPath, ner_folder, overrides={"paths.train": trainPath, "paths.dev": devPath})
-        
-        
+
+
         # Edit training results
         try:
             # Remove model-last
@@ -181,7 +187,7 @@ if __name__ == '__main__':
             shutil.rmtree(model_last_folder)
         except Exception:
             pass
-        
+
         try:
             # Rename model-best
             model_best_folder = os.path.join(ner_folder, 'model-best')
@@ -189,12 +195,12 @@ if __name__ == '__main__':
             os.rename(model_best_folder, model_name)
         except Exception:
             pass
-        
-        
-        
-        
+
+
+
+
         # Update constant at the beggining of the script
-        
+
         with open(__file__, 'r') as f:
             lines = f.read().split('\n')
             val = int(lines[0].split(' = ')[-1])
