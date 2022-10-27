@@ -125,9 +125,7 @@ if __name__ == '__main__':
     print('Read {} annotations.'.format(len(anns)))
 
     if abs(len(anns) - args.train_len) < MIN_NEW_ANNS:
-        nr_sleep_seconds = 10
-        print('Too few new annotations. Must be at least {}. Sleeping {} seconds, then exitting'.format(MIN_NEW_ANNS, nr_sleep_seconds))
-        sleep(nr_sleep_seconds)
+        print('Too few new annotations. Must be at least {}.'.format(MIN_NEW_ANNS))
     else:
 
         # Train-test-dev split
@@ -208,3 +206,5 @@ if __name__ == '__main__':
             new_file = '\n'.join([new_line] + lines[1:])
         with open(__file__, 'w') as f:
             f.write('\n'.join([new_line] + lines[1:]))
+
+    input("Press ENTER when you inspected the training output in order to finish the process.")
