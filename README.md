@@ -327,7 +327,7 @@ The single communication point is the gateway which can be accessed via `HTTP RE
         ----------------------------------
         {
             "SIGNATURE": "get_conf",
-            "DOCUMENT": "Subsemnatul Damian Ionut Andrei, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. J, parter, ap. 1 , declar pe propria raspundere ca sotia mea Andreea Damian, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 120, bl. B, sc. B, et. 1, ap 5B, avand CI cu CNP 1760126423013 nu detine averi ilicite."
+            "DOCUMENT": "Subsemnatul Popescu Costel, nascut la data 26.01.1976, domiciliat in Cluj, str. Cernauti, nr. 17-21, bl. K, parter, ap. 15 , declar pe propria raspundere ca sotia mea Alina Popescu, avand domiciliul flotant in Voluntari, str. Drumul Potcoavei nr 122, bl. B, sc. B, et. 1, ap 7, avand CI cu CNP 18634243332 nu detine proprietati."
         }
         
         Response json
@@ -344,8 +344,8 @@ The single communication point is the gateway which can be accessed via `HTTP RE
                [48, 58, "NASTERE"]
             ],
             "name_codes" : {
-               "Damian Ionut Andrei" : "A",
-               "Andreea Damian" : "B"
+               "Popescu Costel" : "A",
+               "Alina Popescu" : "B"
             }
             "signature": "GetConfWorker:1"
         }
