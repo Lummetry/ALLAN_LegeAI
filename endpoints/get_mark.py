@@ -3,6 +3,9 @@
 Created on Tue Feb 22 18:08:35 2022
 
 @author: filip
+
+
+
 """
 
 import numpy as np
