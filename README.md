@@ -5,6 +5,10 @@
 > Acest produs a fost livrat si realizat in baza serviciilor de cercetare-inovare industrială conform contract de servicii nr. 9 din 01.11.2021 folosind modulele AI "ALLAN" aferente "TempRent" -  Proiect finanțat în cadrul POC, Axa prioritara 2 - Tehnologia Informației și Comunicațiilor (TIC) pentru o economie digitală competitivă, Prioritatea de investiții 2b - Dezvoltarea produselor și serviciilor TIC, a comerțului electronic și a cererii de TIC, cod SMIS 142474, Contractul de finanțare nr. 2/221_ap3/24.06.2021.
 
 
+## English disclaimer
+> Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Reserved.
+> NOTICE:  All information contained herein is, and remains the property of Knowledge Investment Group SRL.   The intellectual and technical concepts contained herein are proprietary to Knowledge Investment Group SRL and may be covered by Romanian and Foreign Patents, patents in process, and are protected by trade secret or copyright law. Dissemination of this information or reproduction of this material is strictly forbidden unless prior written permission is obtained from Knowledge Investment Group SRL.
+
 ## API documentation
 Each system functionality is hosted by a microservice. All microservices are orchestrated by a gateway.
 
