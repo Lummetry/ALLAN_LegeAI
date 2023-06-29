@@ -1,3 +1,13 @@
+"""
+*
+*  RO:
+*    Modul software TempRent, proiect finanțat în cadrul POC, Axa prioritara 2 - Tehnologia Informației și Comunicațiilor (TIC) 
+*    pentru o economie digitală competitivă, Prioritatea de investiții 2b - Dezvoltarea produselor și s
+*    erviciilor TIC, a comerțului electronic și a cererii de TIC, cod SMIS 142474, 
+*    Contractul de finanțare nr. 2/221_ap3/24.06.2021.
+*
+
+"""
 import argparse
 import pickle
 import matplotlib.pyplot as plt

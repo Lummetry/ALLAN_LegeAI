@@ -11,12 +11,30 @@ Copyright 2019-2021 Lummetry.AI (Knowledge Investment Group SRL). All Rights Res
 * Dissemination of this information or reproduction of this material
 * is strictly forbidden unless prior written permission is obtained
 * from Knowledge Investment Group SRL.
+*
+*
+*  RO:
+*    Modul software TempRent, proiect finanțat în cadrul POC, Axa prioritara 2 - Tehnologia Informației și Comunicațiilor (TIC) 
+*    pentru o economie digitală competitivă, Prioritatea de investiții 2b - Dezvoltarea produselor și s
+*    erviciilor TIC, a comerțului electronic și a cererii de TIC, cod SMIS 142474, 
+*    Contractul de finanțare nr. 2/221_ap3/24.06.2021.
+*
 
 
 @copyright: Lummetry.AI
 @author: Lummetry.AI - Laurentiu
 @project: 
 @description:
+  
+  
+  RO:
+    Acest produs a fost livrat si realizat in baza serviciilor de cercetare-inovare industrială 
+    conform contract de servicii nr. 9 din 01.11.2021 folosind modulele AI "ALLAN" aferente "TempRent" -  
+    Proiect finanțat în cadrul POC, Axa prioritara 2 - Tehnologia Informației și Comunicațiilor (TIC) 
+    pentru o economie digitală competitivă, Prioritatea de investiții 2b - Dezvoltarea produselor și s
+    erviciilor TIC, a comerțului electronic și a cererii de TIC, cod SMIS 142474, 
+    Contractul de finanțare nr. 2/221_ap3/24.06.2021.
+    
 """
 
 import argparse
